@@ -5,3 +5,8 @@ __pycache__/
 instance/*.db
 tmp_restore_drill/
 backups/
+
+.env
+tmp_test/
+tmp_regression/
+uploads/gpx/*.gpx
