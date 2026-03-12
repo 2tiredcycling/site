@@ -10,3 +10,7 @@ backups/
 tmp_test/
 tmp_regression/
 uploads/gpx/*.gpx
+deploy/certs/*.pem
+deploy/certs/*.key
+deploy/certs/*.crt
+deploy/certs/*.p12
