@@ -1,0 +1,33 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>活动详情</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container narrow">
+    <section class="card form-card">
+      <h1>{{ activity.title }}</h1>
+      <p>时间：{{ activity.activity_time.strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
+      <p>参与人数：{{ activity.participant_count }}</p>
+      <p>天气：{{ activity.weather or '-' }}</p>
+      <p>总结：{{ activity.summary or '暂无' }}</p>
+
+      <h3>关联路线</h3>
+      <ul>
+        {% for route in activity.routes %}
+          <li><a href="{{ url_for('web.route_detail', route_id=route.id) }}">{{ route.route_name }}</a></li>
+        {% else %}
+          <li>暂无关联路线</li>
+        {% endfor %}
+      </ul>
+
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('web.activity_list') }}">返回活动列表</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

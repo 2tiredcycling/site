@@ -1,0 +1,180 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>路线维护 V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>路线维护</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        <a class="btn" href="{{ url_for('admin.activities_page') }}">前往活动维护</a>
+        <a class="btn btn-muted" href="{{ url_for('web.bulk_import_template') }}">下载 CSV 模板</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <h2>筛选</h2>
+      <form method="get" action="{{ url_for('admin.routes_page') }}" class="single-form">
+        <div class="filter-grid">
+          <label>关键词<input type="text" name="q" value="{{ filters.q }}"></label>
+          <label>最小里程<input type="number" name="min_km" step="0.1" value="{{ filters.min_km }}"></label>
+          <label>最大里程<input type="number" name="max_km" step="0.1" value="{{ filters.max_km }}"></label>
+          <label>最低评分<input type="number" name="min_rating" step="0.1" min="0" max="5" value="{{ filters.min_rating }}"></label>
+          <label>
+            状态
+            <select name="status">
+              <option value="">全部</option>
+              {% for st in statuses %}
+                <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ st }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="row-actions">
+          <button class="btn" type="submit">应用</button>
+          <a class="btn btn-muted" href="{{ url_for('admin.routes_page') }}">重置</a>
+        </div>
+      </form>
+    </section>
+
+    {% if can_edit %}
+    <section class="card form-card">
+      <h2>新增路线</h2>
+      <form method="post" action="{{ url_for('admin.create_route') }}" enctype="multipart/form-data" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="filter-grid">
+          <label>路线名称<input type="text" name="route_name" required></label>
+          <label>里程 (km)<input type="number" name="distance_km" min="0" step="0.1" required></label>
+          <label>难度
+            <select name="difficulty">
+              <option value="1">★☆☆☆☆</option>
+              <option value="2">★★☆☆☆</option>
+              <option value="3" selected>★★★☆☆</option>
+              <option value="4">★★★★☆</option>
+              <option value="5">★★★★★</option>
+            </select>
+          </label>
+          <label>状态
+            <select name="status">
+              {% for st in statuses %}
+                <option value="{{ st }}">{{ st }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>建议用时(h)<input type="number" name="suggested_duration_hours" min="0" step="0.1" value="3"></label>
+          <label>补给点<input type="text" name="supply_points"></label>
+          <label>风险提示<input type="text" name="risk_warning"></label>
+          <label>GPX 文件<input type="file" name="gpx_file" accept=".gpx" required></label>
+        </div>
+        <label>简介<textarea name="description" rows="3"></textarea></label>
+        <button class="btn" type="submit">新增</button>
+      </form>
+    </section>
+
+    <section class="card form-card">
+      <h2>批量导入（CSV + GPX）</h2>
+      <form method="post" action="{{ url_for('admin.bulk_import') }}" enctype="multipart/form-data" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="filter-grid">
+          <label>CSV 文件<input type="file" name="csv_file" accept=".csv" required></label>
+          <label>可选：先上传 GPX 文件（可多选）<input type="file" name="gpx_files" accept=".gpx" multiple></label>
+        </div>
+        <button class="btn" type="submit">开始导入</button>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="card form-card">
+      <h2>路线列表</h2>
+      {% for route in routes %}
+      <article class="edit-item">
+        <form method="post" action="{{ url_for('admin.update_route', route_id=route.id) }}" enctype="multipart/form-data" class="single-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="filter-grid">
+            <label>名称<input type="text" name="route_name" value="{{ route.route_name }}" required {% if not can_edit %}disabled{% endif %}></label>
+            <label>里程<input type="number" name="distance_km" step="0.1" min="0" value="{{ route.distance_km }}" required {% if not can_edit %}disabled{% endif %}></label>
+            <label>难度
+              <select name="difficulty" {% if not can_edit %}disabled{% endif %}>
+                <option value="1" {% if route.difficulty == 'easy' %}selected{% endif %}>★☆☆☆☆</option>
+                <option value="2" {% if route.difficulty == 'easy' %}selected{% endif %}>★★☆☆☆</option>
+                <option value="3" {% if route.difficulty == 'medium' %}selected{% endif %}>★★★☆☆</option>
+                <option value="4" {% if route.difficulty == 'hard' %}selected{% endif %}>★★★★☆</option>
+                <option value="5" {% if route.difficulty == 'hard' %}selected{% endif %}>★★★★★</option>
+              </select>
+            </label>
+            <label>状态
+              <select name="status" {% if not can_edit %}disabled{% endif %}>
+                {% for st in statuses %}
+                  <option value="{{ st }}" {% if route.status == st %}selected{% endif %}>{{ st }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>建议用时(h)<input type="number" name="suggested_duration_hours" min="0" step="0.1" value="{{ route.suggested_duration_hours }}" {% if not can_edit %}disabled{% endif %}></label>
+            <label>补给点<input type="text" name="supply_points" value="{{ route.supply_points }}" {% if not can_edit %}disabled{% endif %}></label>
+            <label>风险提示<input type="text" name="risk_warning" value="{{ route.risk_warning }}" {% if not can_edit %}disabled{% endif %}></label>
+            <label>替换 GPX<input type="file" name="gpx_file" accept=".gpx" {% if not can_edit %}disabled{% endif %}></label>
+          </div>
+          <label>简介<textarea name="description" rows="2" {% if not can_edit %}disabled{% endif %}>{{ route.description }}</textarea></label>
+          <div class="row-actions">
+            {% if can_edit %}<button class="btn" type="submit">保存</button>{% endif %}
+            <a class="btn" href="{{ url_for('web.route_detail', route_id=route.id) }}">查看详情</a>
+          </div>
+        </form>
+        {% if can_edit %}
+        <div class="row-actions">
+          <form method="post" action="{{ url_for('admin.delete_route', route_id=route.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-danger" type="submit">移入回收站</button>
+          </form>
+          <form method="post" action="{{ url_for('admin.rollback_route', route_id=route.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="number" name="version_no" min="1" placeholder="版本号" required>
+            <button class="btn btn-muted" type="submit">回滚</button>
+          </form>
+        </div>
+        {% endif %}
+      </article>
+      {% else %}
+      <p>暂无路线</p>
+      {% endfor %}
+
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.routes_page', page=pagination.prev_num, q=filters.q, min_km=filters.min_km, max_km=filters.max_km, min_rating=filters.min_rating, max_rating=filters.max_rating, difficulty=filters.difficulty, status=filters.status, sort=filters.sort, direction=filters.direction, per_page=filters.per_page) }}">上一页</a>
+        {% endif %}
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.routes_page', page=pagination.next_num, q=filters.q, min_km=filters.min_km, max_km=filters.max_km, min_rating=filters.min_rating, max_rating=filters.max_rating, difficulty=filters.difficulty, status=filters.status, sort=filters.sort, direction=filters.direction, per_page=filters.per_page) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card form-card">
+      <h2>回收站</h2>
+      {% for route in recycle_routes %}
+        <div class="row-actions">
+          <span>{{ route.route_name }}（{{ route.gpx_filename }}）</span>
+          <form method="post" action="{{ url_for('admin.restore_route', route_id=route.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn" type="submit">恢复</button>
+          </form>
+        </div>
+      {% else %}
+        <p>回收站为空</p>
+      {% endfor %}
+    </section>
+  </main>
+</body>
+</html>

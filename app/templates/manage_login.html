@@ -1,0 +1,36 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台登录</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container narrow">
+    <section class="card form-card login-card">
+      <h1>管理后台登录</h1>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for _category, message in messages %}
+            <div class="alert">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      <form method="post" action="{{ url_for('admin.login_submit') }}" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>
+          用户名
+          <input type="text" name="username" required>
+        </label>
+        <label>
+          密码
+          <input type="password" name="password" required>
+        </label>
+        <button class="btn" type="submit">登录</button>
+      </form>
+      <a class="link-back" href="{{ url_for('web.index') }}">返回用户页</a>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+﻿Flask==3.1.0
+Flask-SQLAlchemy==3.1.1
+gunicorn==23.0.0
+python-dotenv==1.0.1
+psycopg2-binary==2.9.10
+pytest==8.4.1
+alembic==1.14.0

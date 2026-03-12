@@ -1,0 +1,128 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理总览 V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>管理总览</h1>
+      <p>当前用户：{{ g.current_user.username }}（{{ g.current_user.role }}）</p>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.routes_page') }}">路线维护</a>
+        <a class="btn" href="{{ url_for('admin.activities_page') }}">活动维护</a>
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回用户页</a>
+        <form method="post" action="{{ url_for('admin.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-muted" type="submit">退出登录</button>
+        </form>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <h2>运行概览</h2>
+      <div class="filter-grid">
+        <div><strong>路线总数</strong><div>{{ summary.route_total }}</div></div>
+        <div><strong>回收站</strong><div>{{ summary.route_deleted }}</div></div>
+        <div><strong>活动总数</strong><div>{{ summary.activity_total }}</div></div>
+        <div><strong>待审核反馈</strong><div>{{ summary.feedback_pending }}</div></div>
+      </div>
+    </section>
+
+    {% if can_review %}
+    <section class="card form-card">
+      <h2>反馈审核</h2>
+      {% for feedback in pending_feedback %}
+        <article class="edit-item">
+          <p><strong>路线：</strong>{{ feedback.route.route_name if feedback.route else feedback.route_id }}</p>
+          <p><strong>评分：</strong>{{ feedback.rating }} / 5</p>
+          <p><strong>评论：</strong>{{ feedback.comment or '无' }}</p>
+          <p><strong>路况更新：</strong>{{ feedback.road_condition_update or '无' }}</p>
+          <form method="post" action="{{ url_for('admin.review_feedback', feedback_id=feedback.id) }}" class="single-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row-actions">
+              <input type="text" name="reviewer_note" placeholder="审核备注">
+              <button class="btn" type="submit" name="status" value="approved">通过</button>
+              <button class="btn btn-danger" type="submit" name="status" value="rejected">驳回</button>
+            </div>
+          </form>
+        </article>
+      {% else %}
+        <p>暂无待审核反馈</p>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if can_manage_users %}
+    <section class="card form-card">
+      <h2>账号与角色</h2>
+      <form method="post" action="{{ url_for('admin.create_user') }}" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="filter-grid">
+          <label>用户名<input type="text" name="username" required></label>
+          <label>密码<input type="password" name="password" required></label>
+          <label>
+            角色
+            <select name="role">
+              {% for role in roles %}
+                <option value="{{ role }}">{{ role }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <button class="btn" type="submit">创建账号</button>
+      </form>
+
+      <table>
+        <thead>
+          <tr><th>用户名</th><th>角色</th><th>状态</th><th>创建时间</th></tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+            <tr>
+              <td>{{ user.username }}</td>
+              <td>{{ user.role }}</td>
+              <td>{{ 'active' if user.is_active else 'inactive' }}</td>
+              <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '-' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    <section class="card form-card">
+      <h2>审计日志</h2>
+      <table>
+        <thead>
+          <tr><th>时间</th><th>操作人</th><th>动作</th><th>目标</th><th>详情</th></tr>
+        </thead>
+        <tbody>
+          {% for log in audit_logs %}
+            <tr>
+              <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}</td>
+              <td>{{ log.actor.username if log.actor else '-' }}</td>
+              <td>{{ log.action }}</td>
+              <td>{{ log.target_type }}#{{ log.target_id or '-' }}</td>
+              <td>{{ log.detail }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5">暂无日志</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

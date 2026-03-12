@@ -1,0 +1,28 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>活动档案</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container narrow">
+    <section class="card form-card">
+      <h1>历史活动档案</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('web.index') }}">返回路线</a>
+      </div>
+      {% for activity in activities %}
+        <article class="edit-item">
+          <h3><a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a></h3>
+          <p>时间：{{ activity.activity_time.strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
+          <p>人数：{{ activity.participant_count }}，天气：{{ activity.weather or '-' }}</p>
+        </article>
+      {% else %}
+        <p>暂无活动</p>
+      {% endfor %}
+    </section>
+  </main>
+</body>
+</html>

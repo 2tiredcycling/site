@@ -1,0 +1,240 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>路线详情 V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+</head>
+<body>
+  <main class="container">
+    <section class="card form-card">
+      <h1>{{ route.route_name }}</h1>
+      <p>{{ route.description or '暂无简介' }}</p>
+
+      <div class="filter-grid">
+        <div><strong>里程</strong><div>{{ '%.1f'|format(route.distance_km or 0) }} km</div></div>
+        <div><strong>建议用时</strong><div>{{ '%.1f'|format(route.suggested_duration_hours or 0) }} h</div></div>
+        <div>
+          <strong>难度</strong>
+          <div>
+            {% if route.difficulty == 'easy' %}
+              ★★☆☆☆
+            {% elif route.difficulty == 'medium' %}
+              ★★★☆☆
+            {% elif route.difficulty == 'hard' %}
+              ★★★★★
+            {% else %}
+              {{ route.difficulty }}
+            {% endif %}
+          </div>
+        </div>
+        <div><strong>补给点</strong><div>{{ route.supply_points or '暂无' }}</div></div>
+        <div><strong>风险提示</strong><div>{{ route.risk_warning or '暂无' }}</div></div>
+        <div><strong>下载次数</strong><div>{{ route.download_count or 0 }}</div></div>
+      </div>
+
+      <h3>地图预览（GPX 轨迹）</h3>
+      <div id="route-map" class="map-canvas"></div>
+      <p id="map-source-status" class="hint">底图状态：初始化中...</p>
+      <pre id="preview-box" class="hint">加载中...</pre>
+
+      <h3>关联历史活动</h3>
+      {% if route.activities %}
+        <ul>
+          {% for activity in route.activities %}
+            <li>
+              <a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a>
+              （{{ activity.activity_time.strftime('%Y-%m-%d') if activity.activity_time else '-' }}）
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>暂无关联活动</p>
+      {% endif %}
+
+      <h3>提交反馈</h3>
+      <form id="feedback-form" class="single-form">
+        <div class="filter-grid">
+          <label>评分
+            <select name="rating">
+              <option value="5">5</option>
+              <option value="4">4</option>
+              <option value="3">3</option>
+              <option value="2">2</option>
+              <option value="1">1</option>
+            </select>
+          </label>
+          <label>标注类型
+            <select name="report_type">
+              <option value="normal">正常反馈</option>
+              <option value="outdated">信息过期</option>
+              <option value="changed">路线变更</option>
+            </select>
+          </label>
+        </div>
+        <label>评论<textarea name="comment" rows="2"></textarea></label>
+        <label>路况更新<textarea name="road_condition_update" rows="2"></textarea></label>
+        <button class="btn" type="submit">提交反馈（待审核）</button>
+      </form>
+      <p id="feedback-msg" class="hint"></p>
+
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('web.download', route_id=route.id) }}">下载 GPX</a>
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回列表</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    (function () {
+      const previewBox = document.getElementById('preview-box');
+      const mapSourceStatus = document.getElementById('map-source-status');
+      const map = L.map('route-map');
+      const gaodeVector = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+        subdomains: ['1', '2', '3', '4'],
+        maxZoom: 18,
+        attribution: '&copy; Gaode'
+      });
+      const gaodeImage = L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+        subdomains: ['1', '2', '3', '4'],
+        maxZoom: 18,
+        attribution: '&copy; Gaode'
+      });
+      const tencentVector = L.tileLayer('https://rt{s}.map.gtimg.com/tile?z={z}&x={x}&y={y}&styleid=2&scene=0&version=347', {
+        subdomains: ['0', '1', '2', '3'],
+        maxZoom: 18,
+        attribution: '&copy; Tencent'
+      });
+      const openStreet = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      });
+      const openTopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        maxZoom: 17,
+        attribution: '&copy; OpenTopoMap contributors'
+      });
+
+      const tileCandidates = [
+        {name: 'Gaode Vector', layer: gaodeVector},
+        {name: 'Gaode Satellite', layer: gaodeImage},
+        {name: 'Tencent Vector', layer: tencentVector},
+        {name: 'OpenStreetMap', layer: openStreet},
+        {name: 'OpenTopoMap', layer: openTopo}
+      ];
+
+      function useTileLayer(index) {
+        if (index >= tileCandidates.length) {
+          mapSourceStatus.textContent = '底图状态：所有底图源均不可用';
+          previewBox.textContent = '轨迹已加载，但地图底图不可用（网络或瓦片源限制）。';
+          map.setView([22.3193, 114.1694], 11);
+          return;
+        }
+
+        const candidate = tileCandidates[index];
+        const layer = candidate.layer;
+        let loaded = false;
+        let errorCount = 0;
+        const maxError = 6;
+        const loadTimeoutMs = 6000;
+        mapSourceStatus.textContent = '底图状态：尝试 ' + candidate.name;
+
+        const cleanup = () => {
+          layer.off('tileload', onLoad);
+          layer.off('tileerror', onError);
+        };
+        const onLoad = () => {
+          loaded = true;
+          cleanup();
+          mapSourceStatus.textContent = '当前底图：' + candidate.name + '（加载成功）';
+        };
+        const onError = () => {
+          errorCount += 1;
+          if (!loaded && errorCount >= maxError) {
+            cleanup();
+            map.removeLayer(layer);
+            mapSourceStatus.textContent = '底图状态：' + candidate.name + ' 失败，切换中...';
+            useTileLayer(index + 1);
+          }
+        };
+
+        layer.on('tileload', onLoad);
+        layer.on('tileerror', onError);
+        layer.addTo(map);
+
+        window.setTimeout(() => {
+          if (!loaded) {
+            cleanup();
+            map.removeLayer(layer);
+            mapSourceStatus.textContent = '底图状态：' + candidate.name + ' 超时，切换中...';
+            useTileLayer(index + 1);
+          }
+        }, loadTimeoutMs);
+      }
+
+      L.control.layers(
+        {
+          '高德矢量': gaodeVector,
+          '高德影像': gaodeImage,
+          '腾讯矢量': tencentVector,
+          'OpenStreetMap': openStreet,
+          'OpenTopoMap': openTopo
+        },
+        {}
+      ).addTo(map);
+
+      useTileLayer(0);
+
+      fetch("{{ url_for('api_v1.route_preview', route_id=route.id) }}")
+        .then((resp) => resp.json())
+        .then((data) => {
+          if (!data.points || data.points.length === 0) {
+            previewBox.textContent = '无轨迹点';
+            map.setView([22.3193, 114.1694], 11);
+            return;
+          }
+
+          const line = L.polyline(data.points, {color: '#2563eb', weight: 4}).addTo(map);
+          map.fitBounds(line.getBounds(), {padding: [20, 20]});
+          previewBox.textContent = '轨迹点数：' + data.points.length;
+        })
+        .catch(() => {
+          previewBox.textContent = '预览加载失败';
+          map.setView([22.3193, 114.1694], 11);
+        });
+
+      const form = document.getElementById('feedback-form');
+      const msg = document.getElementById('feedback-msg');
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const payload = {
+          rating: form.rating.value,
+          report_type: form.report_type.value,
+          comment: form.comment.value,
+          road_condition_update: form.road_condition_update.value,
+        };
+
+        fetch("{{ url_for('api_v1.create_feedback', route_id=route.id) }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload),
+        })
+          .then((resp) => resp.json())
+          .then((data) => {
+            if (data.error) {
+              msg.textContent = '提交失败：' + data.error;
+              return;
+            }
+            msg.textContent = '提交成功，当前状态：' + data.status;
+            form.reset();
+          })
+          .catch(() => {
+            msg.textContent = '提交失败，请稍后重试';
+          });
+      });
+    })();
+  </script>
+</body>
+</html>

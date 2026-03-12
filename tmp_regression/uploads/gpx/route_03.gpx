@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="web-project-v1">
+  <trk>
+    <name>Sample Route 03</name>
+    <trkseg>
+      <trkpt lat="22.303000" lon="114.173000"></trkpt>
+      <trkpt lat="22.304000" lon="114.174000"></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
