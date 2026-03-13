@@ -1,10 +1,18 @@
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from app.models import RateLimitState, db, utcnow
 
 
 def _now():
     return utcnow()
+
+
+def _as_utc(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _get_or_create_state(action: str, subject: str) -> RateLimitState:
@@ -20,14 +28,14 @@ def _get_or_create_state(action: str, subject: str) -> RateLimitState:
 def _seconds_left(target_time) -> int:
     if not target_time:
         return 0
-    remaining = int((target_time - _now()).total_seconds())
+    remaining = int((_as_utc(target_time) - _now()).total_seconds())
     return max(0, remaining)
 
 
 def _reset_window_if_needed(state: RateLimitState, window_seconds: int) -> None:
     if window_seconds <= 0:
         return
-    elapsed = (_now() - state.window_started_at).total_seconds()
+    elapsed = (_now() - _as_utc(state.window_started_at)).total_seconds()
     if elapsed >= window_seconds:
         state.window_started_at = _now()
         state.count = 0
