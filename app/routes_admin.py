@@ -394,15 +394,17 @@ def _route_from_form(route: Route | None = None) -> dict:
 
 
 def _normalize_difficulty(raw: str) -> str:
-    if raw in {"easy", "medium", "hard"}:
+    if raw in {"1", "2", "3", "4", "5"}:
         return raw
-    if raw in {"1", "2"}:
-        return "easy"
-    if raw == "3":
-        return "medium"
-    if raw in {"4", "5"}:
-        return "hard"
-    return "medium"
+    # Backward compatibility for legacy values.
+    # We map `hard` to 4 to avoid over-stating routes as 5-star by default.
+    if raw == "easy":
+        return "2"
+    if raw == "medium":
+        return "3"
+    if raw == "hard":
+        return "4"
+    return "3"
 
 
 def _parse_activity_time(value: str | None) -> datetime | None:

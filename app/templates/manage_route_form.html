@@ -34,11 +34,11 @@
           <label>里程 (km)<input type="number" name="distance_km" min="0" step="0.1" value="{{ route.distance_km if route else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
           <label>难度
             <select name="difficulty" {% if not can_edit %}disabled{% endif %}>
-              <option value="1">★☆☆☆☆</option>
-              <option value="2" {% if route and route.difficulty == 'easy' %}selected{% endif %}>★★☆☆☆</option>
-              <option value="3" {% if not route or route.difficulty == 'medium' %}selected{% endif %}>★★★☆☆</option>
-              <option value="4" {% if route and route.difficulty == 'hard' %}selected{% endif %}>★★★★☆</option>
-              <option value="5">★★★★★</option>
+              <option value="1" {% if route and route.difficulty == '1' %}selected{% endif %}>★☆☆☆☆</option>
+              <option value="2" {% if route and route.difficulty in ['2', 'easy'] %}selected{% endif %}>★★☆☆☆</option>
+              <option value="3" {% if not route or route.difficulty in ['3', 'medium'] %}selected{% endif %}>★★★☆☆</option>
+              <option value="4" {% if route and route.difficulty in ['4', 'hard'] %}selected{% endif %}>★★★★☆</option>
+              <option value="5" {% if route and route.difficulty == '5' %}selected{% endif %}>★★★★★</option>
             </select>
           </label>
           <label>状态

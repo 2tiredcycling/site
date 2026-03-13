@@ -34,11 +34,15 @@
         <div>
           <strong>难度</strong>
           <div>
-            {% if route.difficulty == 'easy' %}
+            {% if route.difficulty == '1' %}
+              ★☆☆☆☆
+            {% elif route.difficulty == '2' or route.difficulty == 'easy' %}
               ★★☆☆☆
-            {% elif route.difficulty == 'medium' %}
+            {% elif route.difficulty == '3' or route.difficulty == 'medium' %}
               ★★★☆☆
-            {% elif route.difficulty == 'hard' %}
+            {% elif route.difficulty == '4' or route.difficulty == 'hard' %}
+              ★★★★☆
+            {% elif route.difficulty == '5' %}
               ★★★★★
             {% else %}
               {{ route.difficulty }}
