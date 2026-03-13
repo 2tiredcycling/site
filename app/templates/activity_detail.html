@@ -9,8 +9,15 @@
 <body>
   <main class="container narrow">
     <section class="card form-card">
+      <div class="row-actions">
+        <a class="btn" href="{{ back_url if back_url else url_for('web.activity_list') }}">{{ back_label if back_label else '返回活动列表' }}</a>
+        {% if not back_url %}
+          <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回路线列表</a>
+        {% endif %}
+      </div>
+
       <h1>{{ activity.title }}</h1>
-      <p>时间：{{ activity.activity_time.strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
+      <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
       <p>参与人数：{{ activity.participant_count }}</p>
       <p>天气：{{ activity.weather or '-' }}</p>
       <p>总结：{{ activity.summary or '暂无' }}</p>
@@ -23,10 +30,6 @@
           <li>暂无关联路线</li>
         {% endfor %}
       </ul>
-
-      <div class="row-actions">
-        <a class="btn" href="{{ url_for('web.activity_list') }}">返回活动列表</a>
-      </div>
     </section>
   </main>
 </body>

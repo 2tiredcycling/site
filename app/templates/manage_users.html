@@ -1,0 +1,63 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>账号维护 V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>账号维护</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        <a class="btn" href="{{ url_for('admin.routes_page') }}">路线维护</a>
+        <a class="btn" href="{{ url_for('admin.activities_page') }}">活动维护</a>
+        <a class="btn" href="{{ url_for('admin.user_new_page') }}">新增账号</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <h2>账号列表</h2>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+            <tr>
+              <td>{{ user.id }}</td>
+              <td>{{ user.username }}</td>
+              <td>{{ user.role }}</td>
+              <td>{{ 'active' if user.is_active else 'inactive' }}</td>
+              <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '-' }}</td>
+              <td><a class="btn" href="{{ url_for('admin.user_edit_page', user_id=user.id) }}">编辑</a></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">暂无账号</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.users_page', page=pagination.prev_num) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.users_page', page=pagination.next_num) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

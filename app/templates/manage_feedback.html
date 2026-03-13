@@ -1,0 +1,133 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>反馈评分管理 V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>反馈评分管理</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <h2>筛选</h2>
+      <form method="get" action="{{ url_for('admin.feedback_page') }}" class="single-form">
+        <div class="filter-grid">
+          <label>关键词
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="路线名/评论/路况更新">
+          </label>
+          <label>开始日期
+            <input type="date" name="start_date" value="{{ filters.start_date }}">
+          </label>
+          <label>结束日期
+            <input type="date" name="end_date" value="{{ filters.end_date }}">
+          </label>
+          <label>状态
+            <select name="status">
+              <option value="all" {% if filters.status == 'all' %}selected{% endif %}>全部</option>
+              <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>仅未审核</option>
+              <option value="approved" {% if filters.status == 'approved' %}selected{% endif %}>仅已通过</option>
+              <option value="rejected" {% if filters.status == 'rejected' %}selected{% endif %}>仅已驳回</option>
+            </select>
+          </label>
+        </div>
+        <div class="row-actions">
+          <button class="btn" type="submit">应用筛选</button>
+          <a class="btn btn-muted" href="{{ url_for('admin.feedback_page') }}">重置</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="card form-card">
+      <h2>未审核（{{ pending_pagination.total }}）</h2>
+      {% for feedback in pending_feedback %}
+        <article class="edit-item">
+          <p><strong>路线：</strong>{{ feedback.route.route_name if feedback.route else feedback.route_id }}</p>
+          <p><strong>评分：</strong>{{ feedback.rating }} / 5</p>
+          <p><strong>评论：</strong>{{ feedback.comment or '无' }}</p>
+          <p><strong>路况更新：</strong>{{ feedback.road_condition_update or '无' }}</p>
+          <p><strong>提交时间：</strong>{{ feedback.created_at.strftime('%Y-%m-%d %H:%M:%S') if feedback.created_at else '-' }}</p>
+          <form method="post" action="{{ url_for('admin.review_feedback', feedback_id=feedback.id) }}" class="single-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="feedback">
+            <div class="row-actions">
+              <input type="text" name="reviewer_note" placeholder="审核备注（可选）">
+              <button class="btn" type="submit" name="status" value="approved">通过</button>
+              <button class="btn btn-danger" type="submit" name="status" value="rejected">驳回</button>
+            </div>
+          </form>
+        </article>
+      {% else %}
+        <p>暂无未审核反馈</p>
+      {% endfor %}
+      <div class="row-actions">
+        {% if pending_pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.feedback_page', pending_page=pending_pagination.prev_num, reviewed_page=reviewed_pagination.page, q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pending_pagination.page }} / {{ pending_pagination.pages or 1 }} 页</span>
+        {% if pending_pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.feedback_page', pending_page=pending_pagination.next_num, reviewed_page=reviewed_pagination.page, q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card form-card">
+      <h2>已审核（{{ reviewed_pagination.total }}）</h2>
+      <table>
+        <thead>
+          <tr><th>时间</th><th>路线</th><th>评分</th><th>结果</th><th>审核人</th><th>审核备注</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for feedback in reviewed_feedback %}
+            <tr>
+              <td>{{ feedback.reviewed_at.strftime('%Y-%m-%d %H:%M:%S') if feedback.reviewed_at else '-' }}</td>
+              <td>{{ feedback.route.route_name if feedback.route else feedback.route_id }}</td>
+              <td>{{ feedback.rating }} / 5</td>
+              <td>{{ feedback.status }}</td>
+              <td>{{ feedback.reviewer.username if feedback.reviewer else '-' }}</td>
+              <td>{{ feedback.reviewer_note or '-' }}</td>
+              <td class="row-actions">
+                <form method="post" action="{{ url_for('admin.reopen_feedback', feedback_id=feedback.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-muted" type="submit">撤销审核</button>
+                </form>
+                {% if g.current_user.role == 'admin' %}
+                  <form method="post" action="{{ url_for('admin.delete_feedback', feedback_id=feedback.id) }}" onsubmit="return confirm('确认删除该反馈吗？');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-danger" type="submit">删除</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7">暂无已审核反馈</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="row-actions">
+        {% if reviewed_pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.feedback_page', pending_page=pending_pagination.page, reviewed_page=reviewed_pagination.prev_num, q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ reviewed_pagination.page }} / {{ reviewed_pagination.pages or 1 }} 页</span>
+        {% if reviewed_pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.feedback_page', pending_page=pending_pagination.page, reviewed_page=reviewed_pagination.next_num, q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

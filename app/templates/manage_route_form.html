@@ -1,0 +1,84 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ '编辑路线' if route else '新增路线' }} V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>{{ '编辑路线 #' ~ route.id if route else '新增路线' }}</h1>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.routes_page') }}">返回路线列表</a>
+        {% if route %}
+          <a class="btn" href="{{ url_for('admin.route_detail_manage', route_id=route.id) }}">查看路线详情</a>
+        {% endif %}
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <form method="post" action="{{ url_for('admin.update_route', route_id=route.id) if route else url_for('admin.create_route') }}" enctype="multipart/form-data" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="filter-grid">
+          <label>路线名称<input type="text" name="route_name" value="{{ route.route_name if route else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
+          <label>里程 (km)<input type="number" name="distance_km" min="0" step="0.1" value="{{ route.distance_km if route else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
+          <label>难度
+            <select name="difficulty" {% if not can_edit %}disabled{% endif %}>
+              <option value="1">★☆☆☆☆</option>
+              <option value="2" {% if route and route.difficulty == 'easy' %}selected{% endif %}>★★☆☆☆</option>
+              <option value="3" {% if not route or route.difficulty == 'medium' %}selected{% endif %}>★★★☆☆</option>
+              <option value="4" {% if route and route.difficulty == 'hard' %}selected{% endif %}>★★★★☆</option>
+              <option value="5">★★★★★</option>
+            </select>
+          </label>
+          <label>状态
+            <select name="status" {% if not can_edit %}disabled{% endif %}>
+              {% for st in statuses %}
+                <option value="{{ st }}" {% if route and route.status == st %}selected{% endif %}>{{ st }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>建议用时(h)<input type="number" name="suggested_duration_hours" min="0" step="0.1" value="{{ route.suggested_duration_hours if route else 3 }}" {% if not can_edit %}disabled{% endif %}></label>
+          <label>补给点<input type="text" name="supply_points" value="{{ route.supply_points if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+          <label>风险提示<input type="text" name="risk_warning" value="{{ route.risk_warning if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+          <label>{{ '替换 GPX' if route else 'GPX 文件' }}<input type="file" name="gpx_file" accept=".gpx" {% if not route %}required{% endif %} {% if not can_edit %}disabled{% endif %}></label>
+        </div>
+        <label>简介<textarea name="description" rows="3" {% if not can_edit %}disabled{% endif %}>{{ route.description if route else '' }}</textarea></label>
+        {% if can_edit %}
+          <button class="btn" type="submit">{{ '保存修改' if route else '新增路线' }}</button>
+        {% endif %}
+      </form>
+    </section>
+
+    {% if route and can_edit %}
+      <section class="card form-card">
+        <h2>维护操作</h2>
+        <div class="row-actions">
+          <form method="post" action="{{ url_for('admin.delete_route', route_id=route.id) }}" onsubmit="return confirm('确认移入回收站吗？');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-danger" type="submit">移入回收站</button>
+          </form>
+          <form method="post" action="{{ url_for('admin.rollback_route', route_id=route.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="number" name="version_no" min="1" placeholder="版本号" required>
+            <button class="btn btn-muted" type="submit">回滚版本</button>
+          </form>
+        </div>
+        {% if versions %}
+          <p class="hint">最近版本：{% for version in versions %}v{{ version.version_no }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
+        {% endif %}
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

@@ -1,9 +1,9 @@
 ﻿from pathlib import Path
-import xml.etree.ElementTree as ET
 
 from flask import Blueprint, current_app, jsonify, request
 
 from app.auth import current_user, validate_csrf_token
+from app.gpx_utils import parse_gpx_points_and_stats
 from app.models import (
     FEEDBACK_APPROVED,
     FEEDBACK_PENDING,
@@ -81,24 +81,14 @@ def route_preview(route_id: int):
         return jsonify({"error": "gpx_missing"}), 404
 
     try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
-    except ET.ParseError:
+        points, stats, elevation_profile = parse_gpx_points_and_stats(file_path)
+    except Exception:
         return jsonify({"error": "gpx_parse_failed"}), 400
 
-    points = []
-    for node in root.findall(".//{*}trkpt"):
-        lat = node.attrib.get("lat")
-        lon = node.attrib.get("lon")
-        if lat is None or lon is None:
-            continue
-        try:
-            points.append([float(lat), float(lon)])
-        except ValueError:
-            continue
-
     if not points:
-        return jsonify({"route_id": route.id, "points": [], "bounds": None})
+        return jsonify(
+            {"route_id": route.id, "points": [], "bounds": None, "stats": stats, "elevation_profile": elevation_profile}
+        )
 
     lats = [item[0] for item in points]
     lons = [item[1] for item in points]
@@ -108,7 +98,9 @@ def route_preview(route_id: int):
         "min_lon": min(lons),
         "max_lon": max(lons),
     }
-    return jsonify({"route_id": route.id, "points": points, "bounds": bounds})
+    return jsonify(
+        {"route_id": route.id, "points": points, "bounds": bounds, "stats": stats, "elevation_profile": elevation_profile}
+    )
 
 
 @bp.get("/activities")
@@ -284,3 +276,6 @@ def route_stats():
 @bp.get("/health")
 def api_health():
     return jsonify({"status": "ok", "version": "v3"})
+
+
+

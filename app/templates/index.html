@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GPX 路线知识库 V3</title>
+  <title>2Tired 骑行社线路共享平台 V3</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
     <header class="header">
-      <h1>GPX 路线知识库 V3</h1>
-      <p>支持路线检索、活动档案、反馈评分与更新追踪。</p>
-      <div class="row-actions">
+      <h1>2Tired 骑行社线路共享平台</h1>
+      <p>一站式查看骑行线路、活动档案、反馈评分与更新追踪。</p>
+      <div class="row-actions hero-actions">
         <a class="btn" href="{{ url_for('admin.dashboard') }}">进入管理后台</a>
         <a class="btn btn-muted" href="{{ url_for('web.activity_list') }}">查看活动档案</a>
       </div>
@@ -89,6 +89,7 @@
             <th>路线名称</th>
             <th>里程 (km)</th>
             <th>难度</th>
+            <th>评分</th>
             <th>下载统计</th>
             <th>操作</th>
           </tr>
@@ -110,6 +111,16 @@
                 {% endif %}
               </td>
               <td>
+                {% set info = rating_map.get(route.id, {'avg_rating': 0.0, 'rating_count': 0}) %}
+                {% if info.rating_count > 0 %}
+                  {{ '%.1f'|format(info.avg_rating) }} / 5
+                  <br>
+                  <small>{{ info.rating_count }} 条已审核</small>
+                {% else %}
+                  暂无评分
+                {% endif %}
+              </td>
+              <td>
                 {{ route.download_count or 0 }} 次
                 <br>
                 <small>{{ route.last_downloaded_at.strftime('%Y-%m-%d %H:%M') if route.last_downloaded_at else '暂无' }}</small>
@@ -121,7 +132,7 @@
             </tr>
           {% else %}
             <tr>
-              <td colspan="5">暂无符合条件的路线</td>
+              <td colspan="6">暂无符合条件的路线</td>
             </tr>
           {% endfor %}
         </tbody>

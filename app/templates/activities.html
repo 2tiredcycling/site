@@ -16,7 +16,7 @@
       {% for activity in activities %}
         <article class="edit-item">
           <h3><a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a></h3>
-          <p>时间：{{ activity.activity_time.strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
+          <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
           <p>人数：{{ activity.participant_count }}，天气：{{ activity.weather or '-' }}</p>
         </article>
       {% else %}

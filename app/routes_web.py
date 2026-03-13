@@ -1,20 +1,64 @@
-﻿import csv
+﻿from datetime import timedelta, timezone
+import csv
 from io import StringIO
 from pathlib import Path
 
 from flask import Blueprint, Response, abort, current_app, redirect, render_template, request, send_from_directory, url_for
 
-from app.models import STATUS_PUBLISHED, Activity, Route, db, utcnow
+from app.models import FEEDBACK_APPROVED, Activity, Route, RouteFeedback, STATUS_PUBLISHED, db, utcnow
 from app.querying import query_routes_from_request
 
 bp = Blueprint("web", __name__)
+SH_TZ = timezone(timedelta(hours=8))
+
+
+def _to_local_time(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(SH_TZ)
+
+
+@bp.app_context_processor
+def _inject_time_helpers():
+    return {"to_local_time": _to_local_time}
+
+
+def _rating_summary_map(route_ids: list[int]) -> dict[int, dict]:
+    if not route_ids:
+        return {}
+    rows = (
+        db.session.query(
+            RouteFeedback.route_id,
+            db.func.avg(RouteFeedback.rating).label("avg_rating"),
+            db.func.count(RouteFeedback.id).label("rating_count"),
+        )
+        .filter(RouteFeedback.route_id.in_(route_ids), RouteFeedback.status == FEEDBACK_APPROVED)
+        .group_by(RouteFeedback.route_id)
+        .all()
+    )
+    result = {route_id: {"avg_rating": 0.0, "rating_count": 0} for route_id in route_ids}
+    for route_id, avg_rating, rating_count in rows:
+        result[route_id] = {
+            "avg_rating": round(float(avg_rating or 0), 2),
+            "rating_count": int(rating_count or 0),
+        }
+    return result
 
 
 @bp.get("/")
 def index() -> str:
     query, filters = query_routes_from_request(include_unpublished=False)
     pagination = query.paginate(page=filters["page"], per_page=filters["per_page"], error_out=False)
-    return render_template("index.html", routes=pagination.items, pagination=pagination, filters=filters)
+    rating_map = _rating_summary_map([item.id for item in pagination.items])
+    return render_template(
+        "index.html",
+        routes=pagination.items,
+        pagination=pagination,
+        filters=filters,
+        rating_map=rating_map,
+    )
 
 
 @bp.get("/routes/<int:route_id>")
@@ -22,7 +66,9 @@ def route_detail(route_id: int) -> str:
     route = Route.query.filter_by(id=route_id, status=STATUS_PUBLISHED, is_deleted=False).first()
     if not route:
         abort(404, description="Route not found")
-    return render_template("route_detail.html", route=route)
+    rating_map = _rating_summary_map([route.id])
+    rating_info = rating_map.get(route.id, {"avg_rating": 0.0, "rating_count": 0})
+    return render_template("route_detail.html", route=route, rating_info=rating_info)
 
 
 @bp.get("/activities")
@@ -38,7 +84,13 @@ def activity_detail(activity_id: int) -> str:
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
         abort(404, description="Activity not found")
-    return render_template("activity_detail.html", activity=activity)
+    source = (request.args.get("source") or "").strip()
+    back_url = None
+    back_label = None
+    if source == "manage":
+        back_url = url_for("admin.activities_page")
+        back_label = "返回活动管理"
+    return render_template("activity_detail.html", activity=activity, back_url=back_url, back_label=back_label)
 
 
 @bp.get("/download/<int:route_id>")
@@ -140,3 +192,5 @@ def handle_404(error):
 @bp.app_errorhandler(403)
 def handle_403(_error):
     return redirect(url_for("admin.login"))
+
+

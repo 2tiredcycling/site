@@ -3,12 +3,14 @@ from datetime import datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
 
+from sqlalchemy import or_
 from flask import (
     Blueprint,
     abort,
     current_app,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -51,8 +53,10 @@ from app.models import (
     utcnow,
 )
 from app.querying import query_routes_from_request
+from app.gpx_utils import parse_gpx_points_and_stats
 from app.route_ops import allowed_file, file_size_ok, parse_distance, save_gpx_file
 from app.services import (
+    approved_rating_summary,
     create_route_version,
     rollback_route_to_version,
     route_snapshot,
@@ -63,6 +67,14 @@ from app.services import (
 
 bp = Blueprint("admin", __name__, url_prefix="/manage")
 SH_TZ = timezone(timedelta(hours=8))
+
+
+def _to_local_time(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(SH_TZ)
 
 
 @bp.before_app_request
@@ -81,7 +93,7 @@ def _verify_csrf_for_post():
 
 @bp.app_context_processor
 def _inject_csrf_token():
-    return {"csrf_token": get_csrf_token}
+    return {"csrf_token": get_csrf_token, "to_local_time": _to_local_time}
 
 
 @bp.get("/login")
@@ -118,24 +130,90 @@ def logout():
 @bp.get("")
 @login_required
 def dashboard():
-    pending_feedback = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).order_by(RouteFeedback.created_at.desc()).all()
-    users = User.query.order_by(User.created_at.desc()).all()
-    audit_logs = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(40).all()
+    log_page = max(1, request.args.get("log_page", default=1, type=int))
+    pending_feedback_count = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).count()
+    audit_logs_pagination = AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(
+        page=log_page, per_page=15, error_out=False
+    )
+    latest_routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).limit(3).all()
+    latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(3).all()
+    latest_feedback = RouteFeedback.query.order_by(RouteFeedback.created_at.desc()).limit(3).all()
     summary = {
         "route_total": Route.query.filter_by(is_deleted=False).count(),
         "route_deleted": Route.query.filter_by(is_deleted=True).count(),
         "activity_total": Activity.query.count(),
-        "feedback_pending": len(pending_feedback),
+        "feedback_pending": pending_feedback_count,
     }
     return render_template(
         "manage.html",
         summary=summary,
-        pending_feedback=pending_feedback,
-        users=users,
-        audit_logs=audit_logs,
+        audit_logs=audit_logs_pagination.items,
+        audit_logs_pagination=audit_logs_pagination,
+        latest_routes=latest_routes,
+        latest_activities=latest_activities,
+        latest_feedback=latest_feedback,
         can_review=can_review(g.current_user),
         can_manage_users=(g.current_user.role == ROLE_ADMIN),
-        roles=ROLES,
+    )
+
+
+@bp.get("/feedback")
+@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+def feedback_page():
+    keyword = (request.args.get("q") or "").strip()
+    status_filter = (request.args.get("status") or "all").strip()
+    start_date = (request.args.get("start_date") or "").strip()
+    end_date = (request.args.get("end_date") or "").strip()
+    if status_filter not in {"all", FEEDBACK_PENDING, FEEDBACK_APPROVED, FEEDBACK_REJECTED}:
+        status_filter = "all"
+
+    base_query = RouteFeedback.query.outerjoin(Route, Route.id == RouteFeedback.route_id)
+    if keyword:
+        pattern = f"%{keyword}%"
+        base_query = base_query.filter(
+            or_(
+                Route.route_name.ilike(pattern),
+                RouteFeedback.comment.ilike(pattern),
+                RouteFeedback.road_condition_update.ilike(pattern),
+            )
+        )
+    if start_date:
+        try:
+            start_local = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=SH_TZ)
+            base_query = base_query.filter(RouteFeedback.created_at >= start_local.astimezone(timezone.utc))
+        except ValueError:
+            start_date = ""
+    if end_date:
+        try:
+            end_local = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=SH_TZ) + timedelta(days=1)
+            base_query = base_query.filter(RouteFeedback.created_at < end_local.astimezone(timezone.utc))
+        except ValueError:
+            end_date = ""
+
+    pending_page = max(1, request.args.get("pending_page", default=1, type=int))
+    reviewed_page = max(1, request.args.get("reviewed_page", default=1, type=int))
+
+    pending_query = base_query.filter(RouteFeedback.status == FEEDBACK_PENDING)
+    if status_filter in {FEEDBACK_APPROVED, FEEDBACK_REJECTED}:
+        pending_query = pending_query.filter(db.text("1=0"))
+
+    reviewed_query = base_query.filter(RouteFeedback.status.in_([FEEDBACK_APPROVED, FEEDBACK_REJECTED]))
+    if status_filter in {FEEDBACK_APPROVED, FEEDBACK_REJECTED}:
+        reviewed_query = reviewed_query.filter(RouteFeedback.status == status_filter)
+    elif status_filter == FEEDBACK_PENDING:
+        reviewed_query = reviewed_query.filter(db.text("1=0"))
+
+    pending_pagination = pending_query.order_by(RouteFeedback.created_at.desc()).paginate(page=pending_page, per_page=12, error_out=False)
+    reviewed_pagination = reviewed_query.order_by(RouteFeedback.reviewed_at.desc(), RouteFeedback.created_at.desc()).paginate(
+        page=reviewed_page, per_page=12, error_out=False
+    )
+    return render_template(
+        "manage_feedback.html",
+        pending_feedback=pending_pagination.items,
+        reviewed_feedback=reviewed_pagination.items,
+        pending_pagination=pending_pagination,
+        reviewed_pagination=reviewed_pagination,
+        filters={"q": keyword, "status": status_filter, "start_date": start_date, "end_date": end_date},
     )
 
 
@@ -156,17 +234,145 @@ def routes_page():
     )
 
 
+@bp.get("/routes/new")
+@role_required(ROLE_ADMIN, ROLE_EDITOR)
+def route_new_page():
+    return render_template("manage_route_form.html", route=None, statuses=ROUTE_STATUSES, can_edit=True)
+
+
+@bp.get("/routes/<int:route_id>/edit")
+@login_required
+def route_edit_page(route_id: int):
+    route = Route.query.filter_by(id=route_id, is_deleted=False).first()
+    if not route:
+        flash("路线不存在", "error")
+        return redirect(url_for("admin.routes_page"))
+    versions = (
+        RouteVersion.query.filter_by(route_id=route_id)
+        .order_by(RouteVersion.version_no.desc())
+        .limit(20)
+        .all()
+    )
+    return render_template(
+        "manage_route_form.html",
+        route=route,
+        statuses=ROUTE_STATUSES,
+        versions=versions,
+        can_edit=can_edit(g.current_user),
+    )
+
+
+@bp.get("/routes/<int:route_id>/view")
+@login_required
+def route_detail_manage(route_id: int):
+    route = Route.query.filter_by(id=route_id, is_deleted=False).first()
+    if not route:
+        abort(404, description="Route not found")
+    avg_rating, rating_count = approved_rating_summary(route.id)
+    return render_template(
+        "route_detail.html",
+        route=route,
+        rating_info={"avg_rating": avg_rating, "rating_count": rating_count},
+        preview_endpoint=url_for("admin.route_preview_manage", route_id=route.id),
+        back_url=url_for("admin.routes_page"),
+        back_label="返回路线管理",
+    )
+
+
+
+@bp.get("/routes/<int:route_id>/preview")
+@login_required
+def route_preview_manage(route_id: int):
+    route = Route.query.filter_by(id=route_id, is_deleted=False).first()
+    if not route:
+        return jsonify({"error": "route_not_found"}), 404
+
+    file_path = Path(current_app.config["UPLOAD_FOLDER"]) / route.gpx_filename
+    if not file_path.exists():
+        return jsonify({"error": "gpx_missing"}), 404
+
+    try:
+        points, stats, elevation_profile = parse_gpx_points_and_stats(file_path)
+    except Exception:
+        return jsonify({"error": "gpx_parse_failed"}), 400
+
+    if not points:
+        return jsonify(
+            {"route_id": route.id, "points": [], "bounds": None, "stats": stats, "elevation_profile": elevation_profile}
+        )
+
+    lats = [item[0] for item in points]
+    lons = [item[1] for item in points]
+    bounds = {
+        "min_lat": min(lats),
+        "max_lat": max(lats),
+        "min_lon": min(lons),
+        "max_lon": max(lons),
+    }
+    return jsonify(
+        {"route_id": route.id, "points": points, "bounds": bounds, "stats": stats, "elevation_profile": elevation_profile}
+    )
+
 @bp.get("/activities")
 @login_required
 def activities_page():
-    activities = Activity.query.order_by(Activity.activity_time.desc()).all()
-    routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
+    page = max(1, request.args.get("page", default=1, type=int))
+    activities_pagination = Activity.query.order_by(Activity.activity_time.desc()).paginate(
+        page=page, per_page=20, error_out=False
+    )
     return render_template(
         "manage_activities.html",
-        activities=activities,
+        activities=activities_pagination.items,
+        pagination=activities_pagination,
+        can_edit=can_edit(g.current_user),
+    )
+
+
+@bp.get("/activities/new")
+@role_required(ROLE_ADMIN, ROLE_EDITOR)
+def activity_new_page():
+    routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
+    return render_template("manage_activity_form.html", activity=None, routes=routes, can_edit=True)
+
+
+@bp.get("/activities/<int:activity_id>/edit")
+@login_required
+def activity_edit_page(activity_id: int):
+    activity = Activity.query.filter_by(id=activity_id).first()
+    if not activity:
+        flash("活动不存在", "error")
+        return redirect(url_for("admin.activities_page"))
+    routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
+    return render_template(
+        "manage_activity_form.html",
+        activity=activity,
         routes=routes,
         can_edit=can_edit(g.current_user),
     )
+
+
+@bp.get("/users")
+@role_required(ROLE_ADMIN)
+def users_page():
+    page = max(1, request.args.get("page", default=1, type=int))
+    pagination = User.query.order_by(User.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    return render_template("manage_users.html", users=pagination.items, pagination=pagination)
+
+
+@bp.get("/users/new")
+@role_required(ROLE_ADMIN)
+def user_new_page():
+    return render_template("manage_user_form.html", user=None, roles=ROLES)
+
+
+@bp.get("/users/<int:user_id>/edit")
+@role_required(ROLE_ADMIN)
+def user_edit_page(user_id: int):
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        flash("用户不存在", "error")
+        return redirect(url_for("admin.users_page"))
+    return render_template("manage_user_form.html", user=user, roles=ROLES)
 
 
 def _route_from_form(route: Route | None = None) -> dict:
@@ -478,7 +684,44 @@ def review_feedback(feedback_id: int):
 
     write_audit_log(g.current_user.id, "feedback.review", "route_feedback", str(feedback.id), status)
     flash("反馈已审核", "success")
+    next_page = (request.form.get("next") or "").strip()
+    if next_page == "feedback":
+        return redirect(url_for("admin.feedback_page"))
     return redirect(url_for("admin.dashboard"))
+
+
+@bp.post("/feedback/<int:feedback_id>/reopen")
+@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+def reopen_feedback(feedback_id: int):
+    feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
+    if not feedback:
+        flash("反馈不存在", "error")
+        return redirect(url_for("admin.feedback_page"))
+
+    feedback.status = FEEDBACK_PENDING
+    feedback.reviewer_note = ""
+    feedback.reviewer_id = None
+    feedback.reviewed_at = None
+    db.session.commit()
+    write_audit_log(g.current_user.id, "feedback.reopen", "route_feedback", str(feedback.id), "reopen_to_pending")
+    flash("已撤销审核，反馈回到待审核", "success")
+    return redirect(url_for("admin.feedback_page"))
+
+
+@bp.post("/feedback/<int:feedback_id>/delete")
+@role_required(ROLE_ADMIN)
+def delete_feedback(feedback_id: int):
+    feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
+    if not feedback:
+        flash("反馈不存在", "error")
+        return redirect(url_for("admin.feedback_page"))
+
+    route_id = feedback.route_id
+    db.session.delete(feedback)
+    db.session.commit()
+    write_audit_log(g.current_user.id, "feedback.delete", "route_feedback", str(feedback_id), f"route={route_id}")
+    flash("反馈已删除", "success")
+    return redirect(url_for("admin.feedback_page"))
 
 
 @bp.post("/activities/create")
@@ -576,21 +819,77 @@ def create_user():
 
     if not username or not password or role not in ROLES:
         flash("用户创建失败：参数不合法", "error")
-        return redirect(url_for("admin.dashboard"))
+        return redirect(url_for("admin.users_page"))
     if len(password) < 12:
         flash("用户创建失败：密码长度至少 12 位", "error")
-        return redirect(url_for("admin.dashboard"))
+        return redirect(url_for("admin.users_page"))
 
     if User.query.filter_by(username=username).first():
         flash("用户创建失败：用户名重复", "error")
-        return redirect(url_for("admin.dashboard"))
+        return redirect(url_for("admin.users_page"))
 
     user = User(username=username, password=generate_password_hash(password), role=role, is_active=True)
     db.session.add(user)
     db.session.commit()
     write_audit_log(g.current_user.id, "user.create", "user", str(user.id), username)
     flash("用户创建成功", "success")
-    return redirect(url_for("admin.dashboard"))
+    return redirect(url_for("admin.users_page"))
+
+
+@bp.post("/users/<int:user_id>/update")
+@role_required(ROLE_ADMIN)
+def update_user(user_id: int):
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        flash("用户不存在", "error")
+        return redirect(url_for("admin.users_page"))
+
+    username = (request.form.get("username") or "").strip()
+    role = (request.form.get("role") or ROLE_EDITOR).strip()
+    is_active = (request.form.get("is_active") or "0").strip() == "1"
+    password = (request.form.get("password") or "").strip()
+
+    if not username or role not in ROLES:
+        flash("用户更新失败：参数不合法", "error")
+        return redirect(url_for("admin.user_edit_page", user_id=user_id))
+    if User.query.filter(User.id != user_id, User.username == username).first():
+        flash("用户更新失败：用户名重复", "error")
+        return redirect(url_for("admin.user_edit_page", user_id=user_id))
+    if password and len(password) < 12:
+        flash("用户更新失败：密码长度至少 12 位", "error")
+        return redirect(url_for("admin.user_edit_page", user_id=user_id))
+    if user.id == g.current_user.id and not is_active:
+        flash("不能停用当前登录账号", "error")
+        return redirect(url_for("admin.user_edit_page", user_id=user_id))
+
+    user.username = username
+    user.role = role
+    user.is_active = is_active
+    if password:
+        user.password = generate_password_hash(password)
+
+    db.session.commit()
+    write_audit_log(g.current_user.id, "user.update", "user", str(user.id), username)
+    flash("用户已更新", "success")
+    return redirect(url_for("admin.users_page"))
+
+
+@bp.post("/users/<int:user_id>/delete")
+@role_required(ROLE_ADMIN)
+def delete_user(user_id: int):
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        flash("用户不存在", "error")
+        return redirect(url_for("admin.users_page"))
+    if user.id == g.current_user.id:
+        flash("不能删除当前登录账号", "error")
+        return redirect(url_for("admin.user_edit_page", user_id=user_id))
+
+    user.is_active = False
+    db.session.commit()
+    write_audit_log(g.current_user.id, "user.deactivate", "user", str(user.id), user.username)
+    flash("账号已停用", "success")
+    return redirect(url_for("admin.users_page"))
 
 
 def _cleanup_paths(paths: list[Path]) -> None:
@@ -756,3 +1055,8 @@ def download_import_report(token: str):
         download_name=report.report_filename,
         mimetype="text/csv",
     )
+
+
+
+
+

@@ -10,12 +10,27 @@
 <body>
   <main class="container">
     <section class="card form-card">
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('web.download', route_id=route.id) }}">下载 GPX</a>
+        <a class="btn btn-muted" href="{{ back_url if back_url else url_for('web.index') }}">{{ back_label if back_label else '返回列表' }}</a>
+      </div>
+
       <h1>{{ route.route_name }}</h1>
       <p>{{ route.description or '暂无简介' }}</p>
 
       <div class="filter-grid">
         <div><strong>里程</strong><div>{{ '%.1f'|format(route.distance_km or 0) }} km</div></div>
         <div><strong>建议用时</strong><div>{{ '%.1f'|format(route.suggested_duration_hours or 0) }} h</div></div>
+        <div>
+          <strong>用户评分</strong>
+          <div>
+            {% if rating_info and rating_info.rating_count > 0 %}
+              {{ '%.1f'|format(rating_info.avg_rating) }} / 5（{{ rating_info.rating_count }} 条）
+            {% else %}
+              暂无评分
+            {% endif %}
+          </div>
+        </div>
         <div>
           <strong>难度</strong>
           <div>
@@ -33,6 +48,14 @@
         <div><strong>补给点</strong><div>{{ route.supply_points or '暂无' }}</div></div>
         <div><strong>风险提示</strong><div>{{ route.risk_warning or '暂无' }}</div></div>
         <div><strong>下载次数</strong><div>{{ route.download_count or 0 }}</div></div>
+        <div><strong>GPX识别里程</strong><div id="auto-distance">计算中...</div></div>
+        <div><strong>累计爬升</strong><div id="auto-ascent">计算中...</div></div>
+      </div>
+
+      <h3>海拔剖面图</h3>
+      <div class="elevation-profile">
+        <svg id="elevation-profile" viewBox="0 0 760 220" preserveAspectRatio="none"></svg>
+        <p id="elevation-profile-msg" class="hint">加载中...</p>
       </div>
 
       <h3>地图预览（GPX 轨迹）</h3>
@@ -46,7 +69,7 @@
           {% for activity in route.activities %}
             <li>
               <a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a>
-              （{{ activity.activity_time.strftime('%Y-%m-%d') if activity.activity_time else '-' }}）
+              （{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-' }}）
             </li>
           {% endfor %}
         </ul>
@@ -80,10 +103,6 @@
       </form>
       <p id="feedback-msg" class="hint"></p>
 
-      <div class="row-actions">
-        <a class="btn" href="{{ url_for('web.download', route_id=route.id) }}">下载 GPX</a>
-        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回列表</a>
-      </div>
     </section>
   </main>
 
@@ -92,6 +111,139 @@
     (function () {
       const previewBox = document.getElementById('preview-box');
       const mapSourceStatus = document.getElementById('map-source-status');
+      const autoDistance = document.getElementById('auto-distance');
+      const autoAscent = document.getElementById('auto-ascent');
+      const profileSvg = document.getElementById('elevation-profile');
+      const profileMsg = document.getElementById('elevation-profile-msg');
+      const previewEndpoint = "{{ preview_endpoint if preview_endpoint else url_for('api_v1.route_preview', route_id=route.id) }}";
+      if (typeof window.L === 'undefined') {
+        mapSourceStatus.textContent = '底图状态：Leaflet 加载失败';
+        previewBox.textContent = '地图组件未加载，请检查本地网络。';
+        return;
+      }
+
+      function outOfChina(lat, lon) {
+        return lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271;
+      }
+
+      function transformLat(x, y) {
+        let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+        ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+        ret += (20.0 * Math.sin(y * Math.PI) + 40.0 * Math.sin(y / 3.0 * Math.PI)) * 2.0 / 3.0;
+        ret += (160.0 * Math.sin(y / 12.0 * Math.PI) + 320 * Math.sin(y * Math.PI / 30.0)) * 2.0 / 3.0;
+        return ret;
+      }
+
+      function transformLon(x, y) {
+        let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+        ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+        ret += (20.0 * Math.sin(x * Math.PI) + 40.0 * Math.sin(x / 3.0 * Math.PI)) * 2.0 / 3.0;
+        ret += (150.0 * Math.sin(x / 12.0 * Math.PI) + 300.0 * Math.sin(x / 30.0 * Math.PI)) * 2.0 / 3.0;
+        return ret;
+      }
+
+      function wgs84ToGcj02(lat, lon) {
+        if (outOfChina(lat, lon)) {
+          return [lat, lon];
+        }
+        const a = 6378245.0;
+        const ee = 0.00669342162296594323;
+        let dLat = transformLat(lon - 105.0, lat - 35.0);
+        let dLon = transformLon(lon - 105.0, lat - 35.0);
+        const radLat = lat / 180.0 * Math.PI;
+        let magic = Math.sin(radLat);
+        magic = 1 - ee * magic * magic;
+        const sqrtMagic = Math.sqrt(magic);
+        dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * Math.PI);
+        dLon = (dLon * 180.0) / (a / sqrtMagic * Math.cos(radLat) * Math.PI);
+        const mgLat = lat + dLat;
+        const mgLon = lon + dLon;
+        return [mgLat, mgLon];
+      }
+
+      function renderElevationProfile(profile) {
+        profileSvg.innerHTML = '';
+        if (!Array.isArray(profile) || profile.length < 2) {
+          profileMsg.textContent = '暂无有效海拔数据';
+          return;
+        }
+
+        const width = 760;
+        const height = 220;
+        const padding = {left: 46, right: 14, top: 12, bottom: 30};
+        const distMin = profile[0].distance_km;
+        const distMax = profile[profile.length - 1].distance_km;
+        let eleMin = Math.min(...profile.map((item) => item.elevation_m));
+        let eleMax = Math.max(...profile.map((item) => item.elevation_m));
+        if (Math.abs(eleMax - eleMin) < 1) {
+          eleMax += 1;
+          eleMin -= 1;
+        }
+        const distRange = Math.max(0.001, distMax - distMin);
+        const eleRange = Math.max(0.001, eleMax - eleMin);
+
+        const sx = (distance) => padding.left + (distance - distMin) / distRange * (width - padding.left - padding.right);
+        const sy = (elevation) => height - padding.bottom - (elevation - eleMin) / eleRange * (height - padding.top - padding.bottom);
+
+        const gridYs = [0, 0.25, 0.5, 0.75, 1].map((k) => padding.top + k * (height - padding.top - padding.bottom));
+        gridYs.forEach((y) => {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', String(padding.left));
+          line.setAttribute('x2', String(width - padding.right));
+          line.setAttribute('y1', String(y));
+          line.setAttribute('y2', String(y));
+          line.setAttribute('stroke', '#e5e7eb');
+          line.setAttribute('stroke-width', '1');
+          profileSvg.appendChild(line);
+        });
+
+        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute(
+          'points',
+          profile.map((item) => `${sx(item.distance_km)},${sy(item.elevation_m)}`).join(' ')
+        );
+        polyline.setAttribute('fill', 'none');
+        polyline.setAttribute('stroke', '#2563eb');
+        polyline.setAttribute('stroke-width', '2.5');
+        polyline.setAttribute('stroke-linecap', 'round');
+        polyline.setAttribute('stroke-linejoin', 'round');
+        profileSvg.appendChild(polyline);
+
+        const startLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        startLabel.setAttribute('x', String(padding.left));
+        startLabel.setAttribute('y', String(height - 8));
+        startLabel.setAttribute('fill', '#6b7280');
+        startLabel.setAttribute('font-size', '12');
+        startLabel.textContent = `${distMin.toFixed(1)} km`;
+        profileSvg.appendChild(startLabel);
+
+        const endLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        endLabel.setAttribute('x', String(width - padding.right));
+        endLabel.setAttribute('y', String(height - 8));
+        endLabel.setAttribute('text-anchor', 'end');
+        endLabel.setAttribute('fill', '#6b7280');
+        endLabel.setAttribute('font-size', '12');
+        endLabel.textContent = `${distMax.toFixed(1)} km`;
+        profileSvg.appendChild(endLabel);
+
+        const minLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        minLabel.setAttribute('x', '6');
+        minLabel.setAttribute('y', String(height - padding.bottom));
+        minLabel.setAttribute('fill', '#6b7280');
+        minLabel.setAttribute('font-size', '12');
+        minLabel.textContent = `${eleMin.toFixed(0)} m`;
+        profileSvg.appendChild(minLabel);
+
+        const maxLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        maxLabel.setAttribute('x', '6');
+        maxLabel.setAttribute('y', String(padding.top + 10));
+        maxLabel.setAttribute('fill', '#6b7280');
+        maxLabel.setAttribute('font-size', '12');
+        maxLabel.textContent = `${eleMax.toFixed(0)} m`;
+        profileSvg.appendChild(maxLabel);
+
+        profileMsg.textContent = `剖面点：${profile.length}，海拔范围：${eleMin.toFixed(1)}m - ${eleMax.toFixed(1)}m`;
+      }
       const map = L.map('route-map');
       const gaodeVector = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
         subdomains: ['1', '2', '3', '4'],
@@ -187,21 +339,34 @@
 
       useTileLayer(0);
 
-      fetch("{{ url_for('api_v1.route_preview', route_id=route.id) }}")
+      fetch(previewEndpoint)
         .then((resp) => resp.json())
         .then((data) => {
+          if (data.stats) {
+            autoDistance.textContent = (data.stats.distance_km ?? 0) + ' km';
+            autoAscent.textContent = data.stats.ascent_m != null ? (data.stats.ascent_m + ' m') : '暂无海拔数据';
+          } else {
+            autoDistance.textContent = '暂无';
+            autoAscent.textContent = '暂无';
+          }
+          renderElevationProfile(data.elevation_profile);
           if (!data.points || data.points.length === 0) {
             previewBox.textContent = '无轨迹点';
             map.setView([22.3193, 114.1694], 11);
             return;
           }
 
-          const line = L.polyline(data.points, {color: '#2563eb', weight: 4}).addTo(map);
+          // GPX 通常是 WGS84，国内底图（高德/腾讯）是 GCJ-02，先做坐标转换以减少偏移。
+          const correctedPoints = data.points.map((point) => wgs84ToGcj02(point[0], point[1]));
+          const line = L.polyline(correctedPoints, {color: '#2563eb', weight: 4}).addTo(map);
           map.fitBounds(line.getBounds(), {padding: [20, 20]});
-          previewBox.textContent = '轨迹点数：' + data.points.length;
+          previewBox.textContent = '轨迹点数：' + correctedPoints.length;
         })
         .catch(() => {
           previewBox.textContent = '预览加载失败';
+          autoDistance.textContent = '计算失败';
+          autoAscent.textContent = '计算失败';
+          profileMsg.textContent = '剖面加载失败';
           map.setView([22.3193, 114.1694], 11);
         });
 

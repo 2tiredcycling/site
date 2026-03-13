@@ -1,0 +1,64 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ '编辑账号' if user else '新增账号' }} V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container narrow">
+    <header class="header">
+      <h1>{{ '编辑账号 #' ~ user.id if user else '新增账号' }}</h1>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.users_page') }}">返回账号列表</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <form method="post" action="{{ url_for('admin.update_user', user_id=user.id) if user else url_for('admin.create_user') }}" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>用户名<input type="text" name="username" value="{{ user.username if user else '' }}" required></label>
+        <label>角色
+          <select name="role">
+            {% for role in roles %}
+              <option value="{{ role }}" {% if user and user.role == role %}selected{% endif %}>{{ role }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% if user %}
+          <label>
+            <input type="checkbox" name="is_active" value="1" {% if user.is_active %}checked{% endif %}>
+            保持为启用状态
+          </label>
+          <label>重置密码（可留空）<input type="password" name="password" placeholder="留空表示不修改"></label>
+          <p class="hint">如需修改密码，长度至少 12 位。</p>
+        {% else %}
+          <label>密码<input type="password" name="password" required></label>
+          <p class="hint">初始密码长度至少 12 位。</p>
+        {% endif %}
+        <button class="btn" type="submit">{{ '保存账号' if user else '创建账号' }}</button>
+      </form>
+    </section>
+
+    {% if user %}
+      <section class="card form-card">
+        <h2>删除账号</h2>
+        <p class="hint">删除会将账号停用，不会删除历史审计记录。</p>
+        <form method="post" action="{{ url_for('admin.delete_user', user_id=user.id) }}" onsubmit="return confirm('确认停用该账号吗？');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-danger" type="submit">删除账号（停用）</button>
+        </form>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

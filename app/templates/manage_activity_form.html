@@ -1,0 +1,66 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ '编辑活动' if activity else '新增活动' }} V3</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>{{ '编辑活动 #' ~ activity.id if activity else '新增活动' }}</h1>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.activities_page') }}">返回活动列表</a>
+        {% if activity %}
+          <a class="btn" href="{{ url_for('web.activity_detail', activity_id=activity.id, source='manage') }}">查看活动详情</a>
+        {% endif %}
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <form method="post" action="{{ url_for('admin.update_activity', activity_id=activity.id) if activity else url_for('admin.create_activity') }}" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="filter-grid">
+          <label>活动名<input type="text" name="title" value="{{ activity.title if activity else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
+          <label>活动时间
+            <input type="datetime-local" name="activity_time" value="{{ to_local_time(activity.activity_time).strftime('%Y-%m-%dT%H:%M') if activity and activity.activity_time else '' }}" {% if not can_edit %}disabled{% endif %}>
+          </label>
+          <label>参与人数<input type="number" name="participant_count" min="0" value="{{ activity.participant_count if activity else 0 }}" {% if not can_edit %}disabled{% endif %}></label>
+          <label>天气<input type="text" name="weather" value="{{ activity.weather if activity else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+          <label>关联路线
+            <select name="route_ids" multiple size="10" {% if not can_edit %}disabled{% endif %}>
+              {% set selected_ids = activity.routes | map(attribute='id') | list if activity else [] %}
+              {% for route in routes %}
+                <option value="{{ route.id }}" {% if route.id in selected_ids %}selected{% endif %}>{{ route.route_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <label>活动总结<textarea name="summary" rows="3" {% if not can_edit %}disabled{% endif %}>{{ activity.summary if activity else '' }}</textarea></label>
+        {% if can_edit %}
+          <button class="btn" type="submit">{{ '保存活动' if activity else '新增活动' }}</button>
+        {% endif %}
+      </form>
+    </section>
+
+    {% if activity and can_edit %}
+      <section class="card form-card">
+        <h2>维护操作</h2>
+        <form method="post" action="{{ url_for('admin.delete_activity', activity_id=activity.id) }}" onsubmit="return confirm('确认删除活动吗？');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-danger" type="submit">删除活动</button>
+        </form>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>
