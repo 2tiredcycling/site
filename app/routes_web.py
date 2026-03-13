@@ -18,9 +18,12 @@ from app.models import (
     utcnow,
 )
 from app.querying import query_routes_from_request
+from app.security_limits import consume_fixed_window
 
 bp = Blueprint("web", __name__)
 SH_TZ = timezone(timedelta(hours=8))
+SITE_FEEDBACK_LIMIT_PER_MINUTE = 5
+SITE_FEEDBACK_WINDOW_SECONDS = 60
 
 
 def _to_local_time(value):
@@ -84,6 +87,21 @@ def site_feedback_submit():
     content = (request.form.get("content") or "").strip()
     contact = (request.form.get("contact") or "").strip()
     source = (request.form.get("source") or "").strip()
+    source_ip = ((request.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or request.remote_addr or "unknown")
+
+    allowed, retry_after = consume_fixed_window(
+        "site_feedback_submit",
+        source_ip,
+        limit=SITE_FEEDBACK_LIMIT_PER_MINUTE,
+        window_seconds=SITE_FEEDBACK_WINDOW_SECONDS,
+    )
+    if not allowed:
+        return render_template(
+            "site_feedback.html",
+            source=source,
+            error_message=f"提交过于频繁，请 {retry_after} 秒后再试。",
+            form_data={"category": category, "content": content, "contact": contact},
+        )
 
     allowed_categories = {"bug", "suggestion", "data", "other"}
     if category not in allowed_categories:

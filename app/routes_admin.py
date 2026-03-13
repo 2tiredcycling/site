@@ -58,6 +58,7 @@ from app.models import (
 from app.querying import query_routes_from_request
 from app.gpx_utils import parse_gpx_points_and_stats
 from app.route_ops import allowed_file, file_size_ok, parse_distance, save_gpx_file
+from app.security_limits import check_lock, clear_state, register_failure
 from app.services import (
     approved_rating_summary,
     create_route_version,
@@ -70,6 +71,9 @@ from app.services import (
 
 bp = Blueprint("admin", __name__, url_prefix="/manage")
 SH_TZ = timezone(timedelta(hours=8))
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_MAX_FAILURES = 5
+LOGIN_LOCK_SECONDS = 15 * 60
 
 
 def _to_local_time(value: datetime | None) -> datetime | None:
@@ -110,12 +114,30 @@ def login():
 def login_submit():
     username = (request.form.get("username") or "").strip()
     password = (request.form.get("password") or "").strip()
+    source_ip = ((request.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or request.remote_addr or "unknown")
+    login_subject = f"{source_ip}:{username.lower() or '_'}"
+
+    retry_after = check_lock("admin_login", login_subject, LOGIN_WINDOW_SECONDS)
+    if retry_after > 0:
+        flash(f"尝试次数过多，请 {retry_after} 秒后再试", "error")
+        return redirect(url_for("admin.login"))
 
     user = User.query.filter_by(username=username, is_active=True).first()
     if not user or not check_password_hash(user.password, password):
-        flash("用户名或密码错误", "error")
+        retry_after = register_failure(
+            "admin_login",
+            login_subject,
+            max_attempts=LOGIN_MAX_FAILURES,
+            window_seconds=LOGIN_WINDOW_SECONDS,
+            lock_seconds=LOGIN_LOCK_SECONDS,
+        )
+        if retry_after > 0:
+            flash(f"尝试次数过多，请 {retry_after} 秒后再试", "error")
+        else:
+            flash("用户名或密码错误", "error")
         return redirect(url_for("admin.login"))
 
+    clear_state("admin_login", login_subject)
     session["user_id"] = user.id
     write_audit_log(user.id, "auth.login", "user", str(user.id), "login success")
     return redirect(url_for("admin.dashboard"))

@@ -324,3 +324,20 @@ class AuditLog(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
     actor = db.relationship("User", lazy="joined")
+
+
+class RateLimitState(db.Model):
+    __tablename__ = "rate_limit_states"
+    __table_args__ = (
+        db.UniqueConstraint("action", "subject", name="uq_rate_limit_action_subject"),
+        Index("idx_rate_limit_action_subject", "action", "subject"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    action = db.Column(db.String(64), nullable=False)
+    subject = db.Column(db.String(128), nullable=False)
+    window_started_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    count = db.Column(db.Integer, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
