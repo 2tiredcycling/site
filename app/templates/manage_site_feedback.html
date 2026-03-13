@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网站问题反馈管理 V3</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>网站问题反馈管理</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <h2>筛选</h2>
+      <form method="get" action="{{ url_for('admin.site_feedback_page') }}" class="single-form">
+        <div class="filter-grid">
+          <label>关键词
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="内容/学号/来源页">
+          </label>
+          <label>状态
+            <select name="status">
+              <option value="all" {% if filters.status == 'all' %}selected{% endif %}>全部</option>
+              <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>待处理</option>
+              <option value="done" {% if filters.status == 'done' %}selected{% endif %}>已处理</option>
+            </select>
+          </label>
+          <label>类型
+            <select name="category">
+              <option value="all" {% if filters.category == 'all' %}selected{% endif %}>全部</option>
+              <option value="bug" {% if filters.category == 'bug' %}selected{% endif %}>功能异常</option>
+              <option value="suggestion" {% if filters.category == 'suggestion' %}selected{% endif %}>体验建议</option>
+              <option value="data" {% if filters.category == 'data' %}selected{% endif %}>数据纠错</option>
+              <option value="other" {% if filters.category == 'other' %}selected{% endif %}>其他</option>
+            </select>
+          </label>
+          <label>开始日期
+            <input type="date" name="start_date" value="{{ filters.start_date }}">
+          </label>
+          <label>结束日期
+            <input type="date" name="end_date" value="{{ filters.end_date }}">
+          </label>
+        </div>
+        <div class="row-actions">
+          <button class="btn" type="submit">应用筛选</button>
+          <a class="btn btn-muted" href="{{ url_for('admin.site_feedback_page') }}">重置</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="card form-card">
+      <h2>反馈列表（{{ pagination.total }}）</h2>
+      <table>
+        <thead>
+          <tr><th>提交时间</th><th>类型</th><th>内容</th><th>学号</th><th>来源页面</th><th>状态</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for item in feedback_list %}
+            <tr>
+              <td>{{ item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else '-' }}</td>
+              <td>{{ item.category }}</td>
+              <td>{{ item.content }}</td>
+              <td>{{ item.contact or '-' }}</td>
+              <td>{{ item.source_page or '-' }}</td>
+              <td>{{ item.status }}</td>
+              <td class="row-actions">
+                {% if item.status != 'done' %}
+                  <form method="post" action="{{ url_for('admin.site_feedback_update_status', feedback_id=item.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="done">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button class="btn" type="submit">标记已处理</button>
+                  </form>
+                {% else %}
+                  <form method="post" action="{{ url_for('admin.site_feedback_update_status', feedback_id=item.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="pending">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button class="btn btn-muted" type="submit">改回待处理</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7">暂无反馈数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.site_feedback_page', page=pagination.prev_num, q=filters.q, status=filters.status, category=filters.category, start_date=filters.start_date, end_date=filters.end_date) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.site_feedback_page', page=pagination.next_num, q=filters.q, status=filters.status, category=filters.category, start_date=filters.start_date, end_date=filters.end_date) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

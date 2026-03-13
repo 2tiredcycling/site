@@ -153,14 +153,19 @@ def _normalize_difficulty_filter(raw: str) -> list[str]:
     if not raw:
         return []
 
-    if raw in {"easy", "medium", "hard"}:
-        return [raw]
+    if raw in {"1", "2", "3", "4", "5"}:
+        # Keep compatibility with legacy text values in existing data.
+        if raw in {"1", "2"}:
+            return [raw, "easy"]
+        if raw == "3":
+            return [raw, "medium"]
+        if raw in {"4", "5"}:
+            return [raw, "hard"]
 
-    mapping = {
-        "1": ["easy"],
-        "2": ["easy"],
-        "3": ["medium"],
-        "4": ["hard"],
-        "5": ["hard"],
-    }
-    return mapping.get(raw, [])
+    if raw == "easy":
+        return ["1", "2", "easy"]
+    if raw == "medium":
+        return ["3", "medium"]
+    if raw == "hard":
+        return ["4", "5", "hard"]
+    return []

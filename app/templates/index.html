@@ -4,10 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>2Tired 骑行社线路共享平台 V3</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
+    {% if request.args.get('feedback') == 'ok' %}
+      <div class="alert alert-ok">问题反馈已提交，感谢你的建议。</div>
+    {% endif %}
+
+    <section class="feedback-banner card">
+      <div>
+        <strong>发现网站问题？</strong>
+        <span>首页入口直达反馈，处理进度会进入后台队列。</span>
+      </div>
+      <a class="btn feedback-btn" href="{{ url_for('web.site_feedback', source=url_for('web.index')) }}">我要反馈</a>
+    </section>
+
     <header class="header">
       <h1>2Tired 骑行社线路共享平台</h1>
       <p>一站式查看骑行线路、活动档案、反馈评分与更新追踪。</p>
@@ -100,11 +113,15 @@
               <td>{{ route.route_name }}</td>
               <td>{{ '%.1f'|format(route.distance_km or 0) }}</td>
               <td>
-                {% if route.difficulty == 'easy' %}
+                {% if route.difficulty == '1' %}
+                  ★☆☆☆☆
+                {% elif route.difficulty == '2' or route.difficulty == 'easy' %}
                   ★★☆☆☆
-                {% elif route.difficulty == 'medium' %}
+                {% elif route.difficulty == '3' or route.difficulty == 'medium' %}
                   ★★★☆☆
-                {% elif route.difficulty == 'hard' %}
+                {% elif route.difficulty == '4' or route.difficulty == 'hard' %}
+                  ★★★★☆
+                {% elif route.difficulty == '5' %}
                   ★★★★★
                 {% else %}
                   {{ route.difficulty }}
@@ -153,3 +170,4 @@
   </main>
 </body>
 </html>
+

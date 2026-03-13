@@ -22,6 +22,10 @@ FEEDBACK_APPROVED = "approved"
 FEEDBACK_REJECTED = "rejected"
 FEEDBACK_STATUSES = (FEEDBACK_PENDING, FEEDBACK_APPROVED, FEEDBACK_REJECTED)
 
+SITE_FEEDBACK_PENDING = "pending"
+SITE_FEEDBACK_DONE = "done"
+SITE_FEEDBACK_STATUSES = (SITE_FEEDBACK_PENDING, SITE_FEEDBACK_DONE)
+
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -189,6 +193,38 @@ class RouteFeedback(db.Model):
             "reviewer_note": self.reviewer_note,
             "reviewer_id": self.reviewer_id,
             "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class SiteFeedback(db.Model):
+    __tablename__ = "site_feedback"
+    __table_args__ = (
+        Index("idx_site_feedback_status_created_at", "status", "created_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    category = db.Column(db.String(32), nullable=False, default="bug")
+    content = db.Column(db.Text, nullable=False, default="")
+    contact = db.Column(db.String(128), nullable=False, default="")
+    source_page = db.Column(db.String(255), nullable=False, default="")
+    user_agent = db.Column(db.String(255), nullable=False, default="")
+    ip_address = db.Column(db.String(64), nullable=False, default="")
+    status = db.Column(db.String(16), nullable=False, default=SITE_FEEDBACK_PENDING)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    def as_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "category": self.category,
+            "content": self.content,
+            "contact": self.contact,
+            "source_page": self.source_page,
+            "user_agent": self.user_agent,
+            "ip_address": self.ip_address,
+            "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

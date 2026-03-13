@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网站问题反馈 V3</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container narrow">
+    <section class="card form-card">
+      <h1>网站问题反馈</h1>
+      <p class="hint">反馈会直接进入后台待处理队列。感谢你帮助我们改进。</p>
+
+      {% if error_message %}
+        <div class="alert">{{ error_message }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('web.site_feedback_submit') }}" class="single-form">
+        <input type="hidden" name="source" value="{{ source or url_for('web.index') }}">
+
+        <label>
+          问题类型
+          <select name="category">
+            {% set selected_category = form_data.category if form_data else 'bug' %}
+            <option value="bug" {% if selected_category == 'bug' %}selected{% endif %}>功能异常</option>
+            <option value="suggestion" {% if selected_category == 'suggestion' %}selected{% endif %}>体验建议</option>
+            <option value="data" {% if selected_category == 'data' %}selected{% endif %}>数据纠错</option>
+            <option value="other" {% if selected_category == 'other' %}selected{% endif %}>其他</option>
+          </select>
+        </label>
+
+        <label>
+          反馈内容
+          <textarea name="content" rows="6" maxlength="2000" placeholder="请尽量描述：出现了什么问题、在哪个页面、如何复现。">{{ form_data.content if form_data else '' }}</textarea>
+        </label>
+
+        <label>
+          学号（可选）
+          <input type="text" name="contact" maxlength="128" pattern="\d{9}" title="学号格式应为 9 位数字" value="{{ form_data.contact if form_data else '' }}" placeholder="例如：123456789">
+        </label>
+
+        <div class="row-actions">
+          <button class="btn" type="submit">提交反馈</button>
+          <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 
-from flask import Flask, request
+from flask import Flask, redirect, request, url_for
 from dotenv import load_dotenv
 
 from app.models import db
@@ -50,6 +50,10 @@ def create_app() -> Flask:
     @app.before_request
     def log_access() -> None:
         app.logger.info("access method=%s path=%s ip=%s", request.method, request.path, request.remote_addr)
+
+    @app.get("/favicon.ico")
+    def favicon_ico():
+        return redirect(url_for("static", filename="favicon.svg"), code=302)
 
     return app
 

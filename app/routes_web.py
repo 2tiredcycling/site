@@ -2,10 +2,21 @@
 import csv
 from io import StringIO
 from pathlib import Path
+import re
 
 from flask import Blueprint, Response, abort, current_app, redirect, render_template, request, send_from_directory, url_for
 
-from app.models import FEEDBACK_APPROVED, Activity, Route, RouteFeedback, STATUS_PUBLISHED, db, utcnow
+from app.models import (
+    FEEDBACK_APPROVED,
+    Activity,
+    Route,
+    RouteFeedback,
+    SITE_FEEDBACK_PENDING,
+    STATUS_PUBLISHED,
+    SiteFeedback,
+    db,
+    utcnow,
+)
 from app.querying import query_routes_from_request
 
 bp = Blueprint("web", __name__)
@@ -59,6 +70,63 @@ def index() -> str:
         filters=filters,
         rating_map=rating_map,
     )
+
+
+@bp.get("/feedback")
+def site_feedback() -> str:
+    source = (request.args.get("source") or "").strip()
+    return render_template("site_feedback.html", source=source)
+
+
+@bp.post("/feedback")
+def site_feedback_submit():
+    category = (request.form.get("category") or "bug").strip().lower()
+    content = (request.form.get("content") or "").strip()
+    contact = (request.form.get("contact") or "").strip()
+    source = (request.form.get("source") or "").strip()
+
+    allowed_categories = {"bug", "suggestion", "data", "other"}
+    if category not in allowed_categories:
+        category = "other"
+
+    if len(content) < 5:
+        return render_template(
+            "site_feedback.html",
+            source=source,
+            error_message="反馈内容至少 5 个字。",
+            form_data={"category": category, "content": content, "contact": contact},
+        )
+    if len(content) > 2000:
+        return render_template(
+            "site_feedback.html",
+            source=source,
+            error_message="反馈内容不能超过 2000 个字。",
+            form_data={"category": category, "content": content, "contact": contact},
+        )
+    if len(contact) > 128:
+        contact = contact[:128]
+    if contact and not re.fullmatch(r"\d{9}", contact):
+        return render_template(
+            "site_feedback.html",
+            source=source,
+            error_message="学号格式不正确，应为 9 位数字。",
+            form_data={"category": category, "content": content, "contact": contact},
+        )
+
+    entry = SiteFeedback(
+        category=category,
+        content=content,
+        contact=contact,
+        source_page=source or request.referrer or "",
+        user_agent=(request.user_agent.string or "")[:255],
+        ip_address=(request.remote_addr or "")[:64],
+        status=SITE_FEEDBACK_PENDING,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    db.session.add(entry)
+    db.session.commit()
+    return redirect(url_for("web.index", feedback="ok"))
 
 
 @bp.get("/routes/<int:route_id>")
@@ -192,5 +260,6 @@ def handle_404(error):
 @bp.app_errorhandler(403)
 def handle_403(_error):
     return redirect(url_for("admin.login"))
+
 
 
