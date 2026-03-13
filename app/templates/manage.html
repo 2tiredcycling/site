@@ -39,6 +39,7 @@
         <div><strong>回收站</strong><div>{{ summary.route_deleted }}</div></div>
         <div><strong>活动总数</strong><div>{{ summary.activity_total }}</div></div>
         <div><strong>待审核反馈</strong><div>{{ summary.feedback_pending }}</div></div>
+        <div><strong>网站问题待处理</strong><div>{{ summary.site_feedback_pending }}</div></div>
       </div>
     </section>
 
@@ -86,10 +87,24 @@
           <p>暂无反馈</p>
         {% endfor %}
       </section>
+
+      <section class="card form-card card-link" data-href="{{ url_for('admin.site_feedback_page') }}">
+        <h2>网站问题反馈</h2>
+        {% for item in latest_site_feedback %}
+          <a class="quick-link" href="{{ url_for('admin.site_feedback_page') }}">
+            <article class="edit-item compact-item">
+              <div><strong>[{{ item.category }}] {{ item.content[:48] }}{% if item.content|length > 48 %}...{% endif %}</strong></div>
+              <div class="hint">状态：{{ item.status }}，提交：{{ item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</div>
+            </article>
+          </a>
+        {% else %}
+          <p>暂无网站问题反馈</p>
+        {% endfor %}
+      </section>
     {% endif %}
 
-    <section class="card form-card">
-      <h2>最新审计日志（15条）</h2>
+    <section class="card form-card card-link" data-href="{{ url_for('admin.audit_logs_page') }}">
+      <h2>最新审计日志</h2>
       <table>
         <thead>
           <tr><th>时间</th><th>操作人</th><th>动作</th><th>目标</th><th>详情</th></tr>

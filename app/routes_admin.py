@@ -38,6 +38,8 @@ from app.models import (
     ROLE_REVIEWER,
     ROLES,
     ROUTE_STATUSES,
+    SITE_FEEDBACK_DONE,
+    SITE_FEEDBACK_PENDING,
     STATUS_DRAFT,
     STATUS_OFFLINE,
     STATUS_PENDING_REVIEW,
@@ -48,6 +50,7 @@ from app.models import (
     Route,
     RouteFeedback,
     RouteVersion,
+    SiteFeedback,
     User,
     db,
     utcnow,
@@ -132,17 +135,20 @@ def logout():
 def dashboard():
     log_page = max(1, request.args.get("log_page", default=1, type=int))
     pending_feedback_count = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).count()
+    pending_site_feedback_count = SiteFeedback.query.filter_by(status=SITE_FEEDBACK_PENDING).count()
     audit_logs_pagination = AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(
-        page=log_page, per_page=15, error_out=False
+        page=log_page, per_page=5, error_out=False
     )
     latest_routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).limit(3).all()
     latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(3).all()
     latest_feedback = RouteFeedback.query.order_by(RouteFeedback.created_at.desc()).limit(3).all()
+    latest_site_feedback = SiteFeedback.query.order_by(SiteFeedback.created_at.desc()).limit(3).all()
     summary = {
         "route_total": Route.query.filter_by(is_deleted=False).count(),
         "route_deleted": Route.query.filter_by(is_deleted=True).count(),
         "activity_total": Activity.query.count(),
         "feedback_pending": pending_feedback_count,
+        "site_feedback_pending": pending_site_feedback_count,
     }
     return render_template(
         "manage.html",
@@ -152,9 +158,108 @@ def dashboard():
         latest_routes=latest_routes,
         latest_activities=latest_activities,
         latest_feedback=latest_feedback,
+        latest_site_feedback=latest_site_feedback,
         can_review=can_review(g.current_user),
         can_manage_users=(g.current_user.role == ROLE_ADMIN),
     )
+
+
+@bp.get("/audit-logs")
+@login_required
+def audit_logs_page():
+    page = max(1, request.args.get("page", default=1, type=int))
+    pagination = AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
+    return render_template("manage_audit_logs.html", logs=pagination.items, pagination=pagination)
+
+
+@bp.get("/site-feedback")
+@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+def site_feedback_page():
+    keyword = (request.args.get("q") or "").strip()
+    status_filter = (request.args.get("status") or "all").strip()
+    category_filter = (request.args.get("category") or "all").strip()
+    page = max(1, request.args.get("page", default=1, type=int))
+    start_date = (request.args.get("start_date") or "").strip()
+    end_date = (request.args.get("end_date") or "").strip()
+
+    if status_filter not in {"all", SITE_FEEDBACK_PENDING, SITE_FEEDBACK_DONE}:
+        status_filter = "all"
+    if category_filter not in {"all", "bug", "suggestion", "data", "other"}:
+        category_filter = "all"
+
+    query = SiteFeedback.query
+    if keyword:
+        pattern = f"%{keyword}%"
+        query = query.filter(
+            or_(
+                SiteFeedback.content.ilike(pattern),
+                SiteFeedback.contact.ilike(pattern),
+                SiteFeedback.source_page.ilike(pattern),
+            )
+        )
+    if status_filter != "all":
+        query = query.filter(SiteFeedback.status == status_filter)
+    if category_filter != "all":
+        query = query.filter(SiteFeedback.category == category_filter)
+
+    if start_date:
+        try:
+            start_local = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=SH_TZ)
+            query = query.filter(SiteFeedback.created_at >= start_local.astimezone(timezone.utc))
+        except ValueError:
+            start_date = ""
+    if end_date:
+        try:
+            end_local = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=SH_TZ) + timedelta(days=1)
+            query = query.filter(SiteFeedback.created_at < end_local.astimezone(timezone.utc))
+        except ValueError:
+            end_date = ""
+
+    pagination = query.order_by(SiteFeedback.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    return render_template(
+        "manage_site_feedback.html",
+        feedback_list=pagination.items,
+        pagination=pagination,
+        filters={
+            "q": keyword,
+            "status": status_filter,
+            "category": category_filter,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+    )
+
+
+@bp.post("/site-feedback/<int:feedback_id>/status")
+@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+def site_feedback_update_status(feedback_id: int):
+    target_status = (request.form.get("status") or "").strip()
+    if target_status not in {SITE_FEEDBACK_PENDING, SITE_FEEDBACK_DONE}:
+        flash("状态无效", "error")
+        return redirect(url_for("admin.site_feedback_page"))
+
+    feedback = SiteFeedback.query.filter_by(id=feedback_id).first()
+    if not feedback:
+        flash("反馈不存在", "error")
+        return redirect(url_for("admin.site_feedback_page"))
+
+    old_status = feedback.status
+    feedback.status = target_status
+    feedback.updated_at = utcnow()
+    db.session.commit()
+    write_audit_log(
+        g.current_user.id if g.current_user else None,
+        "site_feedback.status_update",
+        "site_feedback",
+        str(feedback.id),
+        f"{old_status}->{target_status}",
+    )
+    flash("网站反馈状态已更新", "success")
+
+    next_url = (request.form.get("next") or "").strip()
+    if next_url.startswith(url_for("admin.site_feedback_page")):
+        return redirect(next_url)
+    return redirect(url_for("admin.site_feedback_page"))
 
 
 @bp.get("/feedback")

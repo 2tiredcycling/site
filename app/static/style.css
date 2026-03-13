@@ -37,6 +37,38 @@ body {
   margin-bottom: 18px;
 }
 
+.feedback-banner {
+  background: linear-gradient(90deg, #f59e0b, #f97316);
+  color: #1f2937;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #fb923c;
+}
+
+.feedback-banner strong {
+  display: block;
+  font-size: 18px;
+  color: #7c2d12;
+}
+
+.feedback-banner span {
+  display: block;
+  margin-top: 4px;
+  color: #431407;
+}
+
+.feedback-btn {
+  background: #b91c1c;
+  font-weight: 600;
+}
+
+.feedback-btn:hover {
+  background: #991b1b;
+}
+
 .card {
   background: #fff;
   border-radius: 14px;
@@ -277,6 +309,11 @@ td {
 }
 
 @media (max-width: 720px) {
+  .feedback-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   form,
   .filter-grid {
     grid-template-columns: 1fr;
