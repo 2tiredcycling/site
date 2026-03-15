@@ -96,6 +96,18 @@ LOG_FILE="$CURRENT_PATH/deploy_sync_${TS}.log"
 
 COPIED=0
 SKIPPED=0
+REQUIRED_ITEMS=(".env" "deploy/nginx.conf" "deploy/certs")
+
+for req in "${REQUIRED_ITEMS[@]}"; do
+  if ! grep -Eq "^[[:space:]]*${req//\//\\/}[[:space:]]*$" "$MANIFEST_PATH"; then
+    echo "[ERROR] required manifest entry missing: $req" | tee -a "$LOG_FILE"
+    exit 1
+  fi
+  if [[ ! -e "$PREVIOUS_PATH/$req" ]]; then
+    echo "[ERROR] required source missing in previous release: $req" | tee -a "$LOG_FILE"
+    exit 1
+  fi
+done
 
 while IFS= read -r raw || [[ -n "$raw" ]]; do
   line="$(echo "$raw" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"

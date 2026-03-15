@@ -57,6 +57,17 @@ if (-not $entries -or $entries.Count -eq 0) {
     throw "Manifest has no entries: $manifestFull"
 }
 
+$requiredItems = @(".env", "deploy/nginx.conf", "deploy/certs")
+foreach ($required in $requiredItems) {
+    if ($entries -notcontains $required) {
+        throw "Required manifest entry missing: $required"
+    }
+    $requiredSource = Join-Path $previousPath $required
+    if (-not (Test-Path -LiteralPath $requiredSource)) {
+        throw "Required source missing in previous release: $requiredSource"
+    }
+}
+
 $mode = if ($Apply) { "APPLY" } else { "DRY-RUN" }
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $logFile = Join-Path $currentPath "deploy_sync_$timestamp.log"

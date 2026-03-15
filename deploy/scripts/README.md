@@ -54,6 +54,7 @@ chmod +x deploy/scripts/prepare_release.sh
 - `uploads`
 
 脚本会在新版本目录写入 `deploy_sync_YYYYMMDD_HHMMSS.log`，用于审计和回滚排查。
+并且会强制校验这三项必须存在于上一个版本：`.env`、`deploy/nginx.conf`、`deploy/certs`（缺失即中止）。
 
 ### Windows 可选
 
