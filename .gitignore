@@ -5,6 +5,7 @@ __pycache__/
 instance/*.db
 tmp_restore_drill/
 backups/
+server-sync/
 
 .env
 tmp_test/
