@@ -1,0 +1,9 @@
+# Relative paths to copy from previous release into the new release folder.
+# One item per line. Lines beginning with # are ignored.
+
+.env
+docker-compose.yml
+deploy/nginx.conf
+deploy/certs
+instance
+uploads

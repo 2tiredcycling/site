@@ -17,3 +17,44 @@
 - 慢请求：Nginx 打开 `request_time`，阈值建议 1s。
 - 磁盘容量：监控系统盘剩余空间低于 15% 告警。
 - 应用指标：抓取 `/metrics`。
+
+## 发版同步（V3.1.3+，Ubuntu 推荐）
+
+新增脚本：`prepare_release.sh`（Ubuntu）  
+用途：从上一个版本目录复制关键配置到新版本目录，减少人工漏拷。
+
+### 1) 先检查计划（默认 dry-run）
+
+```bash
+chmod +x deploy/scripts/prepare_release.sh
+./deploy/scripts/prepare_release.sh \
+  --releases-root /opt/2tired/releases \
+  --current v3.1.4
+```
+
+### 2) 确认后执行复制
+
+```bash
+./deploy/scripts/prepare_release.sh \
+  --releases-root /opt/2tired/releases \
+  --current v3.1.4 \
+  --apply
+```
+
+### 3) 清单配置
+
+默认清单文件：`deploy/scripts/release_copy_manifest.txt`  
+按需维护每行一个相对路径，例如：
+
+- `.env`
+- `docker-compose.yml`
+- `deploy/nginx.conf`
+- `deploy/certs`
+- `instance`
+- `uploads`
+
+脚本会在新版本目录写入 `deploy_sync_YYYYMMDD_HHMMSS.log`，用于审计和回滚排查。
+
+### Windows 可选
+
+如你在 Windows 环境准备发布目录，可用 `prepare_release.ps1`，参数含义与 Ubuntu 脚本一致。
