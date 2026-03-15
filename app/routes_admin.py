@@ -24,6 +24,7 @@ from app.auth import (
     attach_current_user,
     can_edit,
     can_review,
+    client_ip,
     get_csrf_token,
     login_required,
     role_required,
@@ -114,7 +115,9 @@ def login():
 def login_submit():
     username = (request.form.get("username") or "").strip()
     password = (request.form.get("password") or "").strip()
-    source_ip = ((request.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or request.remote_addr or "unknown")
+    source_ip = client_ip()
+    user_agent = (request.user_agent.string or "")[:255]
+    request_path = request.path
     login_subject = f"{source_ip}:{username.lower() or '_'}"
 
     retry_after = check_lock("admin_login", login_subject, LOGIN_WINDOW_SECONDS)
@@ -135,11 +138,24 @@ def login_submit():
             flash(f"尝试次数过多，请 {retry_after} 秒后再试", "error")
         else:
             flash("用户名或密码错误", "error")
+        write_audit_log(
+            None,
+            "auth.login_failed",
+            "user",
+            username or None,
+            f'ip={source_ip};path={request_path};ua="{user_agent}";retry_after={retry_after}',
+        )
         return redirect(url_for("admin.login"))
 
     clear_state("admin_login", login_subject)
     session["user_id"] = user.id
-    write_audit_log(user.id, "auth.login", "user", str(user.id), "login success")
+    write_audit_log(
+        user.id,
+        "auth.login",
+        "user",
+        str(user.id),
+        f'ip={source_ip};path={request_path};ua="{user_agent}"',
+    )
     return redirect(url_for("admin.dashboard"))
 
 

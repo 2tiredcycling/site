@@ -1,10 +1,30 @@
-﻿from functools import wraps
+import json
+from functools import wraps
 import hmac
 import secrets
 
 from flask import abort, g, redirect, request, session, url_for
 
 from app.models import ROLE_ADMIN, ROLE_EDITOR, ROLE_REVIEWER, User
+from app.services import write_audit_log
+
+
+def client_ip() -> str:
+    forwarded = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return forwarded or request.remote_addr or "unknown"
+
+
+def _build_unauth_detail() -> str:
+    return json.dumps(
+        {
+            "path": request.path,
+            "method": request.method,
+            "ip": client_ip(),
+            "user_agent": (request.user_agent.string or "")[:255],
+            "query": request.query_string.decode("utf-8", errors="ignore")[:255],
+        },
+        ensure_ascii=False,
+    )
 
 
 def current_user() -> User | None:
@@ -22,6 +42,13 @@ def login_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
         if not current_user():
+            write_audit_log(
+                actor_id=None,
+                action="auth.required_redirect",
+                target_type="admin",
+                target_id=request.path,
+                detail=_build_unauth_detail(),
+            )
             return redirect(url_for("admin.login", next=request.path))
         return view_func(*args, **kwargs)
 
@@ -34,6 +61,13 @@ def role_required(*roles: str):
         def wrapper(*args, **kwargs):
             user = current_user()
             if not user:
+                write_audit_log(
+                    actor_id=None,
+                    action="auth.required_redirect",
+                    target_type="admin",
+                    target_id=request.path,
+                    detail=_build_unauth_detail(),
+                )
                 return redirect(url_for("admin.login", next=request.path))
             if user.role not in roles:
                 abort(403)

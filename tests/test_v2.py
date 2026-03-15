@@ -7,7 +7,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import ROLE_REVIEWER, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, User, db
+from app.models import AuditLog, ROLE_REVIEWER, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, User, db
 
 
 def _extract_csrf(html: str) -> str:
@@ -94,6 +94,43 @@ def test_csrf_required_for_login(app_and_client):
         follow_redirects=False,
     )
     assert resp.status_code == 400
+
+
+def test_unauth_manage_redirect_writes_audit_log(app_and_client):
+    app, client = app_and_client
+    resp = client.get("/manage", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/manage/login" in resp.headers.get("Location", "")
+
+    with app.app_context():
+        log = AuditLog.query.order_by(AuditLog.id.desc()).first()
+        assert log is not None
+        assert log.action == "auth.required_redirect"
+        assert log.target_type == "admin"
+        assert log.target_id == "/manage"
+        assert '"path": "/manage"' in (log.detail or "")
+
+
+def test_login_failed_writes_audit_log_with_ip(app_and_client):
+    app, client = app_and_client
+    login_page = client.get("/manage/login")
+    token = _extract_csrf(login_page.get_data(as_text=True))
+    resp = client.post(
+        "/manage/login",
+        data={"username": "admin", "password": "wrong-password", "csrf_token": token},
+        headers={"X-Forwarded-For": "203.0.113.10"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+
+    with app.app_context():
+        log = (
+            AuditLog.query.filter_by(action="auth.login_failed")
+            .order_by(AuditLog.id.desc())
+            .first()
+        )
+        assert log is not None
+        assert "ip=203.0.113.10" in (log.detail or "")
 
 
 def test_admin_login_and_create_route(app_and_client):
@@ -320,4 +357,3 @@ def test_route_rollback_rejects_missing_gpx_snapshot(app_and_client):
         route = db.session.get(Route, route_id)
         assert route is not None
         assert route.route_name == old_name
-
