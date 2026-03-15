@@ -326,6 +326,25 @@ class AuditLog(db.Model):
     actor = db.relationship("User", lazy="joined")
 
 
+class AccessLog(db.Model):
+    __tablename__ = "access_logs"
+    __table_args__ = (
+        Index("idx_access_logs_created_at", "created_at"),
+        Index("idx_access_logs_path_created_at", "path", "created_at"),
+        Index("idx_access_logs_status_created_at", "status_code", "created_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    path = db.Column(db.String(255), nullable=False, default="")
+    method = db.Column(db.String(16), nullable=False, default="GET")
+    endpoint = db.Column(db.String(128), nullable=False, default="")
+    status_code = db.Column(db.Integer, nullable=False, default=200)
+    ip_address = db.Column(db.String(64), nullable=False, default="")
+    user_agent = db.Column(db.String(255), nullable=False, default="")
+    referer = db.Column(db.String(255), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
 class RateLimitState(db.Model):
     __tablename__ = "rate_limit_states"
     __table_args__ = (

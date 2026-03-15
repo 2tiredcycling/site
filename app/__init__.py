@@ -5,7 +5,7 @@ from pathlib import Path
 from flask import Flask, redirect, request, url_for
 from dotenv import load_dotenv
 
-from app.models import db
+from app.models import AccessLog, db
 from app.routes_admin import bp as admin_bp
 from app.routes_api_v1 import bp as api_v1_bp
 from app.routes_legacy import bp as legacy_bp
@@ -50,6 +50,32 @@ def create_app() -> Flask:
     @app.before_request
     def log_access() -> None:
         app.logger.info("access method=%s path=%s ip=%s", request.method, request.path, request.remote_addr)
+
+    @app.after_request
+    def persist_access_log(response):
+        path = request.path or ""
+        if path.startswith("/static/") or path == "/favicon.ico":
+            return response
+
+        try:
+            forwarded = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            ip_address = forwarded or request.remote_addr or "unknown"
+            db.session.add(
+                AccessLog(
+                    path=path[:255],
+                    method=(request.method or "GET")[:16],
+                    endpoint=(request.endpoint or "")[:128],
+                    status_code=int(response.status_code or 0),
+                    ip_address=ip_address[:64],
+                    user_agent=(request.user_agent.string or "")[:255],
+                    referer=(request.referrer or "")[:255],
+                )
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            app.logger.warning("persist access log failed path=%s", path, exc_info=True)
+        return response
 
     @app.get("/favicon.ico")
     def favicon_ico():

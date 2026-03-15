@@ -43,6 +43,18 @@
       </div>
     </section>
 
+    <section class="card form-card card-link analytics-strip" data-href="{{ url_for('admin.analytics_page') }}">
+      <div class="analytics-strip-head">
+        <h2>流量统计</h2>
+        <span class="hint">点击进入分析页（已排除统计页自身访问）</span>
+      </div>
+      <div class="analytics-strip-metrics">
+        <div><strong>24h PV</strong><div>{{ analytics_summary.pv_24h }}</div></div>
+        <div><strong>24h UV(估算)</strong><div>{{ analytics_summary.uv_24h }}</div></div>
+        <div><strong>近5分钟活跃(估算)</strong><div>{{ analytics_summary.active_5m }}</div></div>
+      </div>
+    </section>
+
     <section class="quick-grid">
       <section class="card form-card card-link" data-href="{{ url_for('admin.routes_page') }}">
         <h2>最新路线</h2>

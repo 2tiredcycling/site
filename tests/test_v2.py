@@ -7,7 +7,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AuditLog, ROLE_REVIEWER, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, User, db
+from app.models import AccessLog, AuditLog, ROLE_REVIEWER, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, User, db
 
 
 def _extract_csrf(html: str) -> str:
@@ -131,6 +131,85 @@ def test_login_failed_writes_audit_log_with_ip(app_and_client):
         )
         assert log is not None
         assert "ip=203.0.113.10" in (log.detail or "")
+
+
+def test_access_log_persisted_for_web_request(app_and_client):
+    app, client = app_and_client
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    with app.app_context():
+        log = (
+            AccessLog.query.filter_by(path="/", method="GET")
+            .order_by(AccessLog.id.desc())
+            .first()
+        )
+        assert log is not None
+        assert log.status_code == 200
+
+
+def test_manage_analytics_page_available_after_login(app_and_client):
+    _app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/analytics")
+    assert resp.status_code == 200
+    assert "流量统计" in resp.get_data(as_text=True)
+    assert "近5分钟活跃(估算)" not in resp.get_data(as_text=True)
+
+
+def test_manage_analytics_excludes_self_path(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            AccessLog(
+                path="/manage/analytics",
+                method="GET",
+                endpoint="admin.analytics_page",
+                status_code=200,
+                ip_address="203.0.113.1",
+                user_agent="pytest",
+                referer="",
+            )
+        )
+        db.session.add(
+            AccessLog(
+                path="/manage/routes",
+                method="GET",
+                endpoint="admin.routes_page",
+                status_code=200,
+                ip_address="203.0.113.9",
+                user_agent="pytest",
+                referer="",
+            )
+        )
+        db.session.add(
+            AccessLog(
+                path="/",
+                method="GET",
+                endpoint="web.index",
+                status_code=200,
+                ip_address="203.0.113.2",
+                user_agent="pytest",
+                referer="",
+            )
+        )
+        db.session.commit()
+
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/analytics?days=1")
+    text = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "<td>/manage/analytics</td>" not in text
+    assert "<td>/manage/routes</td>" not in text
+    assert "<td>/</td>" in text
+
+
+def test_manage_dashboard_shows_active_5m_metric(app_and_client):
+    _app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage")
+    assert resp.status_code == 200
+    assert "近5分钟活跃(估算)" in resp.get_data(as_text=True)
 
 
 def test_admin_login_and_create_route(app_and_client):

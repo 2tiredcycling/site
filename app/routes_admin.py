@@ -1,4 +1,5 @@
-﻿import csv
+import csv
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
@@ -46,6 +47,7 @@ from app.models import (
     STATUS_PENDING_REVIEW,
     STATUS_PUBLISHED,
     Activity,
+    AccessLog,
     AuditLog,
     ImportReport,
     Route,
@@ -75,6 +77,7 @@ SH_TZ = timezone(timedelta(hours=8))
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCK_SECONDS = 15 * 60
+ANALYTICS_EXCLUDED_PATH = "/manage/analytics"
 
 
 def _to_local_time(value: datetime | None) -> datetime | None:
@@ -122,7 +125,7 @@ def login_submit():
 
     retry_after = check_lock("admin_login", login_subject, LOGIN_WINDOW_SECONDS)
     if retry_after > 0:
-        flash(f"尝试次数过多，请 {retry_after} 秒后再试", "error")
+        flash(f"??????,? {retry_after} ????", "error")
         return redirect(url_for("admin.login"))
 
     user = User.query.filter_by(username=username, is_active=True).first()
@@ -135,9 +138,9 @@ def login_submit():
             lock_seconds=LOGIN_LOCK_SECONDS,
         )
         if retry_after > 0:
-            flash(f"尝试次数过多，请 {retry_after} 秒后再试", "error")
+            flash(f"??????,? {retry_after} ????", "error")
         else:
-            flash("用户名或密码错误", "error")
+            flash("????????", "error")
         write_audit_log(
             None,
             "auth.login_failed",
@@ -172,6 +175,8 @@ def logout():
 @login_required
 def dashboard():
     log_page = max(1, request.args.get("log_page", default=1, type=int))
+    now = utcnow()
+    start_24h = now - timedelta(hours=24)
     pending_feedback_count = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).count()
     pending_site_feedback_count = SiteFeedback.query.filter_by(status=SITE_FEEDBACK_PENDING).count()
     audit_logs_pagination = AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(
@@ -188,9 +193,34 @@ def dashboard():
         "feedback_pending": pending_feedback_count,
         "site_feedback_pending": pending_site_feedback_count,
     }
+    analytics_summary = {
+        "pv_24h": AccessLog.query.filter(
+            AccessLog.created_at >= start_24h,
+            ~AccessLog.path.like("/manage%"),
+        ).count(),
+        "uv_24h": int(
+            db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+            .filter(
+                AccessLog.created_at >= start_24h,
+                ~AccessLog.path.like("/manage%"),
+            )
+            .scalar()
+            or 0
+        ),
+        "active_5m": int(
+            db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+            .filter(
+                AccessLog.created_at >= (now - timedelta(minutes=5)),
+                ~AccessLog.path.like("/manage%"),
+            )
+            .scalar()
+            or 0
+        ),
+    }
     return render_template(
         "manage.html",
         summary=summary,
+        analytics_summary=analytics_summary,
         audit_logs=audit_logs_pagination.items,
         audit_logs_pagination=audit_logs_pagination,
         latest_routes=latest_routes,
@@ -208,6 +238,117 @@ def audit_logs_page():
     page = max(1, request.args.get("page", default=1, type=int))
     pagination = AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
     return render_template("manage_audit_logs.html", logs=pagination.items, pagination=pagination)
+
+
+@bp.get("/analytics")
+@login_required
+def analytics_page():
+    days = request.args.get("days", default=7, type=int)
+    if days not in {1, 7, 30}:
+        days = 7
+
+    now = utcnow()
+    start_recent = now - timedelta(days=days)
+    start_recent_date = _to_local_time(start_recent).date()
+    today_local = _to_local_time(now).date()
+
+    recent_base_filter = (
+        AccessLog.created_at >= start_recent,
+        ~AccessLog.path.like("/manage%"),
+    )
+    total_base_filter = (~AccessLog.path.like("/manage%"),)
+    recent_pv = AccessLog.query.filter(*recent_base_filter).count()
+    recent_uv = (
+        db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+        .filter(*recent_base_filter)
+        .scalar()
+        or 0
+    )
+    recent_errors_4xx = AccessLog.query.filter(
+        *recent_base_filter,
+        AccessLog.status_code >= 400,
+        AccessLog.status_code < 500,
+    ).count()
+    recent_errors_5xx = AccessLog.query.filter(
+        *recent_base_filter,
+        AccessLog.status_code >= 500,
+    ).count()
+    recent_downloads = AccessLog.query.filter(
+        *recent_base_filter,
+        AccessLog.path.like("/download/%"),
+        AccessLog.status_code == 200,
+    ).count()
+
+    total_pv = AccessLog.query.filter(*total_base_filter).count()
+    total_uv = (
+        db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+        .filter(*total_base_filter)
+        .scalar()
+        or 0
+    )
+    total_errors_4xx = AccessLog.query.filter(
+        *total_base_filter,
+        AccessLog.status_code >= 400,
+        AccessLog.status_code < 500,
+    ).count()
+    total_errors_5xx = AccessLog.query.filter(
+        *total_base_filter,
+        AccessLog.status_code >= 500,
+    ).count()
+    total_downloads = AccessLog.query.filter(
+        *total_base_filter,
+        AccessLog.path.like("/download/%"),
+        AccessLog.status_code == 200,
+    ).count()
+
+    top_pages_rows = (
+        db.session.query(
+            AccessLog.path,
+            db.func.count(AccessLog.id).label("hits"),
+        )
+        .filter(*recent_base_filter)
+        .group_by(AccessLog.path)
+        .order_by(db.text("hits DESC"))
+        .limit(10)
+        .all()
+    )
+    top_pages = [{"path": row[0], "hits": int(row[1] or 0)} for row in top_pages_rows]
+
+    logs_recent = AccessLog.query.filter(*recent_base_filter).all()
+    daily_map: dict = defaultdict(lambda: {"pv": 0, "downloads": 0})
+    for item in logs_recent:
+        local_day = _to_local_time(item.created_at).date()
+        daily_map[local_day]["pv"] += 1
+        if (item.path or "").startswith("/download/") and item.status_code == 200:
+            daily_map[local_day]["downloads"] += 1
+
+    daily_stats = []
+    current = start_recent_date
+    while current <= today_local:
+        row = daily_map[current]
+        daily_stats.append({"date": current.strftime("%Y-%m-%d"), "pv": row["pv"], "downloads": row["downloads"]})
+        current += timedelta(days=1)
+
+    return render_template(
+        "manage_analytics.html",
+        days=days,
+        recent={
+            "pv": recent_pv,
+            "uv": int(recent_uv),
+            "errors_4xx": recent_errors_4xx,
+            "errors_5xx": recent_errors_5xx,
+            "downloads": recent_downloads,
+        },
+        total={
+            "pv": total_pv,
+            "uv": int(total_uv),
+            "errors_4xx": total_errors_4xx,
+            "errors_5xx": total_errors_5xx,
+            "downloads": total_downloads,
+        },
+        top_pages=top_pages,
+        daily_stats=daily_stats,
+    )
 
 
 @bp.get("/site-feedback")
@@ -273,12 +414,12 @@ def site_feedback_page():
 def site_feedback_update_status(feedback_id: int):
     target_status = (request.form.get("status") or "").strip()
     if target_status not in {SITE_FEEDBACK_PENDING, SITE_FEEDBACK_DONE}:
-        flash("状态无效", "error")
+        flash("????", "error")
         return redirect(url_for("admin.site_feedback_page"))
 
     feedback = SiteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
-        flash("反馈不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.site_feedback_page"))
 
     old_status = feedback.status
@@ -292,7 +433,7 @@ def site_feedback_update_status(feedback_id: int):
         str(feedback.id),
         f"{old_status}->{target_status}",
     )
-    flash("网站反馈状态已更新", "success")
+    flash("?????????", "success")
 
     next_url = (request.form.get("next") or "").strip()
     if next_url.startswith(url_for("admin.site_feedback_page")):
@@ -388,7 +529,7 @@ def route_new_page():
 def route_edit_page(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=False).first()
     if not route:
-        flash("路线不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.routes_page"))
     versions = (
         RouteVersion.query.filter_by(route_id=route_id)
@@ -418,7 +559,7 @@ def route_detail_manage(route_id: int):
         rating_info={"avg_rating": avg_rating, "rating_count": rating_count},
         preview_endpoint=url_for("admin.route_preview_manage", route_id=route.id),
         back_url=url_for("admin.routes_page"),
-        back_label="返回路线管理",
+        back_label="??????",
     )
 
 
@@ -483,7 +624,7 @@ def activity_new_page():
 def activity_edit_page(activity_id: int):
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
-        flash("活动不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.activities_page"))
     routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
     return render_template(
@@ -513,7 +654,7 @@ def user_new_page():
 def user_edit_page(user_id: int):
     user = User.query.filter_by(id=user_id).first()
     if not user:
-        flash("用户不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.users_page"))
     return render_template("manage_user_form.html", user=user, roles=ROLES)
 
@@ -584,24 +725,24 @@ def create_route():
     gpx_file = request.files.get("gpx_file")
 
     if not payload["route_name"] or payload["distance_km"] is None or not gpx_file:
-        flash("新增失败：请补齐名称、里程和 GPX 文件", "error")
+        flash("????:????????? GPX ??", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["status"] not in ROUTE_STATUSES:
-        flash("新增失败：状态非法", "error")
+        flash("????:????", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["suggested_duration_hours"] is None:
-        flash("新增失败：建议用时不合法", "error")
+        flash("????:???????", "error")
         return redirect(url_for("admin.routes_page"))
     if not allowed_file(gpx_file.filename or "", {".gpx"}):
-        flash("新增失败：仅支持 .gpx", "error")
+        flash("????:??? .gpx", "error")
         return redirect(url_for("admin.routes_page"))
     if not file_size_ok(gpx_file, current_app.config.get("MAX_GPX_BYTES", 5 * 1024 * 1024)):
-        flash("新增失败：GPX 文件过大", "error")
+        flash("????:GPX ????", "error")
         return redirect(url_for("admin.routes_page"))
 
     filename, path = save_gpx_file(gpx_file)
     if not filename:
-        flash("新增失败：仅支持 .gpx", "error")
+        flash("????:??? .gpx", "error")
         return redirect(url_for("admin.routes_page"))
 
     try:
@@ -626,12 +767,12 @@ def create_route():
         create_route_version(route, g.current_user.id, change_note="create")
         db.session.commit()
         write_audit_log(g.current_user.id, "route.create", "route", str(route.id), route.route_name)
-        flash("新增成功", "success")
+        flash("????", "success")
     except Exception:
         if path and path.exists():
             path.unlink(missing_ok=True)
         db.session.rollback()
-        flash("新增失败：数据库写入异常", "error")
+        flash("????:???????", "error")
 
     return redirect(url_for("admin.routes_page"))
 
@@ -641,15 +782,15 @@ def create_route():
 def update_route(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=False).first()
     if not route:
-        flash("路线不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.routes_page"))
 
     payload = _route_from_form(route)
     if not payload["route_name"] or payload["distance_km"] is None or payload["status"] not in ROUTE_STATUSES:
-        flash("更新失败：字段不合法", "error")
+        flash("????:?????", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["suggested_duration_hours"] is None:
-        flash("更新失败：建议用时不合法", "error")
+        flash("????:???????", "error")
         return redirect(url_for("admin.routes_page"))
 
     before = route_snapshot(route)
@@ -658,14 +799,14 @@ def update_route(route_id: int):
     saved_path = None
     if gpx_file and gpx_file.filename:
         if not allowed_file(gpx_file.filename, {".gpx"}):
-            flash("更新失败：仅支持 .gpx", "error")
+            flash("????:??? .gpx", "error")
             return redirect(url_for("admin.routes_page"))
         if not file_size_ok(gpx_file, current_app.config.get("MAX_GPX_BYTES", 5 * 1024 * 1024)):
-            flash("更新失败：GPX 文件过大", "error")
+            flash("????:GPX ????", "error")
             return redirect(url_for("admin.routes_page"))
         new_filename, saved_path = save_gpx_file(gpx_file)
         if not new_filename:
-            flash("更新失败：仅支持 .gpx", "error")
+            flash("????:??? .gpx", "error")
             return redirect(url_for("admin.routes_page"))
         route.gpx_filename = new_filename
 
@@ -691,12 +832,12 @@ def update_route(route_id: int):
 
         write_field_audit_log(g.current_user.id, "route", str(route.id), before, route_snapshot(route))
         write_audit_log(g.current_user.id, "route.update", "route", str(route.id), route.route_name)
-        flash("更新成功", "success")
+        flash("????", "success")
     except Exception:
         db.session.rollback()
         if saved_path and saved_path.exists():
             saved_path.unlink(missing_ok=True)
-        flash("更新失败：数据库写入异常", "error")
+        flash("????:???????", "error")
 
     return redirect(url_for("admin.routes_page"))
 
@@ -706,7 +847,7 @@ def update_route(route_id: int):
 def delete_route(route_id: int):
     route = Route.query.filter_by(id=route_id).first()
     if not route:
-        flash("路线不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.routes_page"))
 
     try:
@@ -719,10 +860,10 @@ def delete_route(route_id: int):
         create_route_version(route, g.current_user.id, change_note="soft_delete")
         db.session.commit()
         write_audit_log(g.current_user.id, "route.soft_delete", "route", str(route_id), route.gpx_filename)
-        flash("已移入回收站", "success")
+        flash("??????", "success")
     except Exception:
         db.session.rollback()
-        flash("删除失败", "error")
+        flash("????", "error")
 
     return redirect(url_for("admin.routes_page"))
 
@@ -732,7 +873,7 @@ def delete_route(route_id: int):
 def restore_route(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=True).first()
     if not route:
-        flash("回收站中未找到路线", "error")
+        flash("?????????", "error")
         return redirect(url_for("admin.routes_page"))
 
     route.is_deleted = False
@@ -744,7 +885,7 @@ def restore_route(route_id: int):
     create_route_version(route, g.current_user.id, change_note="restore")
     db.session.commit()
     write_audit_log(g.current_user.id, "route.restore", "route", str(route.id), route.route_name)
-    flash("已从回收站恢复（状态为草稿）", "success")
+    flash("???????(?????)", "success")
     return redirect(url_for("admin.routes_page"))
 
 
@@ -753,12 +894,12 @@ def restore_route(route_id: int):
 def update_status(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=False).first()
     if not route:
-        flash("路线不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.routes_page"))
 
     status = (request.form.get("status") or "").strip()
     if status not in ROUTE_STATUSES:
-        flash("状态非法", "error")
+        flash("????", "error")
         return redirect(url_for("admin.routes_page"))
 
     before = route_snapshot(route)
@@ -769,7 +910,7 @@ def update_status(route_id: int):
     db.session.commit()
     write_field_audit_log(g.current_user.id, "route", str(route_id), before, route_snapshot(route))
     write_audit_log(g.current_user.id, "route.status", "route", str(route_id), status)
-    flash("状态已更新", "success")
+    flash("?????", "success")
     return redirect(url_for("admin.routes_page"))
 
 
@@ -778,32 +919,32 @@ def update_status(route_id: int):
 def rollback_route(route_id: int):
     route = Route.query.filter_by(id=route_id).first()
     if not route:
-        flash("路线不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.routes_page"))
 
     version_no_raw = (request.form.get("version_no") or "").strip()
     try:
         version_no = int(version_no_raw)
     except ValueError:
-        flash("版本号非法", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.routes_page"))
 
     version = RouteVersion.query.filter_by(route_id=route_id, version_no=version_no).first()
     if not version:
-        flash("目标版本不存在", "error")
+        flash("???????", "error")
         return redirect(url_for("admin.routes_page"))
 
     try:
         rollback_route_to_version(route, version, g.current_user.id)
         db.session.commit()
         write_audit_log(g.current_user.id, "route.rollback", "route", str(route.id), f"to_v{version_no}")
-        flash(f"已回滚到版本 {version_no}", "success")
+        flash(f"?????? {version_no}", "success")
     except ValueError as exc:
         db.session.rollback()
         if str(exc).startswith("gpx_not_found:"):
-            flash("回滚失败：目标 GPX 文件不存在", "error")
+            flash("????:?? GPX ?????", "error")
         else:
-            flash("回滚失败：版本数据非法", "error")
+            flash("????:??????", "error")
     return redirect(url_for("admin.routes_page"))
 
 
@@ -812,13 +953,13 @@ def rollback_route(route_id: int):
 def review_feedback(feedback_id: int):
     feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
-        flash("反馈不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.dashboard"))
 
     status = (request.form.get("status") or "").strip()
     note = (request.form.get("reviewer_note") or "").strip()
     if status not in (FEEDBACK_APPROVED, FEEDBACK_REJECTED):
-        flash("审核状态非法", "error")
+        flash("??????", "error")
         return redirect(url_for("admin.dashboard"))
 
     feedback.status = status
@@ -828,7 +969,7 @@ def review_feedback(feedback_id: int):
     db.session.commit()
 
     write_audit_log(g.current_user.id, "feedback.review", "route_feedback", str(feedback.id), status)
-    flash("反馈已审核", "success")
+    flash("?????", "success")
     next_page = (request.form.get("next") or "").strip()
     if next_page == "feedback":
         return redirect(url_for("admin.feedback_page"))
@@ -840,7 +981,7 @@ def review_feedback(feedback_id: int):
 def reopen_feedback(feedback_id: int):
     feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
-        flash("反馈不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.feedback_page"))
 
     feedback.status = FEEDBACK_PENDING
@@ -849,7 +990,7 @@ def reopen_feedback(feedback_id: int):
     feedback.reviewed_at = None
     db.session.commit()
     write_audit_log(g.current_user.id, "feedback.reopen", "route_feedback", str(feedback.id), "reopen_to_pending")
-    flash("已撤销审核，反馈回到待审核", "success")
+    flash("?????,???????", "success")
     return redirect(url_for("admin.feedback_page"))
 
 
@@ -858,14 +999,14 @@ def reopen_feedback(feedback_id: int):
 def delete_feedback(feedback_id: int):
     feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
-        flash("反馈不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.feedback_page"))
 
     route_id = feedback.route_id
     db.session.delete(feedback)
     db.session.commit()
     write_audit_log(g.current_user.id, "feedback.delete", "route_feedback", str(feedback_id), f"route={route_id}")
-    flash("反馈已删除", "success")
+    flash("?????", "success")
     return redirect(url_for("admin.feedback_page"))
 
 
@@ -879,7 +1020,7 @@ def create_activity():
     route_ids = request.form.getlist("route_ids")
 
     if not title:
-        flash("活动创建失败：标题不能为空", "error")
+        flash("??????:??????", "error")
         return redirect(url_for("admin.activities_page"))
 
     parsed_activity_time = _parse_activity_time(request.form.get("activity_time"))
@@ -900,7 +1041,7 @@ def create_activity():
     db.session.add(activity)
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.create", "activity", str(activity.id), activity.title)
-    flash("活动创建成功", "success")
+    flash("??????", "success")
     return redirect(url_for("admin.activities_page"))
 
 
@@ -909,12 +1050,12 @@ def create_activity():
 def update_activity(activity_id: int):
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
-        flash("活动不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.activities_page"))
 
     title = (request.form.get("title") or "").strip()
     if not title:
-        flash("活动更新失败：标题不能为空", "error")
+        flash("??????:??????", "error")
         return redirect(url_for("admin.activities_page"))
 
     participant_count = parse_distance(request.form.get("participant_count") or "0")
@@ -935,7 +1076,7 @@ def update_activity(activity_id: int):
 
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.update", "activity", str(activity.id), activity.title)
-    flash("活动已更新", "success")
+    flash("?????", "success")
     return redirect(url_for("admin.activities_page"))
 
 
@@ -944,14 +1085,14 @@ def update_activity(activity_id: int):
 def delete_activity(activity_id: int):
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
-        flash("活动不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.activities_page"))
 
     title = activity.title
     db.session.delete(activity)
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.delete", "activity", str(activity_id), title)
-    flash("活动已删除", "success")
+    flash("?????", "success")
     return redirect(url_for("admin.activities_page"))
 
 
@@ -963,21 +1104,21 @@ def create_user():
     role = (request.form.get("role") or ROLE_EDITOR).strip()
 
     if not username or not password or role not in ROLES:
-        flash("用户创建失败：参数不合法", "error")
+        flash("??????:?????", "error")
         return redirect(url_for("admin.users_page"))
     if len(password) < 12:
-        flash("用户创建失败：密码长度至少 12 位", "error")
+        flash("??????:?????? 12 ?", "error")
         return redirect(url_for("admin.users_page"))
 
     if User.query.filter_by(username=username).first():
-        flash("用户创建失败：用户名重复", "error")
+        flash("??????:?????", "error")
         return redirect(url_for("admin.users_page"))
 
     user = User(username=username, password=generate_password_hash(password), role=role, is_active=True)
     db.session.add(user)
     db.session.commit()
     write_audit_log(g.current_user.id, "user.create", "user", str(user.id), username)
-    flash("用户创建成功", "success")
+    flash("??????", "success")
     return redirect(url_for("admin.users_page"))
 
 
@@ -986,7 +1127,7 @@ def create_user():
 def update_user(user_id: int):
     user = User.query.filter_by(id=user_id).first()
     if not user:
-        flash("用户不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.users_page"))
 
     username = (request.form.get("username") or "").strip()
@@ -995,16 +1136,16 @@ def update_user(user_id: int):
     password = (request.form.get("password") or "").strip()
 
     if not username or role not in ROLES:
-        flash("用户更新失败：参数不合法", "error")
+        flash("??????:?????", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
     if User.query.filter(User.id != user_id, User.username == username).first():
-        flash("用户更新失败：用户名重复", "error")
+        flash("??????:?????", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
     if password and len(password) < 12:
-        flash("用户更新失败：密码长度至少 12 位", "error")
+        flash("??????:?????? 12 ?", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
     if user.id == g.current_user.id and not is_active:
-        flash("不能停用当前登录账号", "error")
+        flash("??????????", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
 
     user.username = username
@@ -1015,7 +1156,7 @@ def update_user(user_id: int):
 
     db.session.commit()
     write_audit_log(g.current_user.id, "user.update", "user", str(user.id), username)
-    flash("用户已更新", "success")
+    flash("?????", "success")
     return redirect(url_for("admin.users_page"))
 
 
@@ -1024,16 +1165,16 @@ def update_user(user_id: int):
 def delete_user(user_id: int):
     user = User.query.filter_by(id=user_id).first()
     if not user:
-        flash("用户不存在", "error")
+        flash("?????", "error")
         return redirect(url_for("admin.users_page"))
     if user.id == g.current_user.id:
-        flash("不能删除当前登录账号", "error")
+        flash("??????????", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
 
     user.is_active = False
     db.session.commit()
     write_audit_log(g.current_user.id, "user.deactivate", "user", str(user.id), user.username)
-    flash("账号已停用", "success")
+    flash("?????", "success")
     return redirect(url_for("admin.users_page"))
 
 
@@ -1047,7 +1188,7 @@ def _cleanup_paths(paths: list[Path]) -> None:
 def bulk_import():
     csv_file = request.files.get("csv_file")
     if not csv_file or not (csv_file.filename or "").lower().endswith(".csv"):
-        flash("导入失败：请上传 CSV", "error")
+        flash("????:??? CSV", "error")
         return redirect(url_for("admin.routes_page"))
 
     csv_text = csv_file.stream.read().decode("utf-8-sig")
@@ -1065,7 +1206,7 @@ def bulk_import():
         "risk_warning",
     }
     if not required.issubset(set(reader.fieldnames or [])):
-        flash("导入失败：CSV 字段不完整", "error")
+        flash("????:CSV ?????", "error")
         return redirect(url_for("admin.routes_page"))
     rows = list(reader)
 
@@ -1167,7 +1308,7 @@ def bulk_import():
     except Exception:
         db.session.rollback()
         _cleanup_paths(list(uploaded_paths.values()))
-        flash("批量导入失败：数据库写入异常", "error")
+        flash("??????:???????", "error")
         return redirect(url_for("admin.routes_page"))
 
     orphan_paths = [path for name, path in uploaded_paths.items() if name not in used_uploaded_names]
@@ -1175,7 +1316,7 @@ def bulk_import():
 
     write_audit_log(g.current_user.id, "route.bulk_import", "route", None, f"created={created},skipped={skipped}")
     flash(
-        f"批量导入完成：新增 {created}，跳过 {skipped}。报告：{url_for('admin.download_import_report', token=report.report_token)}",
+        f"??????:?? {created},?? {skipped}???:{url_for('admin.download_import_report', token=report.report_token)}",
         "success",
     )
     return redirect(url_for("admin.routes_page"))
@@ -1186,12 +1327,12 @@ def bulk_import():
 def download_import_report(token: str):
     report = ImportReport.query.filter_by(report_token=token).first()
     if not report:
-        abort(404, description="报告不存在")
+        abort(404, description="?????")
 
     report_dir = Path(current_app.instance_path) / "import_reports"
     report_path = report_dir / report.report_filename
     if not report_path.exists():
-        abort(404, description="报告文件不存在")
+        abort(404, description="???????")
 
     return send_from_directory(
         str(report_dir),
@@ -1200,6 +1341,7 @@ def download_import_report(token: str):
         download_name=report.report_filename,
         mimetype="text/csv",
     )
+
 
 
 
