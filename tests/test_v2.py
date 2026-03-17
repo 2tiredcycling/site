@@ -299,7 +299,7 @@ def test_manage_dashboard_shows_security_entry(app_and_client):
     assert resp.status_code == 200
     text = resp.get_data(as_text=True)
     assert "安全监控" in text
-    assert "当前版本：v3.2.2" in text
+    assert "当前版本：v3.2.3" in text
 
 
 def test_manage_security_page_available_after_login(app_and_client):
@@ -319,6 +319,17 @@ def test_manage_security_supports_post_deploy_scope(app_and_client):
     text = resp.get_data(as_text=True)
     assert resp.status_code == 200
     assert "核心安全指标（上线后（" in text
+
+
+def test_manage_security_events_filter_and_pagination(app_and_client):
+    _app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/security?event_type=watchlist&event_status=5xx&event_q=wp-admin&event_page=1")
+    text = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "事件类型" in text
+    assert "状态码" in text
+    assert "第 " in text
 
 
 def test_admin_login_and_create_route(app_and_client):

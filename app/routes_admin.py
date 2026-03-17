@@ -492,12 +492,44 @@ def security_page():
     top_ips = [{"ip": row[0] or "unknown", "hits": int(row[1] or 0)} for row in top_ips_rows]
     top_uas = [{"ua": row[0] or "-", "hits": int(row[1] or 0)} for row in top_uas_rows]
 
-    logs_recent = (
-        AccessLog.query.filter(*base_filter, security_expr)
-        .order_by(AccessLog.created_at.desc())
-        .limit(50)
-        .all()
+    event_page = max(1, request.args.get("event_page", default=1, type=int))
+    event_type = (request.args.get("event_type") or "all").strip().lower()
+    if event_type not in {"all", "watchlist", "probe", "throttled"}:
+        event_type = "all"
+    event_status = (request.args.get("event_status") or "all").strip().lower()
+    if event_status not in {"all", "4xx", "5xx", "429"}:
+        event_status = "all"
+    event_q = (request.args.get("event_q") or "").strip()
+
+    event_query = AccessLog.query.filter(*base_filter, security_expr)
+    if event_type == "watchlist":
+        event_query = event_query.filter(watchlist_expr)
+    elif event_type == "probe":
+        event_query = event_query.filter(probe_expr)
+    elif event_type == "throttled":
+        event_query = event_query.filter(AccessLog.status_code == 429)
+
+    if event_status == "4xx":
+        event_query = event_query.filter(AccessLog.status_code >= 400, AccessLog.status_code < 500)
+    elif event_status == "5xx":
+        event_query = event_query.filter(AccessLog.status_code >= 500)
+    elif event_status == "429":
+        event_query = event_query.filter(AccessLog.status_code == 429)
+
+    if event_q:
+        pattern = f"%{event_q}%"
+        event_query = event_query.filter(
+            or_(
+                AccessLog.path.ilike(pattern),
+                AccessLog.ip_address.ilike(pattern),
+                AccessLog.user_agent.ilike(pattern),
+            )
+        )
+
+    events_pagination = event_query.order_by(AccessLog.created_at.desc()).paginate(
+        page=event_page, per_page=50, error_out=False
     )
+    logs_recent = events_pagination.items
     logs_for_trend = AccessLog.query.filter(*base_filter, security_expr).all()
     watchlist_set = {item.lower() for item in WATCHLIST_PROBE_PATHS}
     event_rows = []
@@ -558,6 +590,12 @@ def security_page():
         top_uas=top_uas,
         daily_stats=daily_stats,
         events=event_rows,
+        events_pagination=events_pagination,
+        event_filters={
+            "event_type": event_type,
+            "event_status": event_status,
+            "event_q": event_q,
+        },
     )
 
 

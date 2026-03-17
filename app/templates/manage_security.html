@@ -116,6 +116,38 @@
 
     <section class="card form-card">
       <h2>最近安全事件（最多50条）</h2>
+      <form method="get" action="{{ url_for('admin.security_page') }}" class="single-form">
+        <input type="hidden" name="days" value="{{ days }}">
+        <input type="hidden" name="scope" value="{{ scope }}">
+        <div class="filter-grid">
+          <label>
+            事件类型
+            <select name="event_type">
+              <option value="all" {% if event_filters.event_type == 'all' %}selected{% endif %}>全部</option>
+              <option value="watchlist" {% if event_filters.event_type == 'watchlist' %}selected{% endif %}>watchlist</option>
+              <option value="probe" {% if event_filters.event_type == 'probe' %}selected{% endif %}>probe</option>
+              <option value="throttled" {% if event_filters.event_type == 'throttled' %}selected{% endif %}>throttled</option>
+            </select>
+          </label>
+          <label>
+            状态码
+            <select name="event_status">
+              <option value="all" {% if event_filters.event_status == 'all' %}selected{% endif %}>全部</option>
+              <option value="4xx" {% if event_filters.event_status == '4xx' %}selected{% endif %}>4xx</option>
+              <option value="5xx" {% if event_filters.event_status == '5xx' %}selected{% endif %}>5xx</option>
+              <option value="429" {% if event_filters.event_status == '429' %}selected{% endif %}>429</option>
+            </select>
+          </label>
+          <label>
+            关键词
+            <input type="text" name="event_q" value="{{ event_filters.event_q }}" placeholder="路径/IP/UA 关键词">
+          </label>
+        </div>
+        <div class="row-actions">
+          <button class="btn" type="submit">筛选</button>
+          <a class="btn btn-muted" href="{{ url_for('admin.security_page', days=days, scope=scope) }}">重置</a>
+        </div>
+      </form>
       <table>
         <thead>
           <tr><th>时间</th><th>类型</th><th>路径</th><th>状态码</th><th>IP</th><th>User-Agent</th></tr>
@@ -135,6 +167,17 @@
           {% endfor %}
         </tbody>
       </table>
+      <section class="pagination">
+        <div>第 {{ events_pagination.page }} / {{ events_pagination.pages or 1 }} 页，共 {{ events_pagination.total }} 条</div>
+        <div class="row-actions">
+          {% if events_pagination.has_prev %}
+            <a class="btn btn-muted" href="{{ url_for('admin.security_page', days=days, scope=scope, event_page=events_pagination.prev_num, event_type=event_filters.event_type, event_status=event_filters.event_status, event_q=event_filters.event_q) }}">上一页</a>
+          {% endif %}
+          {% if events_pagination.has_next %}
+            <a class="btn btn-muted" href="{{ url_for('admin.security_page', days=days, scope=scope, event_page=events_pagination.next_num, event_type=event_filters.event_type, event_status=event_filters.event_status, event_q=event_filters.event_q) }}">下一页</a>
+          {% endif %}
+        </div>
+      </section>
     </section>
   </main>
 </body>
