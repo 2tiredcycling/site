@@ -221,6 +221,11 @@ td {
   min-width: 520px;
 }
 
+.analytics-strip-metrics.metrics-4 {
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  min-width: 640px;
+}
+
 .analytics-strip-metrics > div {
   border: 1px solid #dbeafe;
   border-radius: 10px;
@@ -252,6 +257,10 @@ td {
 
 .metric-row-5 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.metric-row-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .metric-row > div {

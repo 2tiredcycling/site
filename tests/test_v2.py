@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash
 
 from app import create_app
 from app.models import AccessLog, AuditLog, ROLE_REVIEWER, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, User, db
+from app.security_monitor import is_watchlist_probe_path
 
 
 def _extract_csrf(html: str) -> str:
@@ -172,6 +173,12 @@ def test_probe_wordpress_path_blocked_early(app_and_client):
         assert log.status_code == 404
 
 
+def test_watchlist_probe_path_match():
+    assert is_watchlist_probe_path("/wordpress/wp-admin/setup-config.php")
+    assert is_watchlist_probe_path("/wp-login.php")
+    assert not is_watchlist_probe_path("/routes/1")
+
+
 def test_404_page_is_lightweight(app_and_client):
     _app, client = app_and_client
     resp = client.get("/not-found-anymore")
@@ -243,6 +250,24 @@ def test_manage_dashboard_shows_active_5m_metric(app_and_client):
     resp = client.get("/manage")
     assert resp.status_code == 200
     assert "近5分钟活跃(估算)" in resp.get_data(as_text=True)
+
+
+def test_manage_dashboard_shows_security_entry(app_and_client):
+    _app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage")
+    assert resp.status_code == 200
+    assert "安全监控" in resp.get_data(as_text=True)
+
+
+def test_manage_security_page_available_after_login(app_and_client):
+    _app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/security")
+    assert resp.status_code == 200
+    text = resp.get_data(as_text=True)
+    assert "核心安全指标" in text
+    assert "最近安全事件" in text
 
 
 def test_admin_login_and_create_route(app_and_client):

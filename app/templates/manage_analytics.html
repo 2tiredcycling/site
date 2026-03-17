@@ -14,6 +14,9 @@
       <p>最近区间与累计数据并排展示，UV/活跃人数均按 IP 去重估算，不展示个人 IP 明细。</p>
       <div class="row-actions">
         <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        {% if can_review %}
+          <a class="btn btn-muted" href="{{ url_for('admin.security_page') }}">安全监控</a>
+        {% endif %}
       </div>
     </header>
 

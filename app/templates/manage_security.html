@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>安全监控 V3.2</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container analytics-container">
+    <header class="header">
+      <h1>安全监控</h1>
+      <p>聚合展示扫描探测、重点路径命中和限流拦截，帮助快速识别异常来源。</p>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.analytics_page') }}">流量统计</a>
+      </div>
+    </header>
+
+    <section class="card form-card">
+      <h2>统计区间</h2>
+      <div class="row-actions analytics-filters">
+        <a class="btn {{ '' if days == 1 else 'btn-muted' }}" href="{{ url_for('admin.security_page', days=1) }}">近1天</a>
+        <a class="btn {{ '' if days == 7 else 'btn-muted' }}" href="{{ url_for('admin.security_page', days=7) }}">近7天</a>
+        <a class="btn {{ '' if days == 30 else 'btn-muted' }}" href="{{ url_for('admin.security_page', days=30) }}">近30天</a>
+      </div>
+    </section>
+
+    <section class="card form-card">
+      <h2>核心安全指标（最近 {{ days }} 天）</h2>
+      <div class="metric-row metric-row-6">
+        <div><strong>Probe 请求</strong><div>{{ recent.probe }}</div></div>
+        <div><strong>重点路径命中</strong><div>{{ recent.watchlist }}</div></div>
+        <div><strong>限流 429</strong><div>{{ recent.throttled }}</div></div>
+        <div><strong>可疑 IP(估算)</strong><div>{{ recent.probe_ip }}</div></div>
+        <div><strong>4xx</strong><div>{{ recent.errors_4xx }}</div></div>
+        <div><strong>5xx</strong><div>{{ recent.errors_5xx }}</div></div>
+      </div>
+    </section>
+
+    <section class="quick-grid">
+      <section class="card form-card">
+        <h2>重点路径/探测路径 Top10</h2>
+        <table>
+          <thead>
+            <tr><th>路径</th><th>命中数</th></tr>
+          </thead>
+          <tbody>
+            {% for item in top_paths %}
+              <tr><td>{{ item.path }}</td><td>{{ item.hits }}</td></tr>
+            {% else %}
+              <tr><td colspan="2">暂无数据</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card form-card">
+        <h2>来源 IP Top10</h2>
+        <table>
+          <thead>
+            <tr><th>IP</th><th>命中数</th></tr>
+          </thead>
+          <tbody>
+            {% for item in top_ips %}
+              <tr><td>{{ item.ip }}</td><td>{{ item.hits }}</td></tr>
+            {% else %}
+              <tr><td colspan="2">暂无数据</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </section>
+
+    <section class="quick-grid">
+      <section class="card form-card">
+        <h2>可疑 User-Agent Top10</h2>
+        <table>
+          <thead>
+            <tr><th>User-Agent</th><th>命中数</th></tr>
+          </thead>
+          <tbody>
+            {% for item in top_uas %}
+              <tr><td>{{ item.ua }}</td><td>{{ item.hits }}</td></tr>
+            {% else %}
+              <tr><td colspan="2">暂无数据</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card form-card">
+        <h2>安全趋势（最近 {{ days }} 天）</h2>
+        <table>
+          <thead>
+            <tr><th>日期</th><th>Probe</th><th>重点命中</th><th>429</th></tr>
+          </thead>
+          <tbody>
+            {% for item in daily_stats %}
+              <tr>
+                <td>{{ item.date }}</td>
+                <td>{{ item.probe }}</td>
+                <td>{{ item.watchlist }}</td>
+                <td>{{ item.throttled }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4">暂无数据</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </section>
+
+    <section class="card form-card">
+      <h2>最近安全事件（最多50条）</h2>
+      <table>
+        <thead>
+          <tr><th>时间</th><th>类型</th><th>路径</th><th>状态码</th><th>IP</th><th>User-Agent</th></tr>
+        </thead>
+        <tbody>
+          {% for item in events %}
+            <tr>
+              <td>{{ to_local_time(item.created_at).strftime('%Y-%m-%d %H:%M:%S') if item.created_at else '-' }}</td>
+              <td>{{ item.event_type }}</td>
+              <td>{{ item.path }}</td>
+              <td>{{ item.status_code }}</td>
+              <td>{{ item.ip }}</td>
+              <td>{{ item.user_agent }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">暂无安全事件</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

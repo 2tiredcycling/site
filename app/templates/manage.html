@@ -55,6 +55,21 @@
       </div>
     </section>
 
+    {% if can_review %}
+      <section class="card form-card card-link analytics-strip" data-href="{{ url_for('admin.security_page') }}">
+        <div class="analytics-strip-head">
+          <h2>安全监控</h2>
+          <span class="hint">点击进入安全页（扫描、拦截、重点路径命中）</span>
+        </div>
+        <div class="analytics-strip-metrics metrics-4">
+          <div><strong>24h Probe</strong><div>{{ security_summary.probe_24h }}</div></div>
+          <div><strong>24h 重点命中</strong><div>{{ security_summary.watchlist_24h }}</div></div>
+          <div><strong>24h 限流429</strong><div>{{ security_summary.blocked_429_24h }}</div></div>
+          <div><strong>24h 可疑IP</strong><div>{{ security_summary.probe_ip_24h }}</div></div>
+        </div>
+      </section>
+    {% endif %}
+
     <section class="quick-grid">
       <section class="card form-card card-link" data-href="{{ url_for('admin.routes_page') }}">
         <h2>最新路线</h2>

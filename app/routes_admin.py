@@ -61,7 +61,7 @@ from app.models import (
 from app.querying import query_routes_from_request
 from app.gpx_utils import parse_gpx_points_and_stats
 from app.route_ops import allowed_file, file_size_ok, parse_distance, save_gpx_file
-from app.security_monitor import build_non_probe_filters
+from app.security_monitor import WATCHLIST_PROBE_PATHS, build_non_probe_filters
 from app.security_limits import check_lock, clear_state, register_failure
 from app.services import (
     approved_rating_summary,
@@ -87,6 +87,22 @@ def _to_local_time(value: datetime | None) -> datetime | None:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(SH_TZ)
+
+
+def _watchlist_probe_expression():
+    conditions = [AccessLog.path.in_(WATCHLIST_PROBE_PATHS), AccessLog.path.like("/wordpress/wp-admin/%")]
+    return or_(*conditions)
+
+
+def _probe_expression():
+    suffixes = (".php", ".asp", ".aspx", ".jsp", ".bak", ".sql", ".zip", ".tar.gz")
+    prefixes = ("/wp-", "/wordpress", "/xmlrpc.php", "/phpmyadmin", "/pma", "/.git", "/.env", "/vendor", "/cgi-bin")
+    conditions = [AccessLog.path.like(f"{prefix}%") for prefix in prefixes]
+    conditions.extend([AccessLog.path.like(f"%{suffix}") for suffix in suffixes])
+    conditions.append(AccessLog.path.like("%../%"))
+    conditions.append(AccessLog.path.ilike("%2e%2e%"))
+    conditions.append(_watchlist_probe_expression())
+    return or_(*conditions)
 
 
 @bp.before_app_request
@@ -194,6 +210,30 @@ def dashboard():
         "feedback_pending": pending_feedback_count,
         "site_feedback_pending": pending_site_feedback_count,
     }
+    probe_filter_24h = (
+        AccessLog.created_at >= start_24h,
+        ~AccessLog.path.like("/manage%"),
+        _probe_expression(),
+    )
+    security_summary = {
+        "probe_24h": AccessLog.query.filter(*probe_filter_24h).count(),
+        "watchlist_24h": AccessLog.query.filter(
+            AccessLog.created_at >= start_24h,
+            ~AccessLog.path.like("/manage%"),
+            _watchlist_probe_expression(),
+        ).count(),
+        "blocked_429_24h": AccessLog.query.filter(
+            AccessLog.created_at >= start_24h,
+            ~AccessLog.path.like("/manage%"),
+            AccessLog.status_code == 429,
+        ).count(),
+        "probe_ip_24h": int(
+            db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+            .filter(*probe_filter_24h)
+            .scalar()
+            or 0
+        ),
+    }
     analytics_summary = {
         "pv_24h": AccessLog.query.filter(
             AccessLog.created_at >= start_24h,
@@ -228,6 +268,7 @@ def dashboard():
         latest_activities=latest_activities,
         latest_feedback=latest_feedback,
         latest_site_feedback=latest_site_feedback,
+        security_summary=security_summary,
         can_review=can_review(g.current_user),
         can_manage_users=(g.current_user.role == ROLE_ADMIN),
     )
@@ -330,6 +371,7 @@ def analytics_page():
     return render_template(
         "manage_analytics.html",
         days=days,
+        can_review=can_review(g.current_user),
         recent={
             "pv": recent_pv,
             "uv": int(recent_uv),
@@ -346,6 +388,137 @@ def analytics_page():
         },
         top_pages=top_pages,
         daily_stats=daily_stats,
+    )
+
+
+@bp.get("/security")
+@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+def security_page():
+    days = request.args.get("days", default=7, type=int)
+    if days not in {1, 7, 30}:
+        days = 7
+
+    now = utcnow()
+    start_recent = now - timedelta(days=days)
+    start_recent_date = _to_local_time(start_recent).date()
+    today_local = _to_local_time(now).date()
+    base_filter = (
+        AccessLog.created_at >= start_recent,
+        ~AccessLog.path.like("/manage%"),
+    )
+    probe_expr = _probe_expression()
+    watchlist_expr = _watchlist_probe_expression()
+    security_expr = or_(probe_expr, AccessLog.status_code == 429)
+
+    recent_probe = AccessLog.query.filter(*base_filter, probe_expr).count()
+    recent_watchlist = AccessLog.query.filter(*base_filter, watchlist_expr).count()
+    recent_throttled = AccessLog.query.filter(*base_filter, AccessLog.status_code == 429).count()
+    recent_errors_4xx = AccessLog.query.filter(
+        *base_filter,
+        AccessLog.status_code >= 400,
+        AccessLog.status_code < 500,
+    ).count()
+    recent_errors_5xx = AccessLog.query.filter(*base_filter, AccessLog.status_code >= 500).count()
+    recent_probe_ip = int(
+        db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+        .filter(*base_filter, security_expr)
+        .scalar()
+        or 0
+    )
+
+    top_paths_rows = (
+        db.session.query(AccessLog.path, db.func.count(AccessLog.id).label("hits"))
+        .filter(*base_filter, security_expr)
+        .group_by(AccessLog.path)
+        .order_by(db.text("hits DESC"))
+        .limit(10)
+        .all()
+    )
+    top_ips_rows = (
+        db.session.query(AccessLog.ip_address, db.func.count(AccessLog.id).label("hits"))
+        .filter(*base_filter, security_expr)
+        .group_by(AccessLog.ip_address)
+        .order_by(db.text("hits DESC"))
+        .limit(10)
+        .all()
+    )
+    top_uas_rows = (
+        db.session.query(AccessLog.user_agent, db.func.count(AccessLog.id).label("hits"))
+        .filter(*base_filter, security_expr, AccessLog.user_agent != "")
+        .group_by(AccessLog.user_agent)
+        .order_by(db.text("hits DESC"))
+        .limit(10)
+        .all()
+    )
+
+    top_paths = [{"path": row[0], "hits": int(row[1] or 0)} for row in top_paths_rows]
+    top_ips = [{"ip": row[0] or "unknown", "hits": int(row[1] or 0)} for row in top_ips_rows]
+    top_uas = [{"ua": row[0] or "-", "hits": int(row[1] or 0)} for row in top_uas_rows]
+
+    logs_recent = (
+        AccessLog.query.filter(*base_filter, security_expr)
+        .order_by(AccessLog.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    logs_for_trend = AccessLog.query.filter(*base_filter, security_expr).all()
+    watchlist_set = {item.lower() for item in WATCHLIST_PROBE_PATHS}
+    event_rows = []
+    for item in logs_recent:
+        normalized = (item.path or "").lower()
+        is_watchlist = normalized in watchlist_set or normalized.startswith("/wordpress/wp-admin/")
+        event_rows.append(
+            {
+                "created_at": item.created_at,
+                "path": item.path,
+                "ip": item.ip_address or "unknown",
+                "status_code": item.status_code,
+                "user_agent": item.user_agent or "-",
+                "event_type": "watchlist" if is_watchlist else ("throttled" if item.status_code == 429 else "probe"),
+            }
+        )
+
+    daily_map: dict = defaultdict(lambda: {"probe": 0, "watchlist": 0, "throttled": 0})
+    for item in logs_for_trend:
+        local_day = _to_local_time(item.created_at).date()
+        normalized = (item.path or "").lower()
+        if normalized in watchlist_set or normalized.startswith("/wordpress/wp-admin/"):
+            daily_map[local_day]["watchlist"] += 1
+        elif item.status_code == 429:
+            daily_map[local_day]["throttled"] += 1
+        else:
+            daily_map[local_day]["probe"] += 1
+
+    daily_stats = []
+    current = start_recent_date
+    while current <= today_local:
+        row = daily_map[current]
+        daily_stats.append(
+            {
+                "date": current.strftime("%Y-%m-%d"),
+                "probe": row["probe"],
+                "watchlist": row["watchlist"],
+                "throttled": row["throttled"],
+            }
+        )
+        current += timedelta(days=1)
+
+    return render_template(
+        "manage_security.html",
+        days=days,
+        recent={
+            "probe": recent_probe,
+            "watchlist": recent_watchlist,
+            "throttled": recent_throttled,
+            "probe_ip": recent_probe_ip,
+            "errors_4xx": recent_errors_4xx,
+            "errors_5xx": recent_errors_5xx,
+        },
+        top_paths=top_paths,
+        top_ips=top_ips,
+        top_uas=top_uas,
+        daily_stats=daily_stats,
+        events=event_rows,
     )
 
 

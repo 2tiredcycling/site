@@ -10,7 +10,7 @@ from app.routes_admin import bp as admin_bp
 from app.routes_api_v1 import bp as api_v1_bp
 from app.routes_legacy import bp as legacy_bp
 from app.routes_web import bp as web_bp
-from app.security_monitor import is_probe_path, should_throttle_probe
+from app.security_monitor import is_probe_path, is_watchlist_probe_path, should_throttle_probe
 from app.services import ensure_default_admin, ensure_schema_compat, ensure_seed_data
 
 
@@ -61,6 +61,13 @@ def create_app() -> Flask:
 
         # Drop common probe paths early, before they hit expensive handlers.
         if is_probe_path(path):
+            if is_watchlist_probe_path(path):
+                app.logger.warning(
+                    "security.watchlist_probe path=%s ip=%s ua=%s",
+                    path,
+                    request.headers.get("X-Forwarded-For", request.remote_addr),
+                    (request.user_agent.string or "")[:200],
+                )
             return Response("Not Found", status=404, mimetype="text/plain")
         return None
 

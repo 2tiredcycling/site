@@ -17,6 +17,15 @@ PROBE_PATH_PREFIXES = (
 PROBE_PATH_EXACT = (
     "/.well-known/security.txt",
 )
+WATCHLIST_PROBE_PATHS = (
+    "/wordpress/wp-admin/setup-config.php",
+    "/wp-admin/setup-config.php",
+    "/wp-login.php",
+    "/xmlrpc.php",
+    "/phpmyadmin",
+    "/.env",
+    "/.git/config",
+)
 PROBE_PATH_SUFFIXES = (
     ".php",
     ".asp",
@@ -74,6 +83,17 @@ def should_throttle_probe(path: str, user_agent: str) -> tuple[bool, int]:
     if not is_probe_request(path, user_agent):
         return True, 0
     return consume_fixed_window("probe_request", client_ip(), limit=120, window_seconds=60)
+
+
+def is_watchlist_probe_path(path: str) -> bool:
+    normalized = (path or "").strip().lower()
+    if not normalized:
+        return False
+    if normalized in WATCHLIST_PROBE_PATHS:
+        return True
+    if normalized.startswith("/wordpress/wp-admin/"):
+        return True
+    return False
 
 
 def build_non_probe_filters(model):
