@@ -1,4 +1,5 @@
-﻿from io import BytesIO
+﻿from datetime import datetime, timedelta, timezone
+from io import BytesIO
 import json
 from pathlib import Path
 import re
@@ -29,6 +30,7 @@ def app_and_client(tmp_path, monkeypatch):
     monkeypatch.setenv("UPLOAD_FOLDER", str(upload_dir))
     monkeypatch.setenv("DEFAULT_ADMIN_USERNAME", "admin")
     monkeypatch.setenv("DEFAULT_ADMIN_PASSWORD", "admin123456789")
+    monkeypatch.setenv("APP_DEPLOYED_AT", "2026-03-17T18:30:00+08:00")
 
     app = create_app()
     app.config.update(TESTING=True, SEED_DEMO_DATA=False)
@@ -244,6 +246,44 @@ def test_manage_analytics_excludes_self_path(app_and_client):
     assert "<td>/</td>" in text
 
 
+def test_manage_analytics_supports_post_deploy_scope(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        baseline_utc = datetime.fromisoformat("2026-03-17T18:30:00+08:00").astimezone(timezone.utc)
+        db.session.add(
+            AccessLog(
+                path="/",
+                method="GET",
+                endpoint="web.index",
+                status_code=200,
+                ip_address="203.0.113.3",
+                user_agent="pytest",
+                referer="",
+                created_at=baseline_utc - timedelta(hours=1),
+            )
+        )
+        db.session.add(
+            AccessLog(
+                path="/",
+                method="GET",
+                endpoint="web.index",
+                status_code=200,
+                ip_address="203.0.113.4",
+                user_agent="pytest",
+                referer="",
+                created_at=baseline_utc + timedelta(hours=1),
+            )
+        )
+        db.session.commit()
+
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/analytics?scope=post_deploy")
+    text = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "上线后（" in text
+    assert "<strong>PV</strong><div>1</div>" in text
+
+
 def test_manage_dashboard_shows_active_5m_metric(app_and_client):
     _app, client = app_and_client
     assert login_admin(client).status_code == 200
@@ -259,7 +299,7 @@ def test_manage_dashboard_shows_security_entry(app_and_client):
     assert resp.status_code == 200
     text = resp.get_data(as_text=True)
     assert "安全监控" in text
-    assert "当前版本：v3.2.1" in text
+    assert "当前版本：v3.2.2" in text
 
 
 def test_manage_security_page_available_after_login(app_and_client):
@@ -270,6 +310,15 @@ def test_manage_security_page_available_after_login(app_and_client):
     text = resp.get_data(as_text=True)
     assert "核心安全指标" in text
     assert "最近安全事件" in text
+
+
+def test_manage_security_supports_post_deploy_scope(app_and_client):
+    _app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/security?scope=post_deploy")
+    text = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "核心安全指标（上线后（" in text
 
 
 def test_admin_login_and_create_route(app_and_client):
@@ -496,3 +545,5 @@ def test_route_rollback_rejects_missing_gpx_snapshot(app_and_client):
         route = db.session.get(Route, route_id)
         assert route is not None
         assert route.route_name == old_name
+
+

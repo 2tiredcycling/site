@@ -24,9 +24,10 @@
     <section class="card form-card">
       <h2>统计区间</h2>
       <div class="row-actions analytics-filters">
-        <a class="btn {{ '' if days == 1 else 'btn-muted' }}" href="{{ url_for('admin.analytics_page', days=1) }}">近1天</a>
-        <a class="btn {{ '' if days == 7 else 'btn-muted' }}" href="{{ url_for('admin.analytics_page', days=7) }}">近7天</a>
-        <a class="btn {{ '' if days == 30 else 'btn-muted' }}" href="{{ url_for('admin.analytics_page', days=30) }}">近30天</a>
+        <a class="btn {{ '' if scope == 'recent' and days == 1 else 'btn-muted' }}" href="{{ url_for('admin.analytics_page', days=1, scope='recent') }}">近1天</a>
+        <a class="btn {{ '' if scope == 'recent' and days == 7 else 'btn-muted' }}" href="{{ url_for('admin.analytics_page', days=7, scope='recent') }}">近7天</a>
+        <a class="btn {{ '' if scope == 'recent' and days == 30 else 'btn-muted' }}" href="{{ url_for('admin.analytics_page', days=30, scope='recent') }}">近30天</a>
+        <a class="btn {{ '' if scope == 'post_deploy' else 'btn-muted' }}" href="{{ url_for('admin.analytics_page', scope='post_deploy') }}">上线后</a>
       </div>
     </section>
 
@@ -34,7 +35,7 @@
       <h2>核心指标</h2>
       <div class="analytics-panels">
         <article class="analytics-panel">
-          <h3>最近 {{ days }} 天</h3>
+          <h3>{{ period_label }}</h3>
           <div class="metric-row metric-row-5">
             <div><strong>PV</strong><div>{{ recent.pv }}</div></div>
             <div><strong>UV(估算)</strong><div>{{ recent.uv }}</div></div>
@@ -45,7 +46,7 @@
         </article>
 
         <article class="analytics-panel">
-          <h3>累计总数据</h3>
+          <h3>{{ '累计（上线后）' if scope == 'post_deploy' else '累计总数据' }}</h3>
           <div class="metric-row metric-row-5">
             <div><strong>PV</strong><div>{{ total.pv }}</div></div>
             <div><strong>UV(估算)</strong><div>{{ total.uv }}</div></div>
@@ -59,7 +60,7 @@
 
     <section class="quick-grid">
       <section class="card form-card">
-        <h2>热门页面 Top10（最近 {{ days }} 天）</h2>
+        <h2>热门页面 Top10（{{ period_label }}）</h2>
         <table>
           <thead>
             <tr><th>页面</th><th>访问量</th></tr>
@@ -78,7 +79,7 @@
       </section>
 
       <section class="card form-card">
-        <h2>访问趋势（最近 {{ days }} 天）</h2>
+        <h2>访问趋势（{{ period_label }}）</h2>
         <table>
           <thead>
             <tr><th>日期</th><th>PV</th><th>下载成功</th></tr>

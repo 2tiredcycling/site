@@ -32,7 +32,8 @@ def _resolve_upload_folder() -> str:
 
 
 class BaseConfig:
-    APP_VERSION = os.getenv("APP_VERSION", "v3.2.1")
+    APP_VERSION = os.getenv("APP_VERSION", "v3.2.2")
+    APP_DEPLOYED_AT = os.getenv("APP_DEPLOYED_AT", "")
     SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change-me-admin")
     DEFAULT_ADMIN_USERNAME = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")

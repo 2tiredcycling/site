@@ -89,6 +89,28 @@ def _to_local_time(value: datetime | None) -> datetime | None:
     return value.astimezone(SH_TZ)
 
 
+def _deployed_at_utc() -> datetime | None:
+    raw = (current_app.config.get("APP_DEPLOYED_AT") or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=SH_TZ)
+    return parsed.astimezone(timezone.utc)
+
+
+def _resolve_period_start(days: int, scope: str, now: datetime) -> tuple[str, datetime, str]:
+    deployed = _deployed_at_utc()
+    if scope == "post_deploy" and deployed is not None:
+        local = _to_local_time(deployed)
+        return "post_deploy", deployed, f"上线后（{local.strftime('%Y-%m-%d %H:%M')}）"
+    start = now - timedelta(days=days)
+    return "recent", start, f"最近 {days} 天"
+
+
 def _watchlist_probe_expression():
     conditions = [AccessLog.path.in_(WATCHLIST_PROBE_PATHS), AccessLog.path.like("/wordpress/wp-admin/%")]
     return or_(*conditions)
@@ -292,14 +314,20 @@ def analytics_page():
     days = request.args.get("days", default=7, type=int)
     if days not in {1, 7, 30}:
         days = 7
+    scope = (request.args.get("scope") or "recent").strip()
+    if scope not in {"recent", "post_deploy"}:
+        scope = "recent"
 
     now = utcnow()
-    start_recent = now - timedelta(days=days)
+    scope, start_recent, period_label = _resolve_period_start(days, scope, now)
     start_recent_date = _to_local_time(start_recent).date()
     today_local = _to_local_time(now).date()
 
     recent_base_filter = (AccessLog.created_at >= start_recent, *build_non_probe_filters(AccessLog))
-    total_base_filter = build_non_probe_filters(AccessLog)
+    total_base_filter = (
+        AccessLog.created_at >= start_recent,
+        *build_non_probe_filters(AccessLog),
+    ) if scope == "post_deploy" else build_non_probe_filters(AccessLog)
     recent_pv = AccessLog.query.filter(*recent_base_filter).count()
     recent_uv = (
         db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
@@ -375,6 +403,8 @@ def analytics_page():
     return render_template(
         "manage_analytics.html",
         days=days,
+        scope=scope,
+        period_label=period_label,
         can_review=can_review(g.current_user),
         recent={
             "pv": recent_pv,
@@ -401,9 +431,12 @@ def security_page():
     days = request.args.get("days", default=7, type=int)
     if days not in {1, 7, 30}:
         days = 7
+    scope = (request.args.get("scope") or "recent").strip()
+    if scope not in {"recent", "post_deploy"}:
+        scope = "recent"
 
     now = utcnow()
-    start_recent = now - timedelta(days=days)
+    scope, start_recent, period_label = _resolve_period_start(days, scope, now)
     start_recent_date = _to_local_time(start_recent).date()
     today_local = _to_local_time(now).date()
     base_filter = (
@@ -510,6 +543,8 @@ def security_page():
     return render_template(
         "manage_security.html",
         days=days,
+        scope=scope,
+        period_label=period_label,
         recent={
             "probe": recent_probe,
             "watchlist": recent_watchlist,
