@@ -263,6 +263,10 @@ td {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
+.metric-row-8 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .metric-row > div {
   border: 1px solid #dbeafe;
   border-radius: 10px;

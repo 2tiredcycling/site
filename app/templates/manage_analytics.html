@@ -36,8 +36,11 @@
       <div class="analytics-panels">
         <article class="analytics-panel">
           <h3>{{ period_label }}</h3>
-          <div class="metric-row metric-row-5">
-            <div><strong>PV</strong><div>{{ recent.pv }}</div></div>
+          <div class="metric-row metric-row-8">
+            <div><strong>业务PV</strong><div>{{ recent.pv }}</div></div>
+            <div><strong>总请求</strong><div>{{ recent.raw_requests }}</div></div>
+            <div><strong>排除探测</strong><div>{{ recent.probe_excluded }}</div></div>
+            <div><strong>探测占比</strong><div>{{ '%.2f'|format(recent.probe_ratio) }}%</div></div>
             <div><strong>UV(估算)</strong><div>{{ recent.uv }}</div></div>
             <div><strong>下载成功</strong><div>{{ recent.downloads }}</div></div>
             <div><strong>4xx</strong><div>{{ recent.errors_4xx }}</div></div>
@@ -47,8 +50,11 @@
 
         <article class="analytics-panel">
           <h3>{{ '累计（上线后）' if scope == 'post_deploy' else '累计总数据' }}</h3>
-          <div class="metric-row metric-row-5">
-            <div><strong>PV</strong><div>{{ total.pv }}</div></div>
+          <div class="metric-row metric-row-8">
+            <div><strong>业务PV</strong><div>{{ total.pv }}</div></div>
+            <div><strong>总请求</strong><div>{{ total.raw_requests }}</div></div>
+            <div><strong>排除探测</strong><div>{{ total.probe_excluded }}</div></div>
+            <div><strong>探测占比</strong><div>{{ '%.2f'|format(total.probe_ratio) }}%</div></div>
             <div><strong>UV(估算)</strong><div>{{ total.uv }}</div></div>
             <div><strong>下载成功</strong><div>{{ total.downloads }}</div></div>
             <div><strong>4xx</strong><div>{{ total.errors_4xx }}</div></div>

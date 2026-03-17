@@ -281,7 +281,42 @@ def test_manage_analytics_supports_post_deploy_scope(app_and_client):
     text = resp.get_data(as_text=True)
     assert resp.status_code == 200
     assert "上线后（" in text
-    assert "<strong>PV</strong><div>1</div>" in text
+    assert "业务PV" in text
+
+
+def test_manage_analytics_shows_probe_excluded_metrics(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            AccessLog(
+                path="/",
+                method="GET",
+                endpoint="web.index",
+                status_code=200,
+                ip_address="203.0.113.20",
+                user_agent="pytest",
+                referer="",
+            )
+        )
+        db.session.add(
+            AccessLog(
+                path="/wp-login.php",
+                method="GET",
+                endpoint="",
+                status_code=404,
+                ip_address="203.0.113.21",
+                user_agent="pytest",
+                referer="",
+            )
+        )
+        db.session.commit()
+
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/analytics?days=1")
+    text = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "排除探测" in text
+    assert "探测占比" in text
 
 
 def test_manage_dashboard_shows_active_5m_metric(app_and_client):

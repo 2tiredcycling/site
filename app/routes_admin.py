@@ -324,10 +324,18 @@ def analytics_page():
     today_local = _to_local_time(now).date()
 
     recent_base_filter = (AccessLog.created_at >= start_recent, *build_non_probe_filters(AccessLog))
+    recent_raw_filter = (
+        AccessLog.created_at >= start_recent,
+        ~AccessLog.path.like("/manage%"),
+    )
     total_base_filter = (
         AccessLog.created_at >= start_recent,
         *build_non_probe_filters(AccessLog),
     ) if scope == "post_deploy" else build_non_probe_filters(AccessLog)
+    total_raw_filter = (
+        AccessLog.created_at >= start_recent,
+        ~AccessLog.path.like("/manage%"),
+    ) if scope == "post_deploy" else (~AccessLog.path.like("/manage%"),)
     recent_pv = AccessLog.query.filter(*recent_base_filter).count()
     recent_uv = (
         db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
@@ -349,6 +357,9 @@ def analytics_page():
         AccessLog.path.like("/download/%"),
         AccessLog.status_code == 200,
     ).count()
+    recent_raw_requests = AccessLog.query.filter(*recent_raw_filter).count()
+    recent_probe_excluded = max(0, recent_raw_requests - recent_pv)
+    recent_probe_ratio = round((recent_probe_excluded / recent_raw_requests) * 100, 2) if recent_raw_requests else 0.0
 
     total_pv = AccessLog.query.filter(*total_base_filter).count()
     total_uv = (
@@ -371,6 +382,9 @@ def analytics_page():
         AccessLog.path.like("/download/%"),
         AccessLog.status_code == 200,
     ).count()
+    total_raw_requests = AccessLog.query.filter(*total_raw_filter).count()
+    total_probe_excluded = max(0, total_raw_requests - total_pv)
+    total_probe_ratio = round((total_probe_excluded / total_raw_requests) * 100, 2) if total_raw_requests else 0.0
 
     top_pages_rows = (
         db.session.query(
@@ -412,6 +426,9 @@ def analytics_page():
             "errors_4xx": recent_errors_4xx,
             "errors_5xx": recent_errors_5xx,
             "downloads": recent_downloads,
+            "raw_requests": recent_raw_requests,
+            "probe_excluded": recent_probe_excluded,
+            "probe_ratio": recent_probe_ratio,
         },
         total={
             "pv": total_pv,
@@ -419,6 +436,9 @@ def analytics_page():
             "errors_4xx": total_errors_4xx,
             "errors_5xx": total_errors_5xx,
             "downloads": total_downloads,
+            "raw_requests": total_raw_requests,
+            "probe_excluded": total_probe_excluded,
+            "probe_ratio": total_probe_ratio,
         },
         top_pages=top_pages,
         daily_stats=daily_stats,
