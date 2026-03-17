@@ -61,6 +61,7 @@ from app.models import (
 from app.querying import query_routes_from_request
 from app.gpx_utils import parse_gpx_points_and_stats
 from app.route_ops import allowed_file, file_size_ok, parse_distance, save_gpx_file
+from app.security_monitor import build_non_probe_filters
 from app.security_limits import check_lock, clear_state, register_failure
 from app.services import (
     approved_rating_summary,
@@ -196,13 +197,13 @@ def dashboard():
     analytics_summary = {
         "pv_24h": AccessLog.query.filter(
             AccessLog.created_at >= start_24h,
-            ~AccessLog.path.like("/manage%"),
+            *build_non_probe_filters(AccessLog),
         ).count(),
         "uv_24h": int(
             db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
             .filter(
                 AccessLog.created_at >= start_24h,
-                ~AccessLog.path.like("/manage%"),
+                *build_non_probe_filters(AccessLog),
             )
             .scalar()
             or 0
@@ -211,7 +212,7 @@ def dashboard():
             db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
             .filter(
                 AccessLog.created_at >= (now - timedelta(minutes=5)),
-                ~AccessLog.path.like("/manage%"),
+                *build_non_probe_filters(AccessLog),
             )
             .scalar()
             or 0
@@ -252,11 +253,8 @@ def analytics_page():
     start_recent_date = _to_local_time(start_recent).date()
     today_local = _to_local_time(now).date()
 
-    recent_base_filter = (
-        AccessLog.created_at >= start_recent,
-        ~AccessLog.path.like("/manage%"),
-    )
-    total_base_filter = (~AccessLog.path.like("/manage%"),)
+    recent_base_filter = (AccessLog.created_at >= start_recent, *build_non_probe_filters(AccessLog))
+    total_base_filter = build_non_probe_filters(AccessLog)
     recent_pv = AccessLog.query.filter(*recent_base_filter).count()
     recent_uv = (
         db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))

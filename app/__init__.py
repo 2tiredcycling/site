@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 
-from flask import Flask, redirect, request, url_for
+from flask import Flask, Response, redirect, request, url_for
 from dotenv import load_dotenv
 
 from app.models import AccessLog, db
@@ -10,6 +10,7 @@ from app.routes_admin import bp as admin_bp
 from app.routes_api_v1 import bp as api_v1_bp
 from app.routes_legacy import bp as legacy_bp
 from app.routes_web import bp as web_bp
+from app.security_monitor import is_probe_path, should_throttle_probe
 from app.services import ensure_default_admin, ensure_schema_compat, ensure_seed_data
 
 
@@ -46,6 +47,22 @@ def create_app() -> Flask:
         )
         if app.config.get("SEED_DEMO_DATA", False):
             ensure_seed_data(app)
+
+    @app.before_request
+    def guard_probe_requests():
+        path = request.path or ""
+        if path.startswith("/manage") or path.startswith("/static/"):
+            return None
+
+        user_agent = request.user_agent.string or ""
+        allowed, retry_after = should_throttle_probe(path, user_agent)
+        if not allowed:
+            return Response("Too Many Requests", status=429, mimetype="text/plain", headers={"Retry-After": str(retry_after)})
+
+        # Drop common probe paths early, before they hit expensive handlers.
+        if is_probe_path(path):
+            return Response("Not Found", status=404, mimetype="text/plain")
+        return None
 
     @app.before_request
     def log_access() -> None:

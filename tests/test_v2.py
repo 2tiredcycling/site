@@ -148,6 +148,39 @@ def test_access_log_persisted_for_web_request(app_and_client):
         assert log.status_code == 200
 
 
+def test_robots_txt_served(app_and_client):
+    _app, client = app_and_client
+    resp = client.get("/robots.txt")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "User-agent: *" in body
+    assert "Disallow: /manage/" in body
+
+
+def test_probe_wordpress_path_blocked_early(app_and_client):
+    app, client = app_and_client
+    resp = client.get("/wordpress/wp-admin/setup-config.php")
+    assert resp.status_code == 404
+
+    with app.app_context():
+        log = (
+            AccessLog.query.filter_by(path="/wordpress/wp-admin/setup-config.php")
+            .order_by(AccessLog.id.desc())
+            .first()
+        )
+        assert log is not None
+        assert log.status_code == 404
+
+
+def test_404_page_is_lightweight(app_and_client):
+    _app, client = app_and_client
+    resp = client.get("/not-found-anymore")
+    text = resp.get_data(as_text=True)
+    assert resp.status_code == 404
+    assert "返回首页" in text
+    assert "查找路线" not in text
+
+
 def test_manage_analytics_page_available_after_login(app_and_client):
     _app, client = app_and_client
     assert login_admin(client).status_code == 200

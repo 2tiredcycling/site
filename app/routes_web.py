@@ -208,6 +208,12 @@ def health() -> Response:
     return Response("ok", mimetype="text/plain")
 
 
+@bp.get("/robots.txt")
+def robots_txt() -> Response:
+    body = "User-agent: *\nDisallow: /manage/\nAllow: /\n"
+    return Response(body, mimetype="text/plain")
+
+
 @bp.get("/metrics")
 def metrics() -> Response:
     total_routes = Route.query.filter_by(is_deleted=False).count()
@@ -269,10 +275,8 @@ def bulk_import_template():
 
 @bp.app_errorhandler(404)
 def handle_404(error):
-    query, filters = query_routes_from_request(include_unpublished=False)
-    pagination = query.paginate(page=filters["page"], per_page=filters["per_page"], error_out=False)
     message = getattr(error, "description", "Resource not found")
-    return render_template("index.html", routes=pagination.items, pagination=pagination, filters=filters, error_message=message), 404
+    return render_template("404.html", error_message=message), 404
 
 
 @bp.app_errorhandler(403)

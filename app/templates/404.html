@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>页面未找到 - 2Tired</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <section class="card form-card">
+      <h1>404</h1>
+      <p>{{ error_message or "请求的页面不存在。" }}</p>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('web.index') }}">返回首页</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
