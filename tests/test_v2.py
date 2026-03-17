@@ -257,7 +257,9 @@ def test_manage_dashboard_shows_security_entry(app_and_client):
     assert login_admin(client).status_code == 200
     resp = client.get("/manage")
     assert resp.status_code == 200
-    assert "安全监控" in resp.get_data(as_text=True)
+    text = resp.get_data(as_text=True)
+    assert "安全监控" in text
+    assert "当前版本：v3.2.1" in text
 
 
 def test_manage_security_page_available_after_login(app_and_client):

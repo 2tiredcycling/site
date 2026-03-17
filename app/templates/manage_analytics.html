@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>流量统计 V3.2.0</title>
+  <title>流量统计 {{ app_version }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,6 +11,7 @@
   <main class="container analytics-container">
     <header class="header">
       <h1>流量统计</h1>
+      <p class="hint">当前版本：{{ app_version }}</p>
       <p>最近区间与累计数据并排展示，UV/活跃人数均按 IP 去重估算，不展示个人 IP 明细。</p>
       <div class="row-actions">
         <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>

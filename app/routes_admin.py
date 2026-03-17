@@ -121,7 +121,11 @@ def _verify_csrf_for_post():
 
 @bp.app_context_processor
 def _inject_csrf_token():
-    return {"csrf_token": get_csrf_token, "to_local_time": _to_local_time}
+    return {
+        "csrf_token": get_csrf_token,
+        "to_local_time": _to_local_time,
+        "app_version": current_app.config.get("APP_VERSION", "unknown"),
+    }
 
 
 @bp.get("/login")

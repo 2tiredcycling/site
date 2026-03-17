@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>管理总览 V3</title>
+  <title>管理总览 {{ app_version }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,6 +11,7 @@
   <main class="container">
     <header class="header">
       <h1>管理总览</h1>
+      <p class="hint">当前版本：{{ app_version }}</p>
       <p>当前用户：{{ g.current_user.username }}（{{ g.current_user.role }}）</p>
       <div class="row-actions">
         <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回用户页</a>
