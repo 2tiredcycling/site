@@ -1,5 +1,10 @@
+import atexit
 import logging
 import os
+import queue
+import threading
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, Response, redirect, request, url_for
@@ -37,6 +42,7 @@ def create_app() -> Flask:
     app.register_blueprint(admin_bp)
     app.register_blueprint(legacy_bp)
     _setup_logging(app)
+    _setup_access_log_pipeline(app)
 
     with app.app_context():
         db.create_all()
@@ -73,7 +79,10 @@ def create_app() -> Flask:
 
     @app.before_request
     def log_access() -> None:
+        if not app.config.get("REQUEST_CONSOLE_LOG_ENABLED", False):
+            return None
         app.logger.info("access method=%s path=%s ip=%s", request.method, request.path, request.remote_addr)
+        return None
 
     @app.after_request
     def persist_access_log(response):
@@ -84,18 +93,29 @@ def create_app() -> Flask:
         try:
             forwarded = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
             ip_address = forwarded or request.remote_addr or "unknown"
-            db.session.add(
-                AccessLog(
-                    path=path[:255],
-                    method=(request.method or "GET")[:16],
-                    endpoint=(request.endpoint or "")[:128],
-                    status_code=int(response.status_code or 0),
-                    ip_address=ip_address[:64],
-                    user_agent=(request.user_agent.string or "")[:255],
-                    referer=(request.referrer or "")[:255],
-                )
-            )
-            db.session.commit()
+            payload = {
+                "path": path[:255],
+                "method": (request.method or "GET")[:16],
+                "endpoint": (request.endpoint or "")[:128],
+                "status_code": int(response.status_code or 0),
+                "ip_address": ip_address[:64],
+                "user_agent": (request.user_agent.string or "")[:255],
+                "referer": (request.referrer or "")[:255],
+                "created_at": datetime.now(timezone.utc),
+            }
+
+            log_queue = app.extensions.get("access_log_queue")
+            if log_queue is not None:
+                try:
+                    log_queue.put_nowait(payload)
+                except queue.Full:
+                    dropped = app.extensions.setdefault("access_log_dropped", {"count": 0})
+                    dropped["count"] += 1
+                    if dropped["count"] % 100 == 1:
+                        app.logger.warning("access log queue full, dropped=%s", dropped["count"])
+            else:
+                db.session.execute(AccessLog.__table__.insert(), [payload])
+                db.session.commit()
         except Exception:
             db.session.rollback()
             app.logger.warning("persist access log failed path=%s", path, exc_info=True)
@@ -116,6 +136,66 @@ def _setup_logging(app: Flask) -> None:
     app.logger.handlers.clear()
     app.logger.addHandler(stream_handler)
     app.logger.setLevel(level)
+
+
+def _setup_access_log_pipeline(app: Flask) -> None:
+    if not app.config.get("ACCESS_LOG_ASYNC", True):
+        return
+
+    batch_size = max(10, int(app.config.get("ACCESS_LOG_BATCH_SIZE", 100)))
+    flush_interval = max(0.2, float(app.config.get("ACCESS_LOG_FLUSH_INTERVAL", 1.0)))
+    queue_max = max(batch_size * 2, int(app.config.get("ACCESS_LOG_QUEUE_MAX", 5000)))
+    log_queue: queue.Queue[dict] = queue.Queue(maxsize=queue_max)
+    stop_event = threading.Event()
+
+    app.extensions["access_log_queue"] = log_queue
+    app.extensions["access_log_stop_event"] = stop_event
+    app.extensions["access_log_dropped"] = {"count": 0}
+
+    def _flush_batch(items: list[dict]) -> None:
+        if not items:
+            return
+        try:
+            with app.app_context():
+                db.session.execute(AccessLog.__table__.insert(), items)
+                db.session.commit()
+        except Exception:
+            with app.app_context():
+                db.session.rollback()
+            app.logger.warning("flush access log batch failed size=%s", len(items), exc_info=True)
+
+    def _worker() -> None:
+        items: list[dict] = []
+        next_flush = time.monotonic() + flush_interval
+        while not stop_event.is_set():
+            timeout = max(0.0, next_flush - time.monotonic())
+            try:
+                item = log_queue.get(timeout=timeout)
+                items.append(item)
+            except queue.Empty:
+                pass
+
+            if len(items) >= batch_size or time.monotonic() >= next_flush:
+                _flush_batch(items)
+                items.clear()
+                next_flush = time.monotonic() + flush_interval
+
+        while True:
+            try:
+                items.append(log_queue.get_nowait())
+            except queue.Empty:
+                break
+        _flush_batch(items)
+
+    thread = threading.Thread(target=_worker, name="access-log-writer", daemon=True)
+    thread.start()
+    app.extensions["access_log_thread"] = thread
+
+    def _shutdown() -> None:
+        stop_event.set()
+        thread.join(timeout=2.0)
+
+    atexit.register(_shutdown)
 
 
 def _ensure_sqlite_parent_dir(app: Flask) -> None:

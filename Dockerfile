@@ -12,4 +12,4 @@ COPY . .
 RUN mkdir -p /app/instance /app/uploads/gpx
 
 EXPOSE 5000
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "run:app"]
+CMD ["sh", "-c", "gunicorn -k gthread -w ${GUNICORN_WORKERS:-2} --threads ${GUNICORN_THREADS:-4} --timeout ${GUNICORN_TIMEOUT:-30} --keep-alive ${GUNICORN_KEEPALIVE:-5} -b 0.0.0.0:5000 run:app"]

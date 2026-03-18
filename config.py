@@ -32,7 +32,7 @@ def _resolve_upload_folder() -> str:
 
 
 class BaseConfig:
-    APP_VERSION = os.getenv("APP_VERSION", "v3.2.3")
+    APP_VERSION = os.getenv("APP_VERSION", "v3.3.1")
     APP_DEPLOYED_AT = os.getenv("APP_DEPLOYED_AT", "")
     SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change-me-admin")
@@ -49,6 +49,11 @@ class BaseConfig:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").strip().lower() == "true"
+    REQUEST_CONSOLE_LOG_ENABLED = os.getenv("REQUEST_CONSOLE_LOG_ENABLED", "false").strip().lower() == "true"
+    ACCESS_LOG_ASYNC = os.getenv("ACCESS_LOG_ASYNC", "true").strip().lower() == "true"
+    ACCESS_LOG_BATCH_SIZE = int(os.getenv("ACCESS_LOG_BATCH_SIZE", "100"))
+    ACCESS_LOG_FLUSH_INTERVAL = float(os.getenv("ACCESS_LOG_FLUSH_INTERVAL", "1.0"))
+    ACCESS_LOG_QUEUE_MAX = int(os.getenv("ACCESS_LOG_QUEUE_MAX", "5000"))
 
 
 class DevelopmentConfig(BaseConfig):
