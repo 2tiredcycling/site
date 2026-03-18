@@ -44,19 +44,21 @@
       </div>
     </section>
 
-    <section class="card form-card card-link analytics-strip" data-href="{{ url_for('admin.analytics_page') }}">
-      <div class="analytics-strip-head">
-        <h2>流量统计</h2>
-        <span class="hint">点击进入分析页（已排除统计页自身访问）</span>
-      </div>
-      <div class="analytics-strip-metrics">
-        <div><strong>24h PV</strong><div>{{ analytics_summary.pv_24h }}</div></div>
-        <div><strong>24h UV(估算)</strong><div>{{ analytics_summary.uv_24h }}</div></div>
-        <div><strong>近5分钟活跃(估算)</strong><div>{{ analytics_summary.active_5m }}</div></div>
-      </div>
-    </section>
+    {% if can_view_analytics %}
+      <section class="card form-card card-link analytics-strip" data-href="{{ url_for('admin.analytics_page') }}">
+        <div class="analytics-strip-head">
+          <h2>流量统计</h2>
+          <span class="hint">点击进入分析页（已排除统计页自身访问）</span>
+        </div>
+        <div class="analytics-strip-metrics">
+          <div><strong>24h PV</strong><div>{{ analytics_summary.pv_24h }}</div></div>
+          <div><strong>24h UV(估算)</strong><div>{{ analytics_summary.uv_24h }}</div></div>
+          <div><strong>近5分钟活跃(估算)</strong><div>{{ analytics_summary.active_5m }}</div></div>
+        </div>
+      </section>
+    {% endif %}
 
-    {% if can_review %}
+    {% if can_view_security %}
       <section class="card form-card card-link analytics-strip" data-href="{{ url_for('admin.security_page') }}">
         <div class="analytics-strip-head">
           <h2>安全监控</h2>
@@ -72,33 +74,47 @@
     {% endif %}
 
     <section class="quick-grid">
-      <section class="card form-card card-link" data-href="{{ url_for('admin.routes_page') }}">
-        <h2>最新路线</h2>
-        {% for route in latest_routes %}
-          <a class="quick-link" href="{{ url_for('admin.route_edit_page', route_id=route.id) }}">
-            <article class="edit-item compact-item">
-              <div><strong>{{ route.route_name }}</strong></div>
-              <div class="hint">状态：{{ route.status }}，更新：{{ route.updated_at.strftime('%Y-%m-%d %H:%M') if route.updated_at else '-' }}</div>
-            </article>
-          </a>
-        {% else %}
-          <p>暂无路线</p>
-        {% endfor %}
-      </section>
+      {% if can_edit %}
+        <section class="card form-card card-link" data-href="{{ url_for('admin.routes_page') }}">
+          <h2>最新路线</h2>
+          {% for route in latest_routes %}
+            <a class="quick-link" href="{{ url_for('admin.route_edit_page', route_id=route.id) }}">
+              <article class="edit-item compact-item">
+                <div><strong>{{ route.route_name }}</strong></div>
+                <div class="hint">状态：{{ route.status }}，更新：{{ route.updated_at.strftime('%Y-%m-%d %H:%M') if route.updated_at else '-' }}</div>
+              </article>
+            </a>
+          {% else %}
+            <p>暂无路线</p>
+          {% endfor %}
+        </section>
+      {% endif %}
 
-      <section class="card form-card card-link" data-href="{{ url_for('admin.activities_page') }}">
-        <h2>最新活动</h2>
-        {% for activity in latest_activities %}
-          <a class="quick-link" href="{{ url_for('admin.activity_edit_page', activity_id=activity.id) }}">
-            <article class="edit-item compact-item">
-              <div><strong>{{ activity.title }}</strong></div>
-              <div class="hint">时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</div>
-            </article>
-          </a>
-        {% else %}
-          <p>暂无活动</p>
-        {% endfor %}
-      </section>
+      {% if can_edit %}
+        <section class="card form-card card-link" data-href="{{ url_for('admin.activities_page') }}">
+          <h2>最新活动</h2>
+          {% for activity in latest_activities %}
+            <a class="quick-link" href="{{ url_for('admin.activity_edit_page', activity_id=activity.id) }}">
+              <article class="edit-item compact-item">
+                <div><strong>{{ activity.title }}</strong></div>
+                <div class="hint">时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</div>
+              </article>
+            </a>
+          {% else %}
+            <p>暂无活动</p>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% if can_manage_users %}
+        <section class="card form-card card-link" data-href="{{ url_for('admin.users_page') }}">
+          <h2>管理员账号</h2>
+          <p class="hint">配置管理员等级、可见页面与编辑权限。</p>
+          <div class="row-actions">
+            <a class="btn" href="{{ url_for('admin.users_page') }}">进入账号维护</a>
+          </div>
+        </section>
+      {% endif %}
     </section>
 
     {% if can_review %}
@@ -131,27 +147,29 @@
       </section>
     {% endif %}
 
-    <section class="card form-card card-link" data-href="{{ url_for('admin.audit_logs_page') }}">
-      <h2>最新审计日志</h2>
-      <table>
-        <thead>
-          <tr><th>时间</th><th>操作人</th><th>动作</th><th>目标</th><th>详情</th></tr>
-        </thead>
-        <tbody>
-          {% for log in audit_logs %}
-            <tr>
-              <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}</td>
-              <td>{{ log.actor.username if log.actor else '-' }}</td>
-              <td>{{ log.action }}</td>
-              <td>{{ log.target_type }}#{{ log.target_id or '-' }}</td>
-              <td>{{ log.detail }}</td>
-            </tr>
-          {% else %}
-            <tr><td colspan="5">暂无日志</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
+    {% if can_view_audit_logs %}
+      <section class="card form-card card-link" data-href="{{ url_for('admin.audit_logs_page') }}">
+        <h2>最新审计日志</h2>
+        <table>
+          <thead>
+            <tr><th>时间</th><th>操作人</th><th>动作</th><th>目标</th><th>详情</th></tr>
+          </thead>
+          <tbody>
+            {% for log in audit_logs %}
+              <tr>
+                <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}</td>
+                <td>{{ log.actor.username if log.actor else '-' }}</td>
+                <td>{{ log.action }}</td>
+                <td>{{ log.target_type }}#{{ log.target_id or '-' }}</td>
+                <td>{{ log.detail }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5">暂无日志</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endif %}
   </main>
   <script>
     (function () {

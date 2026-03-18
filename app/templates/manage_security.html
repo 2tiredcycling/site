@@ -15,7 +15,9 @@
       <p>聚合展示扫描探测、重点路径命中和限流拦截，帮助快速识别异常来源。</p>
       <div class="row-actions">
         <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
-        <a class="btn btn-muted" href="{{ url_for('admin.analytics_page') }}">流量统计</a>
+        {% if can_view_analytics %}
+          <a class="btn btn-muted" href="{{ url_for('admin.analytics_page') }}">流量统计</a>
+        {% endif %}
       </div>
     </header>
 

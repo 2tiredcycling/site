@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, AuditLog, ROLE_REVIEWER, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, User, db
+from app.models import AccessLog, AuditLog, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, User, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -422,6 +422,93 @@ def test_viewer_cannot_create_route(app_and_client):
     assert all(item["route_name"] != "Should Fail" for item in check)
 
 
+def test_user_with_manage_users_permission_can_open_users_page(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        manager = User(
+            username="manager",
+            password=generate_password_hash("manager123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+            perm_manage_users=True,
+            perm_view_analytics=True,
+        )
+        db.session.add(manager)
+        db.session.commit()
+
+    login(client, "manager", "manager123456789")
+    resp = client.get("/manage/users")
+    assert resp.status_code == 200
+    assert "账号列表" in resp.get_data(as_text=True)
+
+
+def test_user_without_analytics_permission_forbidden(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        blocked = User(
+            username="blocked_user",
+            password=generate_password_hash("blocked123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+            perm_view_analytics=False,
+        )
+        db.session.add(blocked)
+        db.session.commit()
+
+    login(client, "blocked_user", "blocked123456789")
+    resp = client.get("/manage/analytics")
+    assert resp.status_code == 302
+    assert "/manage/login" in (resp.headers.get("Location") or "")
+
+
+def test_dashboard_hides_sections_without_permissions(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        viewer = User(
+            username="limited_viewer",
+            password=generate_password_hash("viewer123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+            perm_view_analytics=False,
+            perm_view_security=False,
+            perm_review=False,
+            perm_edit_content=False,
+            perm_manage_users=False,
+            perm_view_audit_logs=False,
+        )
+        db.session.add(viewer)
+        db.session.commit()
+
+    login(client, "limited_viewer", "viewer123456789")
+    resp = client.get("/manage")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "流量统计" not in body
+    assert "安全监控" not in body
+    assert "最新审计日志" not in body
+    assert "管理员账号" not in body
+
+
+def test_user_without_edit_or_review_cannot_download_import_report(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        viewer = User(
+            username="report_blocked",
+            password=generate_password_hash("viewer123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+            perm_edit_content=False,
+            perm_review=False,
+        )
+        db.session.add(viewer)
+        db.session.commit()
+
+    login(client, "report_blocked", "viewer123456789")
+    resp = client.get("/manage/import-report/any-token")
+    assert resp.status_code == 302
+    assert "/manage/login" in (resp.headers.get("Location") or "")
+
+
 def test_bulk_import_invalid_csv_does_not_leave_uploaded_files(app_and_client):
     app, client = app_and_client
     assert login_admin(client).status_code == 200
@@ -472,8 +559,9 @@ def test_feedback_review_flow(app_and_client):
         reviewer = User(
             username="reviewer",
             password=generate_password_hash("reviewer123456789"),
-            role=ROLE_REVIEWER,
+            role=ROLE_OPS_ADMIN,
             is_active=True,
+            perm_review=True,
         )
         db.session.add(reviewer)
         db.session.commit()

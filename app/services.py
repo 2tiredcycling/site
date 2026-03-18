@@ -10,7 +10,8 @@ from werkzeug.security import generate_password_hash
 
 from app.models import (
     FEEDBACK_APPROVED,
-    ROLE_ADMIN,
+    LEGACY_ROLE_MIGRATIONS,
+    ROLE_SUPER_ADMIN,
     STATUS_PUBLISHED,
     Activity,
     AuditLog,
@@ -65,6 +66,12 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("routes", "deleted_by", "deleted_by INTEGER")
         _add_column_if_missing("routes", "created_by", "created_by INTEGER")
         _add_column_if_missing("routes", "updated_by", "updated_by INTEGER")
+        _add_column_if_missing("users", "perm_view_analytics", "perm_view_analytics BOOLEAN DEFAULT 1 NOT NULL")
+        _add_column_if_missing("users", "perm_view_security", "perm_view_security BOOLEAN DEFAULT 0 NOT NULL")
+        _add_column_if_missing("users", "perm_review", "perm_review BOOLEAN DEFAULT 0 NOT NULL")
+        _add_column_if_missing("users", "perm_edit_content", "perm_edit_content BOOLEAN DEFAULT 0 NOT NULL")
+        _add_column_if_missing("users", "perm_manage_users", "perm_manage_users BOOLEAN DEFAULT 0 NOT NULL")
+        _add_column_if_missing("users", "perm_view_audit_logs", "perm_view_audit_logs BOOLEAN DEFAULT 0 NOT NULL")
     else:
         _add_column_if_missing("routes", "updated_at", "updated_at TIMESTAMP")
         _add_column_if_missing("routes", "uploaded_at", "uploaded_at TIMESTAMP")
@@ -83,6 +90,12 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("routes", "deleted_by", "deleted_by INTEGER")
         _add_column_if_missing("routes", "created_by", "created_by INTEGER")
         _add_column_if_missing("routes", "updated_by", "updated_by INTEGER")
+        _add_column_if_missing("users", "perm_view_analytics", "perm_view_analytics BOOLEAN DEFAULT TRUE NOT NULL")
+        _add_column_if_missing("users", "perm_view_security", "perm_view_security BOOLEAN DEFAULT FALSE NOT NULL")
+        _add_column_if_missing("users", "perm_review", "perm_review BOOLEAN DEFAULT FALSE NOT NULL")
+        _add_column_if_missing("users", "perm_edit_content", "perm_edit_content BOOLEAN DEFAULT FALSE NOT NULL")
+        _add_column_if_missing("users", "perm_manage_users", "perm_manage_users BOOLEAN DEFAULT FALSE NOT NULL")
+        _add_column_if_missing("users", "perm_view_audit_logs", "perm_view_audit_logs BOOLEAN DEFAULT FALSE NOT NULL")
 
     with db.engine.begin() as conn:
         conn.execute(text("UPDATE routes SET uploaded_at = created_at WHERE uploaded_at IS NULL"))
@@ -100,6 +113,39 @@ def ensure_schema_compat() -> None:
         false_literal = "0" if is_sqlite else "FALSE"
         conn.execute(text(f"UPDATE routes SET is_active = {true_literal} WHERE status = 'published' AND is_deleted = {false_literal}"))
         conn.execute(text(f"UPDATE routes SET is_active = {false_literal} WHERE status <> 'published' OR is_deleted = {true_literal}"))
+        for old_role, new_role in LEGACY_ROLE_MIGRATIONS.items():
+            conn.execute(text(f"UPDATE users SET role = '{new_role}' WHERE role = '{old_role}'"))
+        conn.execute(
+            text(
+                f"UPDATE users SET perm_view_analytics = {true_literal} "
+                "WHERE role IN ('super_admin', 'ops_admin', 'content_admin')"
+            )
+        )
+        conn.execute(
+            text(
+                f"UPDATE users SET perm_view_security = {true_literal} "
+                "WHERE role IN ('super_admin', 'ops_admin')"
+            )
+        )
+        conn.execute(
+            text(
+                f"UPDATE users SET perm_review = {true_literal} "
+                "WHERE role IN ('super_admin', 'ops_admin', 'content_admin')"
+            )
+        )
+        conn.execute(
+            text(
+                f"UPDATE users SET perm_edit_content = {true_literal} "
+                "WHERE role IN ('super_admin', 'content_admin')"
+            )
+        )
+        conn.execute(text(f"UPDATE users SET perm_manage_users = {true_literal} WHERE role = 'super_admin'"))
+        conn.execute(
+            text(
+                f"UPDATE users SET perm_view_audit_logs = {true_literal} "
+                "WHERE role IN ('super_admin', 'ops_admin')"
+            )
+        )
 
 
 def ensure_default_admin(username: str, password: str) -> None:
@@ -108,15 +154,15 @@ def ensure_default_admin(username: str, password: str) -> None:
 
     user = User.query.filter_by(username=username).first()
     if user:
-        if user.role != ROLE_ADMIN:
-            user.role = ROLE_ADMIN
+        if user.role != ROLE_SUPER_ADMIN:
+            user.role = ROLE_SUPER_ADMIN
             db.session.commit()
         return
 
     user = User(
         username=username,
         password=generate_password_hash(password),
-        role=ROLE_ADMIN,
+        role=ROLE_SUPER_ADMIN,
         is_active=True,
     )
     db.session.add(user)

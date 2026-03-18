@@ -5,11 +5,16 @@ from sqlalchemy import Index
 
 db = SQLAlchemy()
 
-ROLE_ADMIN = "admin"
-ROLE_EDITOR = "editor"
-ROLE_REVIEWER = "reviewer"
+ROLE_SUPER_ADMIN = "super_admin"
+ROLE_OPS_ADMIN = "ops_admin"
+ROLE_CONTENT_ADMIN = "content_admin"
 ROLE_VIEWER = "viewer"
-ROLES = (ROLE_ADMIN, ROLE_EDITOR, ROLE_REVIEWER, ROLE_VIEWER)
+ROLES = (ROLE_SUPER_ADMIN, ROLE_OPS_ADMIN, ROLE_CONTENT_ADMIN, ROLE_VIEWER)
+LEGACY_ROLE_MIGRATIONS = {
+    "admin": ROLE_SUPER_ADMIN,
+    "editor": ROLE_CONTENT_ADMIN,
+    "reviewer": ROLE_OPS_ADMIN,
+}
 
 STATUS_DRAFT = "draft"
 STATUS_PENDING_REVIEW = "pending_review"
@@ -37,8 +42,14 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), nullable=False, unique=True)
     password = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(16), nullable=False, default=ROLE_EDITOR)
+    role = db.Column(db.String(32), nullable=False, default=ROLE_CONTENT_ADMIN)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    perm_view_analytics = db.Column(db.Boolean, nullable=False, default=True)
+    perm_view_security = db.Column(db.Boolean, nullable=False, default=False)
+    perm_review = db.Column(db.Boolean, nullable=False, default=False)
+    perm_edit_content = db.Column(db.Boolean, nullable=False, default=False)
+    perm_manage_users = db.Column(db.Boolean, nullable=False, default=False)
+    perm_view_audit_logs = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
@@ -48,6 +59,12 @@ class User(db.Model):
             "username": self.username,
             "role": self.role,
             "is_active": self.is_active,
+            "perm_view_analytics": self.perm_view_analytics,
+            "perm_view_security": self.perm_view_security,
+            "perm_review": self.perm_review,
+            "perm_edit_content": self.perm_edit_content,
+            "perm_manage_users": self.perm_manage_users,
+            "perm_view_audit_logs": self.perm_view_audit_logs,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

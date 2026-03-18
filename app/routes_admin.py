@@ -24,20 +24,24 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app.auth import (
     attach_current_user,
     can_edit,
+    can_manage_users,
     can_review,
+    can_view_analytics,
+    can_view_audit_logs,
+    can_view_security,
     client_ip,
     get_csrf_token,
     login_required,
-    role_required,
     validate_csrf_token,
 )
 from app.models import (
     FEEDBACK_APPROVED,
     FEEDBACK_PENDING,
     FEEDBACK_REJECTED,
-    ROLE_ADMIN,
-    ROLE_EDITOR,
-    ROLE_REVIEWER,
+    ROLE_CONTENT_ADMIN,
+    ROLE_OPS_ADMIN,
+    ROLE_SUPER_ADMIN,
+    ROLE_VIEWER,
     ROLES,
     ROUTE_STATUSES,
     SITE_FEEDBACK_DONE,
@@ -79,6 +83,20 @@ LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCK_SECONDS = 15 * 60
 ANALYTICS_EXCLUDED_PATH = "/manage/analytics"
+PERMISSION_FIELDS = (
+    "perm_view_analytics",
+    "perm_view_security",
+    "perm_review",
+    "perm_edit_content",
+    "perm_manage_users",
+    "perm_view_audit_logs",
+)
+ROLE_LABELS = {
+    ROLE_SUPER_ADMIN: "super_admin（最高权限）",
+    ROLE_OPS_ADMIN: "ops_admin（安全运维）",
+    ROLE_CONTENT_ADMIN: "content_admin（内容维护）",
+    ROLE_VIEWER: "viewer（只读）",
+}
 
 
 def _to_local_time(value: datetime | None) -> datetime | None:
@@ -127,6 +145,50 @@ def _probe_expression():
     return or_(*conditions)
 
 
+def _default_permissions_for_role(role: str) -> dict[str, bool]:
+    role = (role or "").strip()
+    if role == ROLE_SUPER_ADMIN:
+        return {item: True for item in PERMISSION_FIELDS}
+    if role == ROLE_CONTENT_ADMIN:
+        return {
+            "perm_view_analytics": True,
+            "perm_view_security": False,
+            "perm_review": True,
+            "perm_edit_content": True,
+            "perm_manage_users": False,
+            "perm_view_audit_logs": False,
+        }
+    if role == ROLE_OPS_ADMIN:
+        return {
+            "perm_view_analytics": True,
+            "perm_view_security": True,
+            "perm_review": True,
+            "perm_edit_content": False,
+            "perm_manage_users": False,
+            "perm_view_audit_logs": True,
+        }
+    return {
+        "perm_view_analytics": False,
+        "perm_view_security": False,
+        "perm_review": False,
+        "perm_edit_content": False,
+        "perm_manage_users": False,
+        "perm_view_audit_logs": False,
+    }
+
+
+def _permissions_from_form(role: str) -> dict[str, bool]:
+    defaults = _default_permissions_for_role(role)
+    if role == ROLE_SUPER_ADMIN:
+        return defaults
+    result: dict[str, bool] = {}
+    for field in PERMISSION_FIELDS:
+        result[field] = (request.form.get(field) or "0").strip() == "1"
+    if not any(result.values()):
+        return defaults
+    return result
+
+
 @bp.before_app_request
 def _load_user():
     attach_current_user()
@@ -139,6 +201,37 @@ def _verify_csrf_for_post():
     token = request.form.get("csrf_token")
     if not validate_csrf_token(token):
         abort(400, description="Invalid CSRF token")
+
+
+@bp.before_request
+def _enforce_permission_matrix():
+    if not getattr(g, "current_user", None):
+        return
+    path = request.path or ""
+    if path in {"/manage/login"}:
+        return
+    user = g.current_user
+    if path.startswith("/manage/users") and not can_manage_users(user):
+        abort(403)
+    if path.startswith("/manage/analytics") and not can_view_analytics(user):
+        abort(403)
+    if path.startswith("/manage/security") and not can_view_security(user):
+        abort(403)
+    if path.startswith("/manage/audit-logs") and not can_view_audit_logs(user):
+        abort(403)
+    if (
+        path.startswith("/manage/routes")
+        or path.startswith("/manage/activities")
+        or path.startswith("/manage/bulk-import")
+    ) and not can_edit(user):
+        abort(403)
+    if (
+        path.startswith("/manage/feedback")
+        or path.startswith("/manage/site-feedback")
+    ) and not can_review(user):
+        abort(403)
+    if path.startswith("/manage/import-report") and not (can_edit(user) or can_review(user)):
+        abort(403)
 
 
 @bp.app_context_processor
@@ -168,7 +261,7 @@ def login_submit():
 
     retry_after = check_lock("admin_login", login_subject, LOGIN_WINDOW_SECONDS)
     if retry_after > 0:
-        flash(f"??????,? {retry_after} ????", "error")
+        flash(f"登录过于频繁，请 {retry_after} 秒后再试", "error")
         return redirect(url_for("admin.login"))
 
     user = User.query.filter_by(username=username, is_active=True).first()
@@ -181,9 +274,9 @@ def login_submit():
             lock_seconds=LOGIN_LOCK_SECONDS,
         )
         if retry_after > 0:
-            flash(f"??????,? {retry_after} ????", "error")
+            flash(f"登录过于频繁，请 {retry_after} 秒后再试", "error")
         else:
-            flash("????????", "error")
+            flash("用户名或密码错误", "error")
         write_audit_log(
             None,
             "auth.login_failed",
@@ -220,15 +313,24 @@ def dashboard():
     log_page = max(1, request.args.get("log_page", default=1, type=int))
     now = utcnow()
     start_24h = now - timedelta(hours=24)
-    pending_feedback_count = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).count()
-    pending_site_feedback_count = SiteFeedback.query.filter_by(status=SITE_FEEDBACK_PENDING).count()
-    audit_logs_pagination = AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(
-        page=log_page, per_page=5, error_out=False
+    can_view_analytics_flag = can_view_analytics(g.current_user)
+    can_view_security_flag = can_view_security(g.current_user)
+    can_review_flag = can_review(g.current_user)
+    can_manage_users_flag = can_manage_users(g.current_user)
+    can_view_audit_logs_flag = can_view_audit_logs(g.current_user)
+    can_edit_flag = can_edit(g.current_user)
+
+    pending_feedback_count = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).count() if can_review_flag else 0
+    pending_site_feedback_count = SiteFeedback.query.filter_by(status=SITE_FEEDBACK_PENDING).count() if can_review_flag else 0
+    audit_logs_pagination = (
+        AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(page=log_page, per_page=5, error_out=False)
+        if can_view_audit_logs_flag
+        else None
     )
-    latest_routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).limit(3).all()
-    latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(3).all()
-    latest_feedback = RouteFeedback.query.order_by(RouteFeedback.created_at.desc()).limit(3).all()
-    latest_site_feedback = SiteFeedback.query.order_by(SiteFeedback.created_at.desc()).limit(3).all()
+    latest_routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).limit(3).all() if can_edit_flag else []
+    latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(3).all() if can_edit_flag else []
+    latest_feedback = RouteFeedback.query.order_by(RouteFeedback.created_at.desc()).limit(3).all() if can_review_flag else []
+    latest_site_feedback = SiteFeedback.query.order_by(SiteFeedback.created_at.desc()).limit(3).all() if can_review_flag else []
     summary = {
         "route_total": Route.query.filter_by(is_deleted=False).count(),
         "route_deleted": Route.query.filter_by(is_deleted=True).count(),
@@ -236,67 +338,75 @@ def dashboard():
         "feedback_pending": pending_feedback_count,
         "site_feedback_pending": pending_site_feedback_count,
     }
-    probe_filter_24h = (
-        AccessLog.created_at >= start_24h,
-        ~AccessLog.path.like("/manage%"),
-        _probe_expression(),
-    )
-    security_summary = {
-        "probe_24h": AccessLog.query.filter(*probe_filter_24h).count(),
-        "watchlist_24h": AccessLog.query.filter(
+    security_summary = {"probe_24h": 0, "watchlist_24h": 0, "blocked_429_24h": 0, "probe_ip_24h": 0}
+    if can_view_security_flag:
+        probe_filter_24h = (
             AccessLog.created_at >= start_24h,
             ~AccessLog.path.like("/manage%"),
-            _watchlist_probe_expression(),
-        ).count(),
-        "blocked_429_24h": AccessLog.query.filter(
-            AccessLog.created_at >= start_24h,
-            ~AccessLog.path.like("/manage%"),
-            AccessLog.status_code == 429,
-        ).count(),
-        "probe_ip_24h": int(
-            db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
-            .filter(*probe_filter_24h)
-            .scalar()
-            or 0
-        ),
-    }
-    analytics_summary = {
-        "pv_24h": AccessLog.query.filter(
-            AccessLog.created_at >= start_24h,
-            *build_non_probe_filters(AccessLog),
-        ).count(),
-        "uv_24h": int(
-            db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
-            .filter(
+            _probe_expression(),
+        )
+        security_summary = {
+            "probe_24h": AccessLog.query.filter(*probe_filter_24h).count(),
+            "watchlist_24h": AccessLog.query.filter(
+                AccessLog.created_at >= start_24h,
+                ~AccessLog.path.like("/manage%"),
+                _watchlist_probe_expression(),
+            ).count(),
+            "blocked_429_24h": AccessLog.query.filter(
+                AccessLog.created_at >= start_24h,
+                ~AccessLog.path.like("/manage%"),
+                AccessLog.status_code == 429,
+            ).count(),
+            "probe_ip_24h": int(
+                db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+                .filter(*probe_filter_24h)
+                .scalar()
+                or 0
+            ),
+        }
+    analytics_summary = {"pv_24h": 0, "uv_24h": 0, "active_5m": 0}
+    if can_view_analytics_flag:
+        analytics_summary = {
+            "pv_24h": AccessLog.query.filter(
                 AccessLog.created_at >= start_24h,
                 *build_non_probe_filters(AccessLog),
-            )
-            .scalar()
-            or 0
-        ),
-        "active_5m": int(
-            db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
-            .filter(
-                AccessLog.created_at >= (now - timedelta(minutes=5)),
-                *build_non_probe_filters(AccessLog),
-            )
-            .scalar()
-            or 0
-        ),
-    }
+            ).count(),
+            "uv_24h": int(
+                db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+                .filter(
+                    AccessLog.created_at >= start_24h,
+                    *build_non_probe_filters(AccessLog),
+                )
+                .scalar()
+                or 0
+            ),
+            "active_5m": int(
+                db.session.query(db.func.count(db.distinct(AccessLog.ip_address)))
+                .filter(
+                    AccessLog.created_at >= (now - timedelta(minutes=5)),
+                    *build_non_probe_filters(AccessLog),
+                )
+                .scalar()
+                or 0
+            ),
+        }
     return render_template(
         "manage.html",
         summary=summary,
         analytics_summary=analytics_summary,
-        audit_logs=audit_logs_pagination.items,
+        audit_logs=audit_logs_pagination.items if audit_logs_pagination else [],
         audit_logs_pagination=audit_logs_pagination,
         latest_routes=latest_routes,
         latest_activities=latest_activities,
         latest_feedback=latest_feedback,
         latest_site_feedback=latest_site_feedback,
         security_summary=security_summary,
-        can_review=can_review(g.current_user),
-        can_manage_users=(g.current_user.role == ROLE_ADMIN),
+        can_review=can_review_flag,
+        can_manage_users=can_manage_users_flag,
+        can_view_analytics=can_view_analytics_flag,
+        can_view_security=can_view_security_flag,
+        can_view_audit_logs=can_view_audit_logs_flag,
+        can_edit=can_edit_flag,
     )
 
 
@@ -419,7 +529,7 @@ def analytics_page():
         days=days,
         scope=scope,
         period_label=period_label,
-        can_review=can_review(g.current_user),
+        can_view_security=can_view_security(g.current_user),
         recent={
             "pv": recent_pv,
             "uv": int(recent_uv),
@@ -446,7 +556,7 @@ def analytics_page():
 
 
 @bp.get("/security")
-@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+@login_required
 def security_page():
     days = request.args.get("days", default=7, type=int)
     if days not in {1, 7, 30}:
@@ -597,6 +707,7 @@ def security_page():
         days=days,
         scope=scope,
         period_label=period_label,
+        can_view_analytics=can_view_analytics(g.current_user),
         recent={
             "probe": recent_probe,
             "watchlist": recent_watchlist,
@@ -620,7 +731,7 @@ def security_page():
 
 
 @bp.get("/site-feedback")
-@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+@login_required
 def site_feedback_page():
     keyword = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "all").strip()
@@ -678,16 +789,16 @@ def site_feedback_page():
 
 
 @bp.post("/site-feedback/<int:feedback_id>/status")
-@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+@login_required
 def site_feedback_update_status(feedback_id: int):
     target_status = (request.form.get("status") or "").strip()
     if target_status not in {SITE_FEEDBACK_PENDING, SITE_FEEDBACK_DONE}:
-        flash("????", "error")
+        flash("状态无效", "error")
         return redirect(url_for("admin.site_feedback_page"))
 
     feedback = SiteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
-        flash("?????", "error")
+        flash("反馈不存在", "error")
         return redirect(url_for("admin.site_feedback_page"))
 
     old_status = feedback.status
@@ -701,7 +812,7 @@ def site_feedback_update_status(feedback_id: int):
         str(feedback.id),
         f"{old_status}->{target_status}",
     )
-    flash("?????????", "success")
+    flash("反馈状态已更新", "success")
 
     next_url = (request.form.get("next") or "").strip()
     if next_url.startswith(url_for("admin.site_feedback_page")):
@@ -710,7 +821,7 @@ def site_feedback_update_status(feedback_id: int):
 
 
 @bp.get("/feedback")
-@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+@login_required
 def feedback_page():
     keyword = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "all").strip()
@@ -787,7 +898,7 @@ def routes_page():
 
 
 @bp.get("/routes/new")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def route_new_page():
     return render_template("manage_route_form.html", route=None, statuses=ROUTE_STATUSES, can_edit=True)
 
@@ -797,7 +908,7 @@ def route_new_page():
 def route_edit_page(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=False).first()
     if not route:
-        flash("?????", "error")
+        flash("路线不存在", "error")
         return redirect(url_for("admin.routes_page"))
     versions = (
         RouteVersion.query.filter_by(route_id=route_id)
@@ -827,7 +938,7 @@ def route_detail_manage(route_id: int):
         rating_info={"avg_rating": avg_rating, "rating_count": rating_count},
         preview_endpoint=url_for("admin.route_preview_manage", route_id=route.id),
         back_url=url_for("admin.routes_page"),
-        back_label="??????",
+        back_label="返回列表",
     )
 
 
@@ -881,7 +992,7 @@ def activities_page():
 
 
 @bp.get("/activities/new")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def activity_new_page():
     routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
     return render_template("manage_activity_form.html", activity=None, routes=routes, can_edit=True)
@@ -892,7 +1003,7 @@ def activity_new_page():
 def activity_edit_page(activity_id: int):
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
-        flash("?????", "error")
+        flash("活动不存在", "error")
         return redirect(url_for("admin.activities_page"))
     routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
     return render_template(
@@ -904,27 +1015,51 @@ def activity_edit_page(activity_id: int):
 
 
 @bp.get("/users")
-@role_required(ROLE_ADMIN)
+@login_required
 def users_page():
     page = max(1, request.args.get("page", default=1, type=int))
     pagination = User.query.order_by(User.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
-    return render_template("manage_users.html", users=pagination.items, pagination=pagination)
+    return render_template(
+        "manage_users.html",
+        users=pagination.items,
+        pagination=pagination,
+        role_labels=ROLE_LABELS,
+    )
 
 
 @bp.get("/users/new")
-@role_required(ROLE_ADMIN)
+@login_required
 def user_new_page():
-    return render_template("manage_user_form.html", user=None, roles=ROLES)
+    return render_template(
+        "manage_user_form.html",
+        user=None,
+        roles=ROLES,
+        role_labels=ROLE_LABELS,
+        permission_defaults=_default_permissions_for_role(ROLE_CONTENT_ADMIN),
+    )
 
 
 @bp.get("/users/<int:user_id>/edit")
-@role_required(ROLE_ADMIN)
+@login_required
 def user_edit_page(user_id: int):
     user = User.query.filter_by(id=user_id).first()
     if not user:
-        flash("?????", "error")
+        flash("管理员不存在", "error")
         return redirect(url_for("admin.users_page"))
-    return render_template("manage_user_form.html", user=user, roles=ROLES)
+    return render_template(
+        "manage_user_form.html",
+        user=user,
+        roles=ROLES,
+        role_labels=ROLE_LABELS,
+        permission_defaults={
+            "perm_view_analytics": bool(user.perm_view_analytics),
+            "perm_view_security": bool(user.perm_view_security),
+            "perm_review": bool(user.perm_review),
+            "perm_edit_content": bool(user.perm_edit_content),
+            "perm_manage_users": bool(user.perm_manage_users),
+            "perm_view_audit_logs": bool(user.perm_view_audit_logs),
+        },
+    )
 
 
 def _route_from_form(route: Route | None = None) -> dict:
@@ -987,30 +1122,30 @@ def _parse_activity_time(value: str | None) -> datetime | None:
 
 
 @bp.post("/routes/create")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def create_route():
     payload = _route_from_form()
     gpx_file = request.files.get("gpx_file")
 
     if not payload["route_name"] or payload["distance_km"] is None or not gpx_file:
-        flash("????:????????? GPX ??", "error")
+        flash("参数错误：请填写路线名、距离并上传 GPX 文件", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["status"] not in ROUTE_STATUSES:
-        flash("????:????", "error")
+        flash("参数错误：状态无效", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["suggested_duration_hours"] is None:
-        flash("????:???????", "error")
+        flash("参数错误：预计用时格式错误", "error")
         return redirect(url_for("admin.routes_page"))
     if not allowed_file(gpx_file.filename or "", {".gpx"}):
-        flash("????:??? .gpx", "error")
+        flash("参数错误：仅支持 .gpx 文件", "error")
         return redirect(url_for("admin.routes_page"))
     if not file_size_ok(gpx_file, current_app.config.get("MAX_GPX_BYTES", 5 * 1024 * 1024)):
-        flash("????:GPX ????", "error")
+        flash("参数错误：GPX 文件过大", "error")
         return redirect(url_for("admin.routes_page"))
 
     filename, path = save_gpx_file(gpx_file)
     if not filename:
-        flash("????:??? .gpx", "error")
+        flash("参数错误：仅支持 .gpx 文件", "error")
         return redirect(url_for("admin.routes_page"))
 
     try:
@@ -1035,30 +1170,30 @@ def create_route():
         create_route_version(route, g.current_user.id, change_note="create")
         db.session.commit()
         write_audit_log(g.current_user.id, "route.create", "route", str(route.id), route.route_name)
-        flash("????", "success")
+        flash("路线创建成功", "success")
     except Exception:
         if path and path.exists():
             path.unlink(missing_ok=True)
         db.session.rollback()
-        flash("????:???????", "error")
+        flash("系统错误：保存路线失败", "error")
 
     return redirect(url_for("admin.routes_page"))
 
 
 @bp.post("/routes/<int:route_id>/update")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def update_route(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=False).first()
     if not route:
-        flash("?????", "error")
+        flash("路线不存在", "error")
         return redirect(url_for("admin.routes_page"))
 
     payload = _route_from_form(route)
     if not payload["route_name"] or payload["distance_km"] is None or payload["status"] not in ROUTE_STATUSES:
-        flash("????:?????", "error")
+        flash("参数错误：请检查必填项", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["suggested_duration_hours"] is None:
-        flash("????:???????", "error")
+        flash("参数错误：预计用时格式错误", "error")
         return redirect(url_for("admin.routes_page"))
 
     before = route_snapshot(route)
@@ -1067,14 +1202,14 @@ def update_route(route_id: int):
     saved_path = None
     if gpx_file and gpx_file.filename:
         if not allowed_file(gpx_file.filename, {".gpx"}):
-            flash("????:??? .gpx", "error")
+            flash("参数错误：仅支持 .gpx 文件", "error")
             return redirect(url_for("admin.routes_page"))
         if not file_size_ok(gpx_file, current_app.config.get("MAX_GPX_BYTES", 5 * 1024 * 1024)):
-            flash("????:GPX ????", "error")
+            flash("参数错误：GPX 文件过大", "error")
             return redirect(url_for("admin.routes_page"))
         new_filename, saved_path = save_gpx_file(gpx_file)
         if not new_filename:
-            flash("????:??? .gpx", "error")
+            flash("参数错误：仅支持 .gpx 文件", "error")
             return redirect(url_for("admin.routes_page"))
         route.gpx_filename = new_filename
 
@@ -1100,22 +1235,22 @@ def update_route(route_id: int):
 
         write_field_audit_log(g.current_user.id, "route", str(route.id), before, route_snapshot(route))
         write_audit_log(g.current_user.id, "route.update", "route", str(route.id), route.route_name)
-        flash("????", "success")
+        flash("路线更新成功", "success")
     except Exception:
         db.session.rollback()
         if saved_path and saved_path.exists():
             saved_path.unlink(missing_ok=True)
-        flash("????:???????", "error")
+        flash("系统错误：更新路线失败", "error")
 
     return redirect(url_for("admin.routes_page"))
 
 
 @bp.post("/routes/<int:route_id>/delete")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def delete_route(route_id: int):
     route = Route.query.filter_by(id=route_id).first()
     if not route:
-        flash("?????", "error")
+        flash("路线不存在", "error")
         return redirect(url_for("admin.routes_page"))
 
     try:
@@ -1128,20 +1263,20 @@ def delete_route(route_id: int):
         create_route_version(route, g.current_user.id, change_note="soft_delete")
         db.session.commit()
         write_audit_log(g.current_user.id, "route.soft_delete", "route", str(route_id), route.gpx_filename)
-        flash("??????", "success")
+        flash("路线已移入回收站", "success")
     except Exception:
         db.session.rollback()
-        flash("????", "error")
+        flash("操作失败", "error")
 
     return redirect(url_for("admin.routes_page"))
 
 
 @bp.post("/routes/<int:route_id>/restore")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def restore_route(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=True).first()
     if not route:
-        flash("?????????", "error")
+        flash("回收站中未找到路线", "error")
         return redirect(url_for("admin.routes_page"))
 
     route.is_deleted = False
@@ -1153,21 +1288,21 @@ def restore_route(route_id: int):
     create_route_version(route, g.current_user.id, change_note="restore")
     db.session.commit()
     write_audit_log(g.current_user.id, "route.restore", "route", str(route.id), route.route_name)
-    flash("???????(?????)", "success")
+    flash("路线已恢复（状态为草稿）", "success")
     return redirect(url_for("admin.routes_page"))
 
 
 @bp.post("/routes/<int:route_id>/status")
-@role_required(ROLE_ADMIN, ROLE_EDITOR, ROLE_REVIEWER)
+@login_required
 def update_status(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=False).first()
     if not route:
-        flash("?????", "error")
+        flash("路线不存在", "error")
         return redirect(url_for("admin.routes_page"))
 
     status = (request.form.get("status") or "").strip()
     if status not in ROUTE_STATUSES:
-        flash("????", "error")
+        flash("状态无效", "error")
         return redirect(url_for("admin.routes_page"))
 
     before = route_snapshot(route)
@@ -1178,56 +1313,56 @@ def update_status(route_id: int):
     db.session.commit()
     write_field_audit_log(g.current_user.id, "route", str(route_id), before, route_snapshot(route))
     write_audit_log(g.current_user.id, "route.status", "route", str(route_id), status)
-    flash("?????", "success")
+    flash("状态更新成功", "success")
     return redirect(url_for("admin.routes_page"))
 
 
 @bp.post("/routes/<int:route_id>/rollback")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def rollback_route(route_id: int):
     route = Route.query.filter_by(id=route_id).first()
     if not route:
-        flash("?????", "error")
+        flash("路线不存在", "error")
         return redirect(url_for("admin.routes_page"))
 
     version_no_raw = (request.form.get("version_no") or "").strip()
     try:
         version_no = int(version_no_raw)
     except ValueError:
-        flash("?????", "error")
+        flash("版本号无效", "error")
         return redirect(url_for("admin.routes_page"))
 
     version = RouteVersion.query.filter_by(route_id=route_id, version_no=version_no).first()
     if not version:
-        flash("???????", "error")
+        flash("目标版本不存在", "error")
         return redirect(url_for("admin.routes_page"))
 
     try:
         rollback_route_to_version(route, version, g.current_user.id)
         db.session.commit()
         write_audit_log(g.current_user.id, "route.rollback", "route", str(route.id), f"to_v{version_no}")
-        flash(f"?????? {version_no}", "success")
+        flash(f"已回滚到版本 {version_no}", "success")
     except ValueError as exc:
         db.session.rollback()
         if str(exc).startswith("gpx_not_found:"):
-            flash("????:?? GPX ?????", "error")
+            flash("回滚失败：对应 GPX 文件不存在", "error")
         else:
-            flash("????:??????", "error")
+            flash("回滚失败：版本数据异常", "error")
     return redirect(url_for("admin.routes_page"))
 
 
 @bp.post("/feedback/<int:feedback_id>/review")
-@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+@login_required
 def review_feedback(feedback_id: int):
     feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
-        flash("?????", "error")
+        flash("反馈不存在", "error")
         return redirect(url_for("admin.dashboard"))
 
     status = (request.form.get("status") or "").strip()
     note = (request.form.get("reviewer_note") or "").strip()
     if status not in (FEEDBACK_APPROVED, FEEDBACK_REJECTED):
-        flash("??????", "error")
+        flash("审核状态无效", "error")
         return redirect(url_for("admin.dashboard"))
 
     feedback.status = status
@@ -1237,7 +1372,7 @@ def review_feedback(feedback_id: int):
     db.session.commit()
 
     write_audit_log(g.current_user.id, "feedback.review", "route_feedback", str(feedback.id), status)
-    flash("?????", "success")
+    flash("审核完成", "success")
     next_page = (request.form.get("next") or "").strip()
     if next_page == "feedback":
         return redirect(url_for("admin.feedback_page"))
@@ -1245,11 +1380,11 @@ def review_feedback(feedback_id: int):
 
 
 @bp.post("/feedback/<int:feedback_id>/reopen")
-@role_required(ROLE_ADMIN, ROLE_REVIEWER)
+@login_required
 def reopen_feedback(feedback_id: int):
     feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
-        flash("?????", "error")
+        flash("反馈不存在", "error")
         return redirect(url_for("admin.feedback_page"))
 
     feedback.status = FEEDBACK_PENDING
@@ -1258,28 +1393,30 @@ def reopen_feedback(feedback_id: int):
     feedback.reviewed_at = None
     db.session.commit()
     write_audit_log(g.current_user.id, "feedback.reopen", "route_feedback", str(feedback.id), "reopen_to_pending")
-    flash("?????,???????", "success")
+    flash("已重新打开反馈，状态改为待审核", "success")
     return redirect(url_for("admin.feedback_page"))
 
 
 @bp.post("/feedback/<int:feedback_id>/delete")
-@role_required(ROLE_ADMIN)
+@login_required
 def delete_feedback(feedback_id: int):
+    if g.current_user.role != ROLE_SUPER_ADMIN:
+        abort(403)
     feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
-        flash("?????", "error")
+        flash("反馈不存在", "error")
         return redirect(url_for("admin.feedback_page"))
 
     route_id = feedback.route_id
     db.session.delete(feedback)
     db.session.commit()
     write_audit_log(g.current_user.id, "feedback.delete", "route_feedback", str(feedback_id), f"route={route_id}")
-    flash("?????", "success")
+    flash("反馈已删除", "success")
     return redirect(url_for("admin.feedback_page"))
 
 
 @bp.post("/activities/create")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def create_activity():
     title = (request.form.get("title") or "").strip()
     participant_count = parse_distance(request.form.get("participant_count") or "0")
@@ -1288,7 +1425,7 @@ def create_activity():
     route_ids = request.form.getlist("route_ids")
 
     if not title:
-        flash("??????:??????", "error")
+        flash("参数错误：活动标题不能为空", "error")
         return redirect(url_for("admin.activities_page"))
 
     parsed_activity_time = _parse_activity_time(request.form.get("activity_time"))
@@ -1309,21 +1446,21 @@ def create_activity():
     db.session.add(activity)
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.create", "activity", str(activity.id), activity.title)
-    flash("??????", "success")
+    flash("活动创建成功", "success")
     return redirect(url_for("admin.activities_page"))
 
 
 @bp.post("/activities/<int:activity_id>/update")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def update_activity(activity_id: int):
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
-        flash("?????", "error")
+        flash("活动不存在", "error")
         return redirect(url_for("admin.activities_page"))
 
     title = (request.form.get("title") or "").strip()
     if not title:
-        flash("??????:??????", "error")
+        flash("参数错误：活动标题不能为空", "error")
         return redirect(url_for("admin.activities_page"))
 
     participant_count = parse_distance(request.form.get("participant_count") or "0")
@@ -1344,105 +1481,124 @@ def update_activity(activity_id: int):
 
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.update", "activity", str(activity.id), activity.title)
-    flash("?????", "success")
+    flash("活动更新成功", "success")
     return redirect(url_for("admin.activities_page"))
 
 
 @bp.post("/activities/<int:activity_id>/delete")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def delete_activity(activity_id: int):
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
-        flash("?????", "error")
+        flash("活动不存在", "error")
         return redirect(url_for("admin.activities_page"))
 
     title = activity.title
     db.session.delete(activity)
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.delete", "activity", str(activity_id), title)
-    flash("?????", "success")
+    flash("活动删除成功", "success")
     return redirect(url_for("admin.activities_page"))
 
 
 @bp.post("/users/create")
-@role_required(ROLE_ADMIN)
+@login_required
 def create_user():
     username = (request.form.get("username") or "").strip()
     password = (request.form.get("password") or "").strip()
-    role = (request.form.get("role") or ROLE_EDITOR).strip()
+    role = (request.form.get("role") or ROLE_CONTENT_ADMIN).strip()
 
     if not username or not password or role not in ROLES:
-        flash("??????:?????", "error")
+        flash("参数错误：请检查用户名/密码/角色", "error")
         return redirect(url_for("admin.users_page"))
-    if len(password) < 12:
-        flash("??????:?????? 12 ?", "error")
+    if len(password) < 6:
+        flash("参数错误：密码长度至少 6 位", "error")
         return redirect(url_for("admin.users_page"))
 
     if User.query.filter_by(username=username).first():
-        flash("??????:?????", "error")
+        flash("参数错误：用户名已存在", "error")
         return redirect(url_for("admin.users_page"))
 
-    user = User(username=username, password=generate_password_hash(password), role=role, is_active=True)
+    perms = _permissions_from_form(role)
+    user = User(
+        username=username,
+        password=generate_password_hash(password),
+        role=role,
+        is_active=True,
+        perm_view_analytics=perms["perm_view_analytics"],
+        perm_view_security=perms["perm_view_security"],
+        perm_review=perms["perm_review"],
+        perm_edit_content=perms["perm_edit_content"],
+        perm_manage_users=perms["perm_manage_users"],
+        perm_view_audit_logs=perms["perm_view_audit_logs"],
+    )
     db.session.add(user)
     db.session.commit()
     write_audit_log(g.current_user.id, "user.create", "user", str(user.id), username)
-    flash("??????", "success")
+    flash("管理员创建成功", "success")
     return redirect(url_for("admin.users_page"))
 
 
 @bp.post("/users/<int:user_id>/update")
-@role_required(ROLE_ADMIN)
+@login_required
 def update_user(user_id: int):
     user = User.query.filter_by(id=user_id).first()
     if not user:
-        flash("?????", "error")
+        flash("管理员不存在", "error")
         return redirect(url_for("admin.users_page"))
 
     username = (request.form.get("username") or "").strip()
-    role = (request.form.get("role") or ROLE_EDITOR).strip()
+    role = (request.form.get("role") or ROLE_CONTENT_ADMIN).strip()
     is_active = (request.form.get("is_active") or "0").strip() == "1"
     password = (request.form.get("password") or "").strip()
 
     if not username or role not in ROLES:
-        flash("??????:?????", "error")
+        flash("参数错误：请检查用户名和角色", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
     if User.query.filter(User.id != user_id, User.username == username).first():
-        flash("??????:?????", "error")
+        flash("参数错误：用户名已存在", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
-    if password and len(password) < 12:
-        flash("??????:?????? 12 ?", "error")
+    if password and len(password) < 6:
+        flash("参数错误：密码长度至少 6 位", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
     if user.id == g.current_user.id and not is_active:
-        flash("??????????", "error")
+        flash("不能停用当前登录账号", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
 
     user.username = username
     user.role = role
     user.is_active = is_active
+    perms = _permissions_from_form(role)
+    user.perm_view_analytics = perms["perm_view_analytics"]
+    user.perm_view_security = perms["perm_view_security"]
+    user.perm_review = perms["perm_review"]
+    user.perm_edit_content = perms["perm_edit_content"]
+    user.perm_manage_users = perms["perm_manage_users"]
+    user.perm_view_audit_logs = perms["perm_view_audit_logs"]
     if password:
         user.password = generate_password_hash(password)
 
     db.session.commit()
     write_audit_log(g.current_user.id, "user.update", "user", str(user.id), username)
-    flash("?????", "success")
+    flash("管理员更新成功", "success")
     return redirect(url_for("admin.users_page"))
 
 
 @bp.post("/users/<int:user_id>/delete")
-@role_required(ROLE_ADMIN)
+@login_required
 def delete_user(user_id: int):
     user = User.query.filter_by(id=user_id).first()
     if not user:
-        flash("?????", "error")
+        flash("管理员不存在", "error")
         return redirect(url_for("admin.users_page"))
     if user.id == g.current_user.id:
-        flash("??????????", "error")
+        flash("不能删除当前登录账号", "error")
         return redirect(url_for("admin.user_edit_page", user_id=user_id))
 
     user.is_active = False
     db.session.commit()
     write_audit_log(g.current_user.id, "user.deactivate", "user", str(user.id), user.username)
-    flash("?????", "success")
+    flash("管理员已停用", "success")
     return redirect(url_for("admin.users_page"))
 
 
@@ -1452,11 +1608,11 @@ def _cleanup_paths(paths: list[Path]) -> None:
 
 
 @bp.post("/bulk-import")
-@role_required(ROLE_ADMIN, ROLE_EDITOR)
+@login_required
 def bulk_import():
     csv_file = request.files.get("csv_file")
     if not csv_file or not (csv_file.filename or "").lower().endswith(".csv"):
-        flash("????:??? CSV", "error")
+        flash("参数错误：请上传 CSV 文件", "error")
         return redirect(url_for("admin.routes_page"))
 
     csv_text = csv_file.stream.read().decode("utf-8-sig")
@@ -1474,7 +1630,7 @@ def bulk_import():
         "risk_warning",
     }
     if not required.issubset(set(reader.fieldnames or [])):
-        flash("????:CSV ?????", "error")
+        flash("参数错误：CSV 缺少必要列", "error")
         return redirect(url_for("admin.routes_page"))
     rows = list(reader)
 
@@ -1576,7 +1732,7 @@ def bulk_import():
     except Exception:
         db.session.rollback()
         _cleanup_paths(list(uploaded_paths.values()))
-        flash("??????:???????", "error")
+        flash("批量导入失败：数据库写入异常", "error")
         return redirect(url_for("admin.routes_page"))
 
     orphan_paths = [path for name, path in uploaded_paths.items() if name not in used_uploaded_names]
@@ -1584,23 +1740,23 @@ def bulk_import():
 
     write_audit_log(g.current_user.id, "route.bulk_import", "route", None, f"created={created},skipped={skipped}")
     flash(
-        f"??????:?? {created},?? {skipped}???:{url_for('admin.download_import_report', token=report.report_token)}",
+        f"批量导入完成：成功 {created}，跳过 {skipped}。报告：{url_for('admin.download_import_report', token=report.report_token)}",
         "success",
     )
     return redirect(url_for("admin.routes_page"))
 
 
 @bp.get("/import-report/<string:token>")
-@role_required(ROLE_ADMIN, ROLE_EDITOR, ROLE_REVIEWER)
+@login_required
 def download_import_report(token: str):
     report = ImportReport.query.filter_by(report_token=token).first()
     if not report:
-        abort(404, description="?????")
+        abort(404, description="报告不存在")
 
     report_dir = Path(current_app.instance_path) / "import_reports"
     report_path = report_dir / report.report_filename
     if not report_path.exists():
-        abort(404, description="???????")
+        abort(404, description="报告文件不存在")
 
     return send_from_directory(
         str(report_dir),

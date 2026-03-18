@@ -155,9 +155,9 @@ def _is_weak_password(value: str) -> bool:
         "admin123",
         "change-me-admin",
         "replace-with-strong-password",
-        "replace-with-a-strong-admin-password-12plus",
+        "replace-with-a-strong-admin-password-6plus",
         "replace-with-a-strong-legacy-password",
     }
     if value.lower() in common_bad:
         return True
-    return len(value) < 12
+    return len(value) < 6

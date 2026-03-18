@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>账号维护 V3</title>
+  <title>账号维护 {{ app_version }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,6 +11,7 @@
   <main class="container">
     <header class="header">
       <h1>账号维护</h1>
+      <p class="hint">当前版本：{{ app_version }}</p>
       <div class="row-actions">
         <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
         <a class="btn" href="{{ url_for('admin.routes_page') }}">路线维护</a>
@@ -31,20 +32,34 @@
       <h2>账号列表</h2>
       <table>
         <thead>
-          <tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+          <tr><th>ID</th><th>用户名</th><th>角色</th><th>权限摘要</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for user in users %}
             <tr>
               <td>{{ user.id }}</td>
               <td>{{ user.username }}</td>
-              <td>{{ user.role }}</td>
+              <td>{{ role_labels.get(user.role, user.role) }}</td>
+              <td>
+                {% if user.role == 'super_admin' %}
+                  全部
+                {% else %}
+                  {% set perms = [] %}
+                  {% if user.perm_view_analytics %}{% set _ = perms.append('统计') %}{% endif %}
+                  {% if user.perm_view_security %}{% set _ = perms.append('安全') %}{% endif %}
+                  {% if user.perm_review %}{% set _ = perms.append('审核') %}{% endif %}
+                  {% if user.perm_edit_content %}{% set _ = perms.append('编辑') %}{% endif %}
+                  {% if user.perm_manage_users %}{% set _ = perms.append('账号管理') %}{% endif %}
+                  {% if user.perm_view_audit_logs %}{% set _ = perms.append('审计日志') %}{% endif %}
+                  {{ perms|join(' / ') if perms else '无' }}
+                {% endif %}
+              </td>
               <td>{{ 'active' if user.is_active else 'inactive' }}</td>
               <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '-' }}</td>
               <td><a class="btn" href="{{ url_for('admin.user_edit_page', user_id=user.id) }}">编辑</a></td>
             </tr>
           {% else %}
-            <tr><td colspan="6">暂无账号</td></tr>
+            <tr><td colspan="7">暂无账号</td></tr>
           {% endfor %}
         </tbody>
       </table>

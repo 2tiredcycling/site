@@ -2,14 +2,12 @@
 
 from flask import Blueprint, current_app, jsonify, request
 
-from app.auth import current_user, validate_csrf_token
+from app.auth import can_review, current_user, validate_csrf_token
 from app.gpx_utils import parse_gpx_points_and_stats
 from app.models import (
     FEEDBACK_APPROVED,
     FEEDBACK_PENDING,
     FEEDBACK_REJECTED,
-    ROLE_ADMIN,
-    ROLE_REVIEWER,
     STATUS_PUBLISHED,
     Activity,
     ActivityRoute,
@@ -186,7 +184,7 @@ def review_feedback(feedback_id: int):
     actor = current_user()
     if not actor:
         return jsonify({"error": "auth_required"}), 401
-    if actor.role not in (ROLE_ADMIN, ROLE_REVIEWER):
+    if not can_review(actor):
         return jsonify({"error": "permission_denied"}), 403
     claimed_actor_id = request.headers.get("X-Admin-User")
     if claimed_actor_id:

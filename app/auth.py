@@ -5,7 +5,7 @@ import secrets
 
 from flask import abort, g, redirect, request, session, url_for
 
-from app.models import ROLE_ADMIN, ROLE_EDITOR, ROLE_REVIEWER, User
+from app.models import ROLE_SUPER_ADMIN, User
 from app.services import write_audit_log
 
 
@@ -81,13 +81,49 @@ def role_required(*roles: str):
 def can_edit(user: User | None) -> bool:
     if not user:
         return False
-    return user.role in (ROLE_ADMIN, ROLE_EDITOR)
+    if user.role == ROLE_SUPER_ADMIN:
+        return True
+    return bool(user.perm_edit_content)
 
 
 def can_review(user: User | None) -> bool:
     if not user:
         return False
-    return user.role in (ROLE_ADMIN, ROLE_REVIEWER)
+    if user.role == ROLE_SUPER_ADMIN:
+        return True
+    return bool(user.perm_review)
+
+
+def can_manage_users(user: User | None) -> bool:
+    if not user:
+        return False
+    if user.role == ROLE_SUPER_ADMIN:
+        return True
+    return bool(user.perm_manage_users)
+
+
+def can_view_analytics(user: User | None) -> bool:
+    if not user:
+        return False
+    if user.role == ROLE_SUPER_ADMIN:
+        return True
+    return bool(user.perm_view_analytics)
+
+
+def can_view_security(user: User | None) -> bool:
+    if not user:
+        return False
+    if user.role == ROLE_SUPER_ADMIN:
+        return True
+    return bool(user.perm_view_security)
+
+
+def can_view_audit_logs(user: User | None) -> bool:
+    if not user:
+        return False
+    if user.role == ROLE_SUPER_ADMIN:
+        return True
+    return bool(user.perm_view_audit_logs)
 
 
 def get_csrf_token() -> str:

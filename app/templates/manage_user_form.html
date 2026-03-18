@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ '编辑账号' if user else '新增账号' }} V3</title>
+  <title>{{ '编辑账号' if user else '新增账号' }} {{ app_version }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,6 +11,7 @@
   <main class="container narrow">
     <header class="header">
       <h1>{{ '编辑账号 #' ~ user.id if user else '新增账号' }}</h1>
+      <p class="hint">当前版本：{{ app_version }}</p>
       <div class="row-actions">
         <a class="btn btn-muted" href="{{ url_for('admin.users_page') }}">返回账号列表</a>
       </div>
@@ -31,20 +32,29 @@
         <label>角色
           <select name="role">
             {% for role in roles %}
-              <option value="{{ role }}" {% if user and user.role == role %}selected{% endif %}>{{ role }}</option>
+              <option value="{{ role }}" {% if (user and user.role == role) or (not user and role == 'content_admin') %}selected{% endif %}>{{ role_labels.get(role, role) }}</option>
             {% endfor %}
           </select>
         </label>
+        <fieldset class="edit-item">
+          <legend>权限配置（super_admin 默认全部开启）</legend>
+          <label><input type="checkbox" name="perm_view_analytics" value="1" {% if permission_defaults.perm_view_analytics %}checked{% endif %}> 可查看流量统计</label>
+          <label><input type="checkbox" name="perm_view_security" value="1" {% if permission_defaults.perm_view_security %}checked{% endif %}> 可查看安全监控</label>
+          <label><input type="checkbox" name="perm_review" value="1" {% if permission_defaults.perm_review %}checked{% endif %}> 可审核反馈/站点问题</label>
+          <label><input type="checkbox" name="perm_edit_content" value="1" {% if permission_defaults.perm_edit_content %}checked{% endif %}> 可维护路线与活动</label>
+          <label><input type="checkbox" name="perm_manage_users" value="1" {% if permission_defaults.perm_manage_users %}checked{% endif %}> 可管理管理员账号</label>
+          <label><input type="checkbox" name="perm_view_audit_logs" value="1" {% if permission_defaults.perm_view_audit_logs %}checked{% endif %}> 可查看审计日志</label>
+        </fieldset>
         {% if user %}
           <label>
             <input type="checkbox" name="is_active" value="1" {% if user.is_active %}checked{% endif %}>
             保持为启用状态
           </label>
           <label>重置密码（可留空）<input type="password" name="password" placeholder="留空表示不修改"></label>
-          <p class="hint">如需修改密码，长度至少 12 位。</p>
+          <p class="hint">如需修改密码，长度至少 6 位。</p>
         {% else %}
           <label>密码<input type="password" name="password" required></label>
-          <p class="hint">初始密码长度至少 12 位。</p>
+          <p class="hint">初始密码长度至少 6 位。</p>
         {% endif %}
         <button class="btn" type="submit">{{ '保存账号' if user else '创建账号' }}</button>
       </form>
