@@ -12,6 +12,7 @@ tmp_test/
 tmp_regression/
 uploads/gpx/*.gpx
 uploads/gpx-raw-data/*.gpx
+uploads/media
 deploy/certs/*.pem
 deploy/certs/*.key
 deploy/certs/*.crt
