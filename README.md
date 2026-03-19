@@ -1,8 +1,10 @@
-﻿# GPX 路线知识库 V3（Flask）
+﻿# 2Tired 社团网站（Flask）
 
-从 V2 的“路线下载平台”升级到“路线知识库 + 活动档案库”。
+当前版本状态：
+- 运行基线：`V3.3.x`（路线中心 + 活动档案 + 管理后台）
+- 规划与数据基线：`V4.0.0`（官网化架构、数据模型、迁移兼容已落地）
 
-## V3 能力总览
+## 当前已上线能力（V3 基线）
 
 ### 用户侧
 - 路线详情增强：里程、难度、建议用时、补给点、风险提示、GPX 预览
@@ -29,6 +31,27 @@
 - 文件安全：上传类型白名单与大小限制
 - 列表接口分页 + 核心索引
 - Alembic 迁移脚本：`migrations/`
+
+## V4.0 已完成内容（v4.0.0）
+
+- 范围冻结与 IA：官网 + GPX 模块边界清晰
+- 数据模型基线：新增官网内容与活动报名相关模型
+- 迁移基线：`20260319_0002_v4_content_and_registration.py`
+- 兼容策略：`ensure_schema_compat()` 已覆盖 V4.0 新表字段兜底
+- 文档交付：V4.0 任务单、权限矩阵、SEO/编码/测试计划等
+
+V4.0 文档入口：
+- `docs/V4_0_TASKLIST.md`
+- `docs/V4_SCOPE.md`
+- `docs/V4_IA.md`
+- `docs/V4_URL_MAP.md`
+- `docs/V4_DATA_MODEL.md`
+- `docs/V4_PERMISSION_MATRIX.md`
+- `docs/V4_ADMIN_CONTENT_DESIGN.md`
+- `docs/V4_EVENT_REGISTRATION_FLOW.md`
+- `docs/V4_SEO_BASELINE.md`
+- `docs/V4_ENCODING_GUIDE.md`
+- `docs/V4_TEST_PLAN.md`
 
 ## 目录结构
 
@@ -79,3 +102,8 @@ python run.py
 ```bash
 python -m pytest -q
 ```
+
+## 版本说明
+
+- 已打标签：`v4.0.0`
+- 下一阶段：`V4.1`（官网前台页面实现）
