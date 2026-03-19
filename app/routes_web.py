@@ -91,9 +91,6 @@ def _format_lastmod(value) -> str:
 
 @bp.get("/")
 def index() -> str:
-    query, filters = query_routes_from_request(include_unpublished=False)
-    pagination = query.paginate(page=filters["page"], per_page=filters["per_page"], error_out=False)
-    rating_map = _rating_summary_map([item.id for item in pagination.items])
     latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(5).all()
     latest_routes = (
         Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False)
@@ -101,6 +98,7 @@ def index() -> str:
         .limit(5)
         .all()
     )
+    route_total = Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False).count()
     announcements = (
         Announcement.query.filter_by(status=CONTENT_STATUS_PUBLISHED)
         .order_by(
@@ -113,12 +111,9 @@ def index() -> str:
     )
     return render_template(
         "index.html",
-        routes=pagination.items,
-        pagination=pagination,
-        filters=filters,
-        rating_map=rating_map,
         latest_activities=latest_activities,
         latest_routes=latest_routes,
+        route_total=route_total,
         announcements=announcements,
         meta_description="2Tired 骑行社官网：活动信息、路线共享、社团介绍与反馈入口。",
     )
@@ -241,6 +236,21 @@ def route_detail(route_id: int) -> str:
     )
 
 
+@bp.get("/routes")
+def routes_center() -> str:
+    query, filters = query_routes_from_request(include_unpublished=False)
+    pagination = query.paginate(page=filters["page"], per_page=filters["per_page"], error_out=False)
+    rating_map = _rating_summary_map([item.id for item in pagination.items])
+    return render_template(
+        "routes.html",
+        routes=pagination.items,
+        pagination=pagination,
+        filters=filters,
+        rating_map=rating_map,
+        meta_description="2Tired 路线共享中心：检索、查看并下载 GPX 路线。",
+    )
+
+
 @bp.get("/activities")
 def activity_list() -> str:
     page = request.args.get("page", default=1, type=int)
@@ -355,6 +365,7 @@ def robots_txt() -> Response:
 def sitemap_xml() -> Response:
     static_urls = [
         url_for("web.index", _external=True),
+        url_for("web.routes_center", _external=True),
         url_for("web.about_page", _external=True),
         url_for("web.team_page", _external=True),
         url_for("web.contact_page", _external=True),

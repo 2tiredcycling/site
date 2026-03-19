@@ -206,6 +206,7 @@ def test_sitemap_xml_served(app_and_client):
     assert "<urlset" in body
     assert "/about" in body
     assert "/events" in body
+    assert "/routes" in body
 
 
 def test_v41_static_pages_available(app_and_client):
@@ -213,6 +214,7 @@ def test_v41_static_pages_available(app_and_client):
     assert client.get("/about").status_code == 200
     assert client.get("/team").status_code == 200
     assert client.get("/contact").status_code == 200
+    assert client.get("/routes").status_code == 200
 
 
 def test_events_alias_pages_available(app_and_client):

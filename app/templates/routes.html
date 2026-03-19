@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>路线共享中心 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '2Tired 路线共享中心页面。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <section class="card form-card">
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
+        <a class="btn" href="{{ url_for('web.events_list') }}">查看活动</a>
+      </div>
+      <h1>路线共享中心</h1>
+      <form method="get" action="{{ url_for('web.routes_center') }}" class="single-form">
+        <div class="filter-grid">
+          <label>
+            关键词
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="名称关键词">
+          </label>
+          <label>
+            最小里程 (km)
+            <input type="number" name="min_km" step="0.1" min="0" value="{{ filters.min_km }}">
+          </label>
+          <label>
+            最大里程 (km)
+            <input type="number" name="max_km" step="0.1" min="0" value="{{ filters.max_km }}">
+          </label>
+          <label>
+            难度
+            <select name="difficulty">
+              <option value="">全部</option>
+              <option value="1" {% if filters.difficulty == '1' %}selected{% endif %}>★☆☆☆☆</option>
+              <option value="2" {% if filters.difficulty == '2' %}selected{% endif %}>★★☆☆☆</option>
+              <option value="3" {% if filters.difficulty == '3' %}selected{% endif %}>★★★☆☆</option>
+              <option value="4" {% if filters.difficulty == '4' %}selected{% endif %}>★★★★☆</option>
+              <option value="5" {% if filters.difficulty == '5' %}selected{% endif %}>★★★★★</option>
+            </select>
+          </label>
+          <label>
+            最低评分
+            <input type="number" name="min_rating" min="0" max="5" step="0.1" value="{{ filters.min_rating }}">
+          </label>
+          <label>
+            排序
+            <select name="sort">
+              <option value="latest" {% if filters.sort == 'latest' %}selected{% endif %}>最新</option>
+              <option value="distance" {% if filters.sort == 'distance' %}selected{% endif %}>里程</option>
+            </select>
+          </label>
+          <label>
+            排序方向
+            <select name="direction">
+              <option value="desc" {% if filters.direction == 'desc' %}selected{% endif %}>降序</option>
+              <option value="asc" {% if filters.direction == 'asc' %}selected{% endif %}>升序</option>
+            </select>
+          </label>
+          <label>
+            每页数量
+            <select name="per_page">
+              <option value="10" {% if filters.per_page == 10 %}selected{% endif %}>10</option>
+              <option value="20" {% if filters.per_page == 20 %}selected{% endif %}>20</option>
+              <option value="50" {% if filters.per_page == 50 %}selected{% endif %}>50</option>
+            </select>
+          </label>
+        </div>
+        <div class="row-actions">
+          <button class="btn" type="submit">搜索</button>
+          <a class="btn btn-muted" href="{{ url_for('web.routes_center') }}">清空</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>路线名称</th>
+            <th>里程 (km)</th>
+            <th>难度</th>
+            <th>评分</th>
+            <th>下载统计</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for route in routes %}
+            <tr>
+              <td>{{ route.route_name }}</td>
+              <td>{{ '%.1f'|format(route.distance_km or 0) }}</td>
+              <td>
+                {% if route.difficulty == '1' %}
+                  ★☆☆☆☆
+                {% elif route.difficulty == '2' or route.difficulty == 'easy' %}
+                  ★★☆☆☆
+                {% elif route.difficulty == '3' or route.difficulty == 'medium' %}
+                  ★★★☆☆
+                {% elif route.difficulty == '4' or route.difficulty == 'hard' %}
+                  ★★★★☆
+                {% elif route.difficulty == '5' %}
+                  ★★★★★
+                {% else %}
+                  {{ route.difficulty }}
+                {% endif %}
+              </td>
+              <td>
+                {% set info = rating_map.get(route.id, {'avg_rating': 0.0, 'rating_count': 0}) %}
+                {% if info.rating_count > 0 %}
+                  {{ '%.1f'|format(info.avg_rating) }} / 5
+                  <br>
+                  <small>{{ info.rating_count }} 条已审核</small>
+                {% else %}
+                  暂无评分
+                {% endif %}
+              </td>
+              <td>
+                {{ route.download_count or 0 }} 次
+                <br>
+                <small>{{ to_local_time(route.last_downloaded_at).strftime('%Y-%m-%d %H:%M') if route.last_downloaded_at else '暂无' }}</small>
+              </td>
+              <td class="row-actions">
+                <a class="btn" href="{{ url_for('web.route_detail', route_id=route.id) }}">详情</a>
+                <a class="btn" href="{{ url_for('web.download', route_id=route.id) }}">下载</a>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6">暂无符合条件的路线</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="pagination card form-card">
+      <div>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</div>
+      <div class="row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('web.routes_center', page=pagination.prev_num, per_page=filters.per_page, q=filters.q, min_km=filters.min_km, max_km=filters.max_km, min_rating=filters.min_rating, max_rating=filters.max_rating, difficulty=filters.difficulty, sort=filters.sort, direction=filters.direction) }}">上一页</a>
+        {% endif %}
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('web.routes_center', page=pagination.next_num, per_page=filters.per_page, q=filters.q, min_km=filters.min_km, max_km=filters.max_km, min_rating=filters.min_rating, max_rating=filters.max_rating, difficulty=filters.difficulty, sort=filters.sort, direction=filters.direction) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>
