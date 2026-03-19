@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -18,22 +18,39 @@
       <h1>{{ page.title if page else '管理团队' }}</h1>
       {% if page and page.summary %}
         <p class="hint">{{ page.summary }}</p>
+      {% else %}
+        <p class="hint">各岗位可由 1 名或多名成员组成，当前为占位名单，后续可替换为真实姓名。</p>
       {% endif %}
 
       {% if page and page.content %}
         <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
       {% else %}
         <div class="team-grid">
-          <article class="edit-item"><strong>社长</strong><p class="hint">总体规划与对外代表</p></article>
-          <article class="edit-item"><strong>副社长（活动）</strong><p class="hint">活动组织与执行排期</p></article>
-          <article class="edit-item"><strong>副社长（路线）</strong><p class="hint">路线审核与标准维护</p></article>
-          <article class="edit-item"><strong>安全负责人</strong><p class="hint">风险预案与骑行安全培训</p></article>
-          <article class="edit-item"><strong>技术负责人</strong><p class="hint">站点平台与数据治理</p></article>
-          <article class="edit-item"><strong>宣传负责人</strong><p class="hint">内容发布与社媒传播</p></article>
-          <article class="edit-item"><strong>财务负责人</strong><p class="hint">预算与物资管理</p></article>
-          <article class="edit-item"><strong>外联负责人</strong><p class="hint">校内外合作对接</p></article>
-          <article class="edit-item"><strong>训练负责人</strong><p class="hint">训练计划与分层指导</p></article>
-          <article class="edit-item"><strong>后勤负责人</strong><p class="hint">活动支持与现场协同</p></article>
+          <article class="edit-item">
+            <strong>社长</strong>
+            <p class="hint">负责社团整体规划与统筹协调。</p>
+            <p>成员：同学1</p>
+          </article>
+          <article class="edit-item">
+            <strong>副社长</strong>
+            <p class="hint">协助社长推进日常管理与执行。</p>
+            <p>成员：同学2</p>
+          </article>
+          <article class="edit-item">
+            <strong>活动部</strong>
+            <p class="hint">负责活动策划、组织与现场安排。</p>
+            <p>成员：同学3、同学4</p>
+          </article>
+          <article class="edit-item">
+            <strong>宣传部</strong>
+            <p class="hint">负责社团宣传与活动传播。</p>
+            <p>成员：同学5、同学6</p>
+          </article>
+          <article class="edit-item">
+            <strong>财务部</strong>
+            <p class="hint">负责社团经费管理与财务记录。</p>
+            <p>成员：同学7</p>
+          </article>
         </div>
       {% endif %}
     </section>
