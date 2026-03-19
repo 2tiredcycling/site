@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <main class="container narrow">
+  <main class="container">
     <section class="card form-card">
       <div class="row-actions">
         <a class="btn" href="{{ back_url if back_url else url_for('web.events_list') }}">{{ back_label if back_label else '返回活动中心' }}</a>
@@ -23,6 +23,28 @@
       <p>参与人数：{{ activity.participant_count }}</p>
       <p>天气：{{ activity.weather or '-' }}</p>
       <p>总结：{{ activity.summary or '暂无' }}</p>
+
+      <h3>活动影像</h3>
+      {% if media_assets %}
+        <div class="media-grid">
+          {% for media in media_assets %}
+            <article class="edit-item media-item">
+              {% if media.mime_type.startswith('image/') %}
+                <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}">
+              {% elif media.mime_type.startswith('video/') %}
+                <video controls preload="metadata">
+                  <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
+                </video>
+              {% else %}
+                <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank">查看附件</a>
+              {% endif %}
+              <p class="hint">{{ media.original_filename }}</p>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="hint">暂无活动图片或视频。</p>
+      {% endif %}
 
       <h3>关联路线</h3>
       <ul>

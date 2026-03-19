@@ -17,6 +17,7 @@ from app.models import (
     RouteFeedback,
     SITE_FEEDBACK_PENDING,
     STATUS_PUBLISHED,
+    MediaAsset,
     SiteFeedback,
     SitePage,
     db,
@@ -286,6 +287,7 @@ def events_list() -> str:
 @bp.get("/activities/<int:activity_id>")
 def activity_detail(activity_id: int) -> str:
     activity = _activity_detail_or_404(activity_id)
+    media_assets = MediaAsset.query.filter_by(activity_id=activity.id).order_by(MediaAsset.created_at.desc()).all()
     source = (request.args.get("source") or "").strip()
     if source == "manage":
         back_url = url_for("admin.activities_page")
@@ -296,6 +298,7 @@ def activity_detail(activity_id: int) -> str:
     return render_template(
         "activity_detail.html",
         activity=activity,
+        media_assets=media_assets,
         back_url=back_url,
         back_label=back_label,
         meta_description=f"{activity.title} 活动详情：时间、人数、路线关联与活动总结。",
@@ -305,6 +308,7 @@ def activity_detail(activity_id: int) -> str:
 @bp.get("/events/<int:event_id>")
 def events_detail(event_id: int) -> str:
     activity = _activity_detail_or_404(event_id)
+    media_assets = MediaAsset.query.filter_by(activity_id=activity.id).order_by(MediaAsset.created_at.desc()).all()
     source = (request.args.get("source") or "").strip()
     if source == "manage":
         back_url = url_for("admin.activities_page")
@@ -315,6 +319,7 @@ def events_detail(event_id: int) -> str:
     return render_template(
         "activity_detail.html",
         activity=activity,
+        media_assets=media_assets,
         back_url=back_url,
         back_label=back_label,
         meta_description=f"{activity.title} 活动详情：时间、人数、路线关联与活动总结。",
@@ -342,6 +347,24 @@ def download(route_id: int):
         as_attachment=True,
         download_name=route.gpx_filename,
         mimetype="application/gpx+xml",
+    )
+
+
+@bp.get("/media/<int:asset_id>")
+def media_asset_file(asset_id: int):
+    asset = MediaAsset.query.filter_by(id=asset_id).first()
+    if not asset:
+        abort(404, description="Media not found")
+    media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
+    file_path = media_dir / (asset.storage_path or "")
+    if not file_path.exists() or not file_path.is_file():
+        abort(404, description="Media file missing")
+    return send_from_directory(
+        directory=str(media_dir),
+        path=asset.storage_path,
+        as_attachment=False,
+        download_name=asset.original_filename or asset.storage_path,
+        mimetype=asset.mime_type or "application/octet-stream",
     )
 
 

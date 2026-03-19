@@ -2,8 +2,10 @@ import csv
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from io import StringIO
+import mimetypes
 from pathlib import Path
 import re
+import secrets
 
 from sqlalchemy import or_
 from flask import (
@@ -21,6 +23,7 @@ from flask import (
     url_for,
 )
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 from app.auth import (
     attach_current_user,
@@ -55,6 +58,7 @@ from app.models import (
     AccessLog,
     AuditLog,
     ImportReport,
+    MediaAsset,
     Route,
     RouteFeedback,
     RouteVersion,
@@ -196,6 +200,41 @@ def _permissions_from_form(role: str) -> dict[str, bool]:
     if not any(result.values()):
         return defaults
     return result
+
+
+def _save_activity_media(activity_id: int, uploads) -> int:
+    media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
+    media_dir.mkdir(parents=True, exist_ok=True)
+    allowed_exts = {str(item).lower() for item in current_app.config.get("ALLOWED_MEDIA_EXTENSIONS", set())}
+    max_media_bytes = int(current_app.config.get("MAX_MEDIA_BYTES", 10 * 1024 * 1024))
+
+    saved_count = 0
+    for upload in uploads:
+        if not upload or not (upload.filename or "").strip():
+            continue
+        original_name = secure_filename(Path(upload.filename).name)
+        ext = Path(original_name).suffix.lower()
+        if not original_name or ext not in allowed_exts:
+            continue
+        if not file_size_ok(upload, max_media_bytes):
+            continue
+
+        token = f"activity_{activity_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{secrets.token_hex(4)}{ext}"
+        target_path = media_dir / token
+        upload.save(target_path)
+        mime_type = (upload.mimetype or "").strip() or (mimetypes.guess_type(original_name)[0] or "application/octet-stream")
+        db.session.add(
+            MediaAsset(
+                activity_id=activity_id,
+                original_filename=original_name[:255],
+                storage_path=token,
+                mime_type=mime_type[:128],
+                size_bytes=int(target_path.stat().st_size),
+                created_at=utcnow(),
+            )
+        )
+        saved_count += 1
+    return saved_count
 
 
 @bp.before_app_request
@@ -1012,7 +1051,7 @@ def activities_page():
 @login_required
 def activity_new_page():
     routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
-    return render_template("manage_activity_form.html", activity=None, routes=routes, can_edit=True)
+    return render_template("manage_activity_form.html", activity=None, routes=routes, media_assets=[], can_edit=True)
 
 
 @bp.get("/activities/<int:activity_id>/edit")
@@ -1023,10 +1062,12 @@ def activity_edit_page(activity_id: int):
         flash("活动不存在", "error")
         return redirect(url_for("admin.activities_page"))
     routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
+    media_assets = MediaAsset.query.filter_by(activity_id=activity.id).order_by(MediaAsset.created_at.desc()).all()
     return render_template(
         "manage_activity_form.html",
         activity=activity,
         routes=routes,
+        media_assets=media_assets,
         can_edit=can_edit(g.current_user),
     )
 
@@ -1462,8 +1503,13 @@ def create_activity():
 
     db.session.add(activity)
     db.session.commit()
+    uploaded_count = _save_activity_media(activity.id, request.files.getlist("media_files"))
+    db.session.commit()
     write_audit_log(g.current_user.id, "activity.create", "activity", str(activity.id), activity.title)
-    flash("活动创建成功", "success")
+    if uploaded_count > 0:
+        flash(f"活动创建成功，已上传媒体文件 {uploaded_count} 个", "success")
+    else:
+        flash("活动创建成功", "success")
     return redirect(url_for("admin.activities_page"))
 
 
@@ -1496,9 +1542,13 @@ def update_activity(activity_id: int):
     selected_routes = Route.query.filter(Route.id.in_(route_ids), Route.is_deleted.is_(False)).all() if route_ids else []
     activity.routes = selected_routes
 
+    uploaded_count = _save_activity_media(activity.id, request.files.getlist("media_files"))
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.update", "activity", str(activity.id), activity.title)
-    flash("活动更新成功", "success")
+    if uploaded_count > 0:
+        flash(f"活动更新成功，新增媒体文件 {uploaded_count} 个", "success")
+    else:
+        flash("活动更新成功", "success")
     return redirect(url_for("admin.activities_page"))
 
 
@@ -1511,8 +1561,14 @@ def delete_activity(activity_id: int):
         return redirect(url_for("admin.activities_page"))
 
     title = activity.title
+    media_assets = MediaAsset.query.filter_by(activity_id=activity.id).all()
+    media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
+    media_paths = [media_dir / item.storage_path for item in media_assets if item.storage_path]
+    for item in media_assets:
+        db.session.delete(item)
     db.session.delete(activity)
     db.session.commit()
+    _cleanup_paths(media_paths)
     write_audit_log(g.current_user.id, "activity.delete", "activity", str(activity_id), title)
     flash("活动删除成功", "success")
     return redirect(url_for("admin.activities_page"))

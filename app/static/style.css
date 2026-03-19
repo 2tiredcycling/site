@@ -121,6 +121,26 @@ body {
   gap: 10px;
 }
 
+.activity-card h3 {
+  margin-top: 0;
+}
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.media-item img,
+.media-item video {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #0f172a;
+}
+
 .feedback-banner {
   background: linear-gradient(90deg, #f59e0b, #f97316);
   color: #1f2937;
@@ -474,6 +494,10 @@ td {
     grid-template-columns: 1fr;
   }
 
+  .media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -522,5 +546,9 @@ td {
   td {
     font-size: 13px;
     padding: 10px;
+  }
+
+  .media-grid {
+    grid-template-columns: 1fr;
   }
 }

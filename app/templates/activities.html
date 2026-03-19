@@ -9,15 +9,20 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <main class="container narrow">
-    <section class="card form-card">
+  <main class="container">
+    <section class="card form-card site-hero">
       <div class="row-actions">
         <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
         <a class="btn" href="{{ url_for('web.routes_center') }}">路线共享中心</a>
       </div>
       <h1>{{ list_title or '社团活动' }}</h1>
+      <p class="hint">查看活动档案、路线关联与活动影像记录。</p>
+    </section>
+
+    <section class="card form-card">
+      <h2>活动列表</h2>
       {% for activity in activities %}
-        <article class="edit-item">
+        <article class="edit-item activity-card">
           <h3>
             {% if (detail_endpoint or 'web.events_detail') == 'web.activity_detail' %}
               <a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a>
@@ -25,8 +30,19 @@
               <a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a>
             {% endif %}
           </h3>
-          <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
-          <p>人数：{{ activity.participant_count }}，天气：{{ activity.weather or '-' }}</p>
+          <div class="filter-grid">
+            <div><strong>时间</strong><div>{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</div></div>
+            <div><strong>人数</strong><div>{{ activity.participant_count }}</div></div>
+            <div><strong>天气</strong><div>{{ activity.weather or '-' }}</div></div>
+            <div><strong>关联路线</strong><div>{{ activity.routes|length }}</div></div>
+          </div>
+          <div class="row-actions">
+            {% if (detail_endpoint or 'web.events_detail') == 'web.activity_detail' %}
+              <a class="btn" href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">查看详情</a>
+            {% else %}
+              <a class="btn" href="{{ url_for('web.events_detail', event_id=activity.id) }}">查看详情</a>
+            {% endif %}
+          </div>
         </article>
       {% else %}
         <p>暂无活动</p>

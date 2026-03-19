@@ -35,6 +35,7 @@ def create_app() -> Flask:
 
     os.makedirs(app.instance_path, exist_ok=True)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    os.makedirs(app.config["MEDIA_UPLOAD_FOLDER"], exist_ok=True)
     _ensure_sqlite_parent_dir(app)
 
     db.init_app(app)

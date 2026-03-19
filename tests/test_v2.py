@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, AuditLog, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
+from app.models import AccessLog, Activity, AuditLog, MediaAsset, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -229,6 +229,50 @@ def test_events_alias_pages_available(app_and_client):
     assert list_resp.status_code == 200
     detail_resp = client.get(f"/events/{activity_id}")
     assert detail_resp.status_code == 200
+
+
+def test_activity_media_upload_and_render(app_and_client):
+    app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    csrf_token = get_manage_csrf(client)
+
+    png_bytes = b"\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x08\\x02\\x00\\x00\\x00\\x90wS\\xde\\x00\\x00\\x00\\x0cIDATx\\x9cc``\\x00\\x00\\x00\\x04\\x00\\x01\\x0b\\xe7\\x02\\x9d\\x00\\x00\\x00\\x00IEND\\xaeB`\\x82"
+    mp4_bytes = b"\\x00\\x00\\x00\\x18ftypmp42\\x00\\x00\\x00\\x00mp42isom"
+
+    resp = client.post(
+        "/manage/activities/create",
+        data={
+            "csrf_token": csrf_token,
+            "title": "Media Event",
+            "activity_time": "2026-03-20T10:00",
+            "participant_count": "15",
+            "weather": "sunny",
+            "summary": "with media",
+            "media_files": [
+                (BytesIO(png_bytes), "photo.png"),
+                (BytesIO(mp4_bytes), "clip.mp4"),
+            ],
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+
+    with app.app_context():
+        activity = Activity.query.filter_by(title="Media Event").first()
+        assert activity is not None
+        assets = MediaAsset.query.filter_by(activity_id=activity.id).all()
+        assert len(assets) >= 2
+        first_asset_id = assets[0].id
+        activity_id = activity.id
+
+    media_resp = client.get(f"/media/{first_asset_id}")
+    assert media_resp.status_code == 200
+
+    detail_resp = client.get(f"/events/{activity_id}")
+    body = detail_resp.get_data(as_text=True)
+    assert detail_resp.status_code == 200
+    assert "/media/" in body
 
 
 def test_probe_wordpress_path_blocked_early(app_and_client):

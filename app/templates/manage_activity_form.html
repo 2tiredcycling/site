@@ -29,7 +29,7 @@
     {% endwith %}
 
     <section class="card form-card">
-      <form method="post" action="{{ url_for('admin.update_activity', activity_id=activity.id) if activity else url_for('admin.create_activity') }}" class="single-form">
+      <form method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_activity', activity_id=activity.id) if activity else url_for('admin.create_activity') }}" class="single-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="filter-grid">
           <label>活动名<input type="text" name="title" value="{{ activity.title if activity else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
@@ -48,11 +48,40 @@
           </label>
         </div>
         <label>活动总结<textarea name="summary" rows="3" {% if not can_edit %}disabled{% endif %}>{{ activity.summary if activity else '' }}</textarea></label>
+        <label>活动图片/视频（可多选）
+          <input type="file" name="media_files" accept="image/*,video/*" multiple {% if not can_edit %}disabled{% endif %}>
+        </label>
         {% if can_edit %}
           <button class="btn" type="submit">{{ '保存活动' if activity else '新增活动' }}</button>
         {% endif %}
       </form>
     </section>
+
+    {% if activity %}
+      <section class="card form-card">
+        <h2>已上传媒体</h2>
+        {% if media_assets %}
+          <div class="media-grid">
+            {% for media in media_assets %}
+              <article class="edit-item media-item">
+                {% if media.mime_type.startswith('image/') %}
+                  <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}">
+                {% elif media.mime_type.startswith('video/') %}
+                  <video controls preload="metadata">
+                    <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
+                  </video>
+                {% else %}
+                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank">查看文件</a>
+                {% endif %}
+                <p class="hint">{{ media.original_filename }}</p>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="hint">当前活动还没有上传媒体文件。</p>
+        {% endif %}
+      </section>
+    {% endif %}
 
     {% if activity and can_edit %}
       <section class="card form-card">
