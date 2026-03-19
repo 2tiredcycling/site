@@ -13,7 +13,9 @@
   <main class="container">
     <section class="card form-card">
       <div class="row-actions">
-        <a class="btn" href="{{ url_for('web.download', route_id=route.id) }}">下载 GPX</a>
+        <form method="post" action="{{ url_for('web.download_tracked', route_id=route.id) }}">
+          <button class="btn" type="submit">下载 GPX</button>
+        </form>
         <a class="btn btn-muted" href="{{ back_url if back_url else url_for('web.routes_center') }}">{{ back_label if back_label else '返回路线中心' }}</a>
       </div>
 

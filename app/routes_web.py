@@ -82,6 +82,27 @@ def _activity_detail_or_404(activity_id: int) -> Activity:
     return activity
 
 
+def _published_route_or_404(route_id: int) -> Route:
+    route = Route.query.filter_by(id=route_id, status=STATUS_PUBLISHED, is_deleted=False).first()
+    if not route:
+        abort(404, description="Route not found")
+    return route
+
+
+def _send_route_gpx(route: Route):
+    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+    file_path = upload_folder / route.gpx_filename
+    if not file_path.exists():
+        abort(404, description="GPX file missing")
+    return send_from_directory(
+        directory=str(upload_folder),
+        path=route.gpx_filename,
+        as_attachment=True,
+        download_name=route.gpx_filename,
+        mimetype="application/gpx+xml",
+    )
+
+
 def _format_lastmod(value) -> str:
     if value is None:
         return ""
@@ -224,9 +245,7 @@ def site_feedback_submit():
 
 @bp.get("/routes/<int:route_id>")
 def route_detail(route_id: int) -> str:
-    route = Route.query.filter_by(id=route_id, status=STATUS_PUBLISHED, is_deleted=False).first()
-    if not route:
-        abort(404, description="Route not found")
+    route = _published_route_or_404(route_id)
     rating_map = _rating_summary_map([route.id])
     rating_info = rating_map.get(route.id, {"avg_rating": 0.0, "rating_count": 0})
     from_activity_id = request.args.get("from_activity_id", type=int)
@@ -353,26 +372,17 @@ def events_detail(event_id: int) -> str:
 
 @bp.get("/download/<int:route_id>")
 def download(route_id: int):
-    route = Route.query.filter_by(id=route_id, status=STATUS_PUBLISHED, is_deleted=False).first()
-    if not route:
-        abort(404, description="Route not found")
+    route = _published_route_or_404(route_id)
+    return _send_route_gpx(route)
 
-    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
-    file_path = upload_folder / route.gpx_filename
-    if not file_path.exists():
-        abort(404, description="GPX file missing")
 
+@bp.post("/download/<int:route_id>/track")
+def download_tracked(route_id: int):
+    route = _published_route_or_404(route_id)
     route.download_count = (route.download_count or 0) + 1
     route.last_downloaded_at = utcnow()
     db.session.commit()
-
-    return send_from_directory(
-        directory=str(upload_folder),
-        path=route.gpx_filename,
-        as_attachment=True,
-        download_name=route.gpx_filename,
-        mimetype="application/gpx+xml",
-    )
+    return _send_route_gpx(route)
 
 
 @bp.get("/media/<int:asset_id>")

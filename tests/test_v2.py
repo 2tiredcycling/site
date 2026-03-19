@@ -529,8 +529,13 @@ def test_download_updates_stats(app_and_client):
     list_resp = client.get("/api/v1/routes")
     route_id = list_resp.get_json()["items"][0]["id"]
 
-    d_resp = client.get(f"/download/{route_id}")
-    assert d_resp.status_code == 200
+    scanner_resp = client.get(f"/download/{route_id}")
+    assert scanner_resp.status_code == 200
+    detail_before = client.get(f"/api/v1/routes/{route_id}").get_json()
+    assert detail_before["download_count"] in (0, None)
+
+    tracked_resp = client.post(f"/download/{route_id}/track")
+    assert tracked_resp.status_code == 200
 
     detail = client.get(f"/api/v1/routes/{route_id}").get_json()
     assert detail["download_count"] >= 1
