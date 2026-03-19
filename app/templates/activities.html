@@ -3,28 +3,45 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>活动档案</title>
+  <title>{{ list_title or '社团活动' }}</title>
+  <meta name="description" content="{{ meta_description or '2Tired 骑行社活动中心与历史活动档案。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container narrow">
     <section class="card form-card">
-      <h1>历史活动档案</h1>
       <div class="row-actions">
-        <a class="btn" href="{{ url_for('web.index') }}">返回路线</a>
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
+        <a class="btn" href="{{ url_for('web.index') }}#route-center">路线共享中心</a>
       </div>
+      <h1>{{ list_title or '社团活动' }}</h1>
       {% for activity in activities %}
         <article class="edit-item">
-          <h3><a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a></h3>
+          <h3>
+            {% if (detail_endpoint or 'web.events_detail') == 'web.activity_detail' %}
+              <a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a>
+            {% else %}
+              <a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a>
+            {% endif %}
+          </h3>
           <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
           <p>人数：{{ activity.participant_count }}，天气：{{ activity.weather or '-' }}</p>
         </article>
       {% else %}
         <p>暂无活动</p>
       {% endfor %}
+
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for(list_endpoint or 'web.events_list', page=pagination.prev_num) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for(list_endpoint or 'web.events_list', page=pagination.next_num) }}">下一页</a>
+        {% endif %}
+      </div>
     </section>
   </main>
 </body>
 </html>
-

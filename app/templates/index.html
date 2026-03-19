@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>2Tired 骑行社线路共享平台 V3</title>
+  <title>2Tired 骑行社 | 社团官网与路线共享中心</title>
+  <meta name="description" content="{{ meta_description or '2Tired 骑行社官网，提供社团介绍、活动信息、路线共享与反馈入口。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -13,6 +14,101 @@
       <div class="alert alert-ok">问题反馈已提交，感谢你的建议。</div>
     {% endif %}
 
+    <section class="card form-card site-hero">
+      <nav class="site-nav">
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">首页</a>
+        <a class="btn btn-muted" href="{{ url_for('web.about_page') }}">社团介绍</a>
+        <a class="btn btn-muted" href="{{ url_for('web.team_page') }}">管理团队</a>
+        <a class="btn btn-muted" href="{{ url_for('web.events_list') }}">活动</a>
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}#route-center">路线</a>
+        <a class="btn btn-muted" href="{{ url_for('web.site_feedback', source=url_for('web.index')) }}">反馈</a>
+        <a class="btn btn-muted" href="{{ url_for('web.contact_page') }}">联系</a>
+      </nav>
+
+      <div class="hero-layout">
+        <div>
+          <h1>2Tired 骑行社</h1>
+          <p class="hero-sub">把活动、路线与社团信息整合成一个轻量官网入口。</p>
+          <div class="row-actions">
+            <a class="btn" href="{{ url_for('web.events_list') }}">查看活动</a>
+            <a class="btn" href="#route-center">进入路线中心</a>
+          </div>
+        </div>
+        <div class="hero-metrics">
+          <div><strong>公开路线</strong><div>{{ pagination.total }}</div></div>
+          <div><strong>近期活动</strong><div>{{ latest_activities|length }}</div></div>
+          <div><strong>公告条数</strong><div>{{ announcements|length }}</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="portal-grid">
+      <a class="card form-card portal-card" href="{{ url_for('web.about_page') }}">
+        <h3>社团介绍</h3>
+        <p>宗旨、历史与加入方式</p>
+      </a>
+      <a class="card form-card portal-card" href="{{ url_for('web.team_page') }}">
+        <h3>管理团队</h3>
+        <p>组织架构与职责分工</p>
+      </a>
+      <a class="card form-card portal-card" href="{{ url_for('web.events_list') }}">
+        <h3>活动中心</h3>
+        <p>活动档案与路线关联</p>
+      </a>
+      <a class="card form-card portal-card" href="#route-center">
+        <h3>路线共享</h3>
+        <p>检索、查看并下载 GPX</p>
+      </a>
+    </section>
+
+    <section class="card form-card">
+      <h2>公告</h2>
+      {% if announcements %}
+        <div class="notice-list">
+          {% for item in announcements %}
+            <article class="edit-item">
+              <div class="row-actions">
+                <strong>{{ item.title }}</strong>
+                {% if item.is_pinned %}<span class="hint">置顶</span>{% endif %}
+              </div>
+              <p>{{ item.content[:140] }}{% if item.content|length > 140 %}...{% endif %}</p>
+              <p class="hint">发布时间：{{ to_local_time(item.published_at).strftime('%Y-%m-%d %H:%M') if item.published_at else '-' }}</p>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="hint">暂无公告，后续可在管理后台内容模块发布。</p>
+      {% endif %}
+    </section>
+
+    <section class="split-grid">
+      <section class="card form-card">
+        <h2>最新活动</h2>
+        {% for activity in latest_activities %}
+          <article class="edit-item compact-item">
+            <h3><a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a></h3>
+            <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
+            <p class="hint">人数：{{ activity.participant_count }}，关联路线：{{ activity.routes|length }}</p>
+          </article>
+        {% else %}
+          <p>暂无活动</p>
+        {% endfor %}
+      </section>
+
+      <section class="card form-card">
+        <h2>最新路线</h2>
+        {% for route in latest_routes %}
+          <article class="edit-item compact-item">
+            <h3><a href="{{ url_for('web.route_detail', route_id=route.id) }}">{{ route.route_name }}</a></h3>
+            <p>{{ '%.1f'|format(route.distance_km or 0) }} km，下载 {{ route.download_count or 0 }} 次</p>
+            <p class="hint">更新：{{ to_local_time(route.updated_at).strftime('%Y-%m-%d %H:%M') if route.updated_at else '-' }}</p>
+          </article>
+        {% else %}
+          <p>暂无路线</p>
+        {% endfor %}
+      </section>
+    </section>
+
     <section class="feedback-banner card">
       <div>
         <strong>发现网站问题？</strong>
@@ -21,20 +117,12 @@
       <a class="btn feedback-btn" href="{{ url_for('web.site_feedback', source=url_for('web.index')) }}">我要反馈</a>
     </section>
 
-    <header class="header">
-      <h1>2Tired 骑行社线路共享平台</h1>
-      <p>一站式查看骑行线路、活动档案、反馈评分与更新追踪。</p>
-      <div class="row-actions hero-actions">
-        <a class="btn btn-muted" href="{{ url_for('web.activity_list') }}">查看活动档案</a>
-      </div>
-    </header>
-
     {% if error_message %}
       <div class="alert">{{ error_message }}</div>
     {% endif %}
 
-    <section class="card form-card">
-      <h2>查找路线</h2>
+    <section class="card form-card" id="route-center">
+      <h2>路线共享中心</h2>
       <form method="get" action="{{ url_for('web.index') }}" class="single-form">
         <div class="filter-grid">
           <label>
@@ -139,7 +227,7 @@
               <td>
                 {{ route.download_count or 0 }} 次
                 <br>
-                <small>{{ route.last_downloaded_at.strftime('%Y-%m-%d %H:%M') if route.last_downloaded_at else '暂无' }}</small>
+                <small>{{ to_local_time(route.last_downloaded_at).strftime('%Y-%m-%d %H:%M') if route.last_downloaded_at else '暂无' }}</small>
               </td>
               <td class="row-actions">
                 <a class="btn" href="{{ url_for('web.route_detail', route_id=route.id) }}">详情</a>
@@ -169,4 +257,3 @@
   </main>
 </body>
 </html>
-

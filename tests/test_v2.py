@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, AuditLog, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
+from app.models import AccessLog, Activity, AuditLog, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -195,6 +195,38 @@ def test_robots_txt_served(app_and_client):
     body = resp.get_data(as_text=True)
     assert "User-agent: *" in body
     assert "Disallow: /manage/" in body
+    assert "Sitemap:" in body
+
+
+def test_sitemap_xml_served(app_and_client):
+    _app, client = app_and_client
+    resp = client.get("/sitemap.xml")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "<urlset" in body
+    assert "/about" in body
+    assert "/events" in body
+
+
+def test_v41_static_pages_available(app_and_client):
+    _app, client = app_and_client
+    assert client.get("/about").status_code == 200
+    assert client.get("/team").status_code == 200
+    assert client.get("/contact").status_code == 200
+
+
+def test_events_alias_pages_available(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        activity = Activity(title="V4.1 Test Event")
+        db.session.add(activity)
+        db.session.commit()
+        activity_id = activity.id
+
+    list_resp = client.get("/events")
+    assert list_resp.status_code == 200
+    detail_resp = client.get(f"/events/{activity_id}")
+    assert detail_resp.status_code == 200
 
 
 def test_probe_wordpress_path_blocked_early(app_and_client):

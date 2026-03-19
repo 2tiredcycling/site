@@ -3,6 +3,7 @@
 当前版本状态：
 - 运行基线：`V3.3.x`（路线中心 + 活动档案 + 管理后台）
 - 规划与数据基线：`V4.0.0`（官网化架构、数据模型、迁移兼容已落地）
+- 前台架构基线：`V4.1.0`（官网首页 + 静态页 + 活动中心路由 + sitemap）
 
 ## 当前已上线能力（V3 基线）
 
@@ -53,6 +54,17 @@ V4.0 文档入口：
 - `docs/V4_ENCODING_GUIDE.md`
 - `docs/V4_TEST_PLAN.md`
 
+## V4.1 已完成内容（v4.1.0）
+
+- 官网首页改版：导航入口、公告区、最新活动、最新路线、路线中心整合
+- 新增静态页路由与模板：`/about`、`/team`、`/contact`
+- 活动中心路由：`/events`、`/events/<id>`（保留 `/activities` 兼容）
+- 基础 SEO 增强：
+  - 页面 `meta description`
+  - `GET /sitemap.xml`
+  - `robots.txt` 增加 `Sitemap` 声明
+- 测试补充：站点地图、静态页、events 别名路由
+
 ## 目录结构
 
 ```text
@@ -88,6 +100,10 @@ python run.py
 ## 默认入口
 
 - 用户页：`/`
+- 社团介绍：`/about`
+- 管理团队：`/team`
+- 联系我们：`/contact`
+- 活动中心：`/events`
 - 路线详情：`/routes/<id>`
 - 活动列表：`/activities`
 - 活动详情：`/activities/<id>`
@@ -96,6 +112,7 @@ python run.py
 - API v1：`/api/v1/routes`
 - 健康检查：`/health`
 - 指标：`/metrics`
+- 站点地图：`/sitemap.xml`
 
 ## 测试
 
@@ -105,5 +122,6 @@ python -m pytest -q
 
 ## 版本说明
 
-- 已打标签：`v4.0.0`
-- 下一阶段：`V4.1`（官网前台页面实现）
+- 已打标签：`v4.0.0`、`v4.0.1`
+- 当前阶段：`V4.1.0`（官网前台基础架构）
+- 下一阶段：`V4.2`（后台内容管理 + 活动报名闭环）

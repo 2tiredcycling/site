@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>联系我们 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '联系 2Tired 骑行社。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container narrow">
+    <section class="card form-card">
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
+        <a class="btn" href="{{ url_for('web.site_feedback', source=url_for('web.contact_page')) }}">提交反馈</a>
+      </div>
+      <h1>{{ page.title if page else '联系我们' }}</h1>
+      {% if page and page.summary %}
+        <p class="hint">{{ page.summary }}</p>
+      {% endif %}
+
+      {% if page and page.content %}
+        <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
+      {% else %}
+        <div class="edit-item">
+          <p><strong>活动咨询：</strong>活动中心页面留言或现场联系活动负责人</p>
+          <p><strong>路线问题：</strong>在路线详情页提交反馈，后台将统一处理</p>
+          <p><strong>合作沟通：</strong>请在反馈中注明“合作”，并留下可联系信息</p>
+          <p><strong>值班时间：</strong>工作日 12:30-13:30 / 18:00-20:00</p>
+        </div>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

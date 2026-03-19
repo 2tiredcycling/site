@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理团队 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '2Tired 骑行社管理团队页面。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <section class="card form-card">
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
+        <a class="btn" href="{{ url_for('web.contact_page') }}">联系团队</a>
+      </div>
+      <h1>{{ page.title if page else '管理团队' }}</h1>
+      {% if page and page.summary %}
+        <p class="hint">{{ page.summary }}</p>
+      {% endif %}
+
+      {% if page and page.content %}
+        <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
+      {% else %}
+        <div class="team-grid">
+          <article class="edit-item"><strong>社长</strong><p class="hint">总体规划与对外代表</p></article>
+          <article class="edit-item"><strong>副社长（活动）</strong><p class="hint">活动组织与执行排期</p></article>
+          <article class="edit-item"><strong>副社长（路线）</strong><p class="hint">路线审核与标准维护</p></article>
+          <article class="edit-item"><strong>安全负责人</strong><p class="hint">风险预案与骑行安全培训</p></article>
+          <article class="edit-item"><strong>技术负责人</strong><p class="hint">站点平台与数据治理</p></article>
+          <article class="edit-item"><strong>宣传负责人</strong><p class="hint">内容发布与社媒传播</p></article>
+          <article class="edit-item"><strong>财务负责人</strong><p class="hint">预算与物资管理</p></article>
+          <article class="edit-item"><strong>外联负责人</strong><p class="hint">校内外合作对接</p></article>
+          <article class="edit-item"><strong>训练负责人</strong><p class="hint">训练计划与分层指导</p></article>
+          <article class="edit-item"><strong>后勤负责人</strong><p class="hint">活动支持与现场协同</p></article>
+        </div>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

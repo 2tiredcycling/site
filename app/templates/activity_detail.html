@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>活动详情</title>
+  <title>{{ activity.title }} | 活动详情 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '2Tired 骑行社活动详情页面。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,9 +12,9 @@
   <main class="container narrow">
     <section class="card form-card">
       <div class="row-actions">
-        <a class="btn" href="{{ back_url if back_url else url_for('web.activity_list') }}">{{ back_label if back_label else '返回活动列表' }}</a>
+        <a class="btn" href="{{ back_url if back_url else url_for('web.events_list') }}">{{ back_label if back_label else '返回活动中心' }}</a>
         {% if not back_url %}
-          <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回路线列表</a>
+          <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
         {% endif %}
       </div>
 

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>社团介绍 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '2Tired 骑行社社团介绍页面。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container narrow">
+    <section class="card form-card">
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
+        <a class="btn" href="{{ url_for('web.events_list') }}">查看活动</a>
+      </div>
+      <h1>{{ page.title if page else '社团介绍' }}</h1>
+      {% if page and page.summary %}
+        <p class="hint">{{ page.summary }}</p>
+      {% endif %}
+
+      {% if page and page.content %}
+        <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
+      {% else %}
+        <h3>社团宗旨</h3>
+        <p>以安全、协作、持续精进为核心，推动校园骑行文化，沉淀可复用路线知识。</p>
+        <h3>发展历程</h3>
+        <p>从路线下载平台逐步演进到“活动 + 路线 + 反馈”的统一协作站点，并持续官网化升级。</p>
+        <h3>加入方式</h3>
+        <p>可先通过活动中心参与公开活动，或通过联系页面提交加入意向。</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>
