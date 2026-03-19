@@ -31,6 +31,22 @@ SITE_FEEDBACK_PENDING = "pending"
 SITE_FEEDBACK_DONE = "done"
 SITE_FEEDBACK_STATUSES = (SITE_FEEDBACK_PENDING, SITE_FEEDBACK_DONE)
 
+CONTENT_STATUS_DRAFT = "draft"
+CONTENT_STATUS_PUBLISHED = "published"
+CONTENT_STATUS_OFFLINE = "offline"
+CONTENT_STATUSES = (CONTENT_STATUS_DRAFT, CONTENT_STATUS_PUBLISHED, CONTENT_STATUS_OFFLINE)
+
+REGISTRATION_PENDING = "pending"
+REGISTRATION_CONFIRMED = "confirmed"
+REGISTRATION_REJECTED = "rejected"
+REGISTRATION_CANCELLED = "cancelled"
+REGISTRATION_STATUSES = (
+    REGISTRATION_PENDING,
+    REGISTRATION_CONFIRMED,
+    REGISTRATION_REJECTED,
+    REGISTRATION_CANCELLED,
+)
+
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -245,6 +261,100 @@ class SiteFeedback(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class SitePage(db.Model):
+    __tablename__ = "site_pages"
+    __table_args__ = (
+        db.UniqueConstraint("slug", name="uq_site_pages_slug"),
+        Index("idx_site_pages_status_updated_at", "status", "updated_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(64), nullable=False)
+    title = db.Column(db.String(128), nullable=False)
+    summary = db.Column(db.String(255), nullable=False, default="")
+    content = db.Column(db.Text, nullable=False, default="")
+    status = db.Column(db.String(16), nullable=False, default=CONTENT_STATUS_DRAFT)
+    published_at = db.Column(db.DateTime, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    updated_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    creator = db.relationship("User", foreign_keys=[created_by], lazy="joined")
+    updater = db.relationship("User", foreign_keys=[updated_by], lazy="joined")
+
+
+class Announcement(db.Model):
+    __tablename__ = "announcements"
+    __table_args__ = (
+        Index("idx_announcements_status_pinned_published", "status", "is_pinned", "published_at"),
+        Index("idx_announcements_updated_at", "updated_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(160), nullable=False)
+    content = db.Column(db.Text, nullable=False, default="")
+    status = db.Column(db.String(16), nullable=False, default=CONTENT_STATUS_DRAFT)
+    is_pinned = db.Column(db.Boolean, nullable=False, default=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    published_at = db.Column(db.DateTime, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    updated_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    creator = db.relationship("User", foreign_keys=[created_by], lazy="joined")
+    updater = db.relationship("User", foreign_keys=[updated_by], lazy="joined")
+
+
+class HomepageSection(db.Model):
+    __tablename__ = "homepage_sections"
+    __table_args__ = (
+        db.UniqueConstraint("section_key", name="uq_homepage_sections_section_key"),
+        Index("idx_homepage_sections_enabled_sort", "is_enabled", "sort_order"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    section_key = db.Column(db.String(64), nullable=False)
+    title = db.Column(db.String(160), nullable=False, default="")
+    subtitle = db.Column(db.String(255), nullable=False, default="")
+    payload_json = db.Column(db.Text, nullable=False, default="{}")
+    is_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    updated_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    updater = db.relationship("User", foreign_keys=[updated_by], lazy="joined")
+
+
+class EventRegistration(db.Model):
+    __tablename__ = "event_registrations"
+    __table_args__ = (
+        Index("idx_event_registrations_activity_status", "activity_id", "status"),
+        Index("idx_event_registrations_created_at", "created_at"),
+        Index("idx_event_registrations_student_id", "student_id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    activity_id = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=False)
+    name = db.Column(db.String(64), nullable=False)
+    student_id = db.Column(db.String(32), nullable=False, default="")
+    contact = db.Column(db.String(128), nullable=False, default="")
+    notes = db.Column(db.Text, nullable=False, default="")
+    status = db.Column(db.String(16), nullable=False, default=REGISTRATION_PENDING)
+    review_note = db.Column(db.String(255), nullable=False, default="")
+    reviewed_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    source_ip = db.Column(db.String(64), nullable=False, default="")
+    user_agent = db.Column(db.String(255), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    activity = db.relationship("Activity", lazy="joined")
+    reviewer = db.relationship("User", foreign_keys=[reviewed_by], lazy="joined")
 
 
 class RouteVersion(db.Model):
