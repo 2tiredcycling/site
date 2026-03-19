@@ -128,7 +128,27 @@ body {
 .media-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
+}
+
+.media-item {
+  padding: 10px;
+  background: linear-gradient(180deg, #ffffff, #f9fbff);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.media-preview-trigger {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.media-preview-trigger:hover img {
+  transform: scale(1.02);
 }
 
 .media-item img,
@@ -139,6 +159,15 @@ body {
   border-radius: 8px;
   border: 1px solid #d1d5db;
   background: #0f172a;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.media-item video {
+  display: block;
+}
+
+.media-actions {
+  margin-top: 8px;
 }
 
 .feedback-banner {
@@ -475,6 +504,110 @@ td {
   width: 100%;
   height: 220px;
   display: block;
+}
+
+.media-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.82);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 0;
+}
+
+.media-modal.open {
+  display: flex;
+}
+
+.media-modal-shell {
+  width: 100vw;
+  height: 100vh;
+  background: #0b1220;
+  border: 0;
+  border-radius: 0;
+  padding: 8px;
+  position: relative;
+}
+
+.media-modal-close {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  background: #334155;
+  color: #f8fafc;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+}
+
+.media-modal img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+  border-radius: 10px;
+  margin: 0 auto;
+  transform-origin: center center;
+  transition: transform 0.1s ease-out;
+}
+
+.media-modal-stage {
+  margin-top: 0;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 8px;
+  overflow: auto;
+  height: calc(100vh - 16px);
+  background: #020617;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-modal-stage.dragging {
+  cursor: grabbing;
+}
+
+.media-modal-stage img {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.media-zoom-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e5e7eb;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.media-modal-toolbar {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+
+.media-modal-toolbar .hint {
+  margin: 0;
+  color: #cbd5e1;
 }
 
 @media (max-width: 960px) {

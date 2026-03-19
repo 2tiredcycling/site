@@ -229,10 +229,25 @@ def route_detail(route_id: int) -> str:
         abort(404, description="Route not found")
     rating_map = _rating_summary_map([route.id])
     rating_info = rating_map.get(route.id, {"avg_rating": 0.0, "rating_count": 0})
+    from_activity_id = request.args.get("from_activity_id", type=int)
+    from_detail = (request.args.get("from_detail") or "").strip()
+    source = (request.args.get("source") or "").strip()
+    back_url = None
+    back_label = None
+    if from_activity_id and from_detail in {"web.activity_detail", "web.events_detail"}:
+        route_back_params = {"source": source} if source else {}
+        if from_detail == "web.events_detail":
+            back_url = url_for("web.events_detail", event_id=from_activity_id, **route_back_params)
+            back_label = "返回活动详情"
+        else:
+            back_url = url_for("web.activity_detail", activity_id=from_activity_id, **route_back_params)
+            back_label = "返回活动详情"
     return render_template(
         "route_detail.html",
         route=route,
         rating_info=rating_info,
+        back_url=back_url,
+        back_label=back_label,
         meta_description=f"{route.route_name} 路线详情：里程、难度、补给点与下载。",
     )
 
@@ -299,6 +314,11 @@ def activity_detail(activity_id: int) -> str:
         "activity_detail.html",
         activity=activity,
         media_assets=media_assets,
+        route_back_params={
+            "from_activity_id": activity.id,
+            "from_detail": "web.activity_detail",
+            **({"source": source} if source else {}),
+        },
         back_url=back_url,
         back_label=back_label,
         meta_description=f"{activity.title} 活动详情：时间、人数、路线关联与活动总结。",
@@ -320,6 +340,11 @@ def events_detail(event_id: int) -> str:
         "activity_detail.html",
         activity=activity,
         media_assets=media_assets,
+        route_back_params={
+            "from_activity_id": activity.id,
+            "from_detail": "web.events_detail",
+            **({"source": source} if source else {}),
+        },
         back_url=back_url,
         back_label=back_label,
         meta_description=f"{activity.title} 活动详情：时间、人数、路线关联与活动总结。",

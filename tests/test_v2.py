@@ -231,6 +231,29 @@ def test_events_alias_pages_available(app_and_client):
     assert detail_resp.status_code == 200
 
 
+def test_route_detail_back_link_from_activity_detail(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        route = Route(
+            route_name="Back Link Route",
+            gpx_filename="back_link_route.gpx",
+            status="published",
+            is_deleted=False,
+        )
+        activity = Activity(title="Back Link Event")
+        activity.routes.append(route)
+        db.session.add_all([route, activity])
+        db.session.commit()
+        route_id = route.id
+        activity_id = activity.id
+
+    resp = client.get(f"/routes/{route_id}?from_activity_id={activity_id}&from_detail=web.events_detail")
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "返回活动详情" in body
+    assert f"/events/{activity_id}" in body
+
+
 def test_activity_media_upload_and_render(app_and_client):
     app, client = app_and_client
     assert login_admin(client).status_code == 200

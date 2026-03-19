@@ -64,19 +64,27 @@
           <div class="media-grid">
             {% for media in media_assets %}
               <article class="edit-item media-item">
-                {% if media.mime_type.startswith('image/') %}
-                  <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}">
-                {% elif media.mime_type.startswith('video/') %}
-                  <video controls preload="metadata">
-                    <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
-                  </video>
-                {% else %}
-                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank">查看文件</a>
-                {% endif %}
-                <p class="hint">{{ media.original_filename }}</p>
-              </article>
-            {% endfor %}
-          </div>
+              {% if media.mime_type.startswith('image/') %}
+                <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}">
+                <div class="media-actions">
+                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载图片</a>
+                </div>
+              {% elif media.mime_type.startswith('video/') %}
+                <video controls preload="metadata">
+                  <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
+                </video>
+                <div class="media-actions">
+                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载视频</a>
+                </div>
+              {% else %}
+                <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank">查看文件</a>
+                <div class="media-actions">
+                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载附件</a>
+                </div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
         {% else %}
           <p class="hint">当前活动还没有上传媒体文件。</p>
         {% endif %}
