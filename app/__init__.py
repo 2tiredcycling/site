@@ -10,6 +10,7 @@ from pathlib import Path
 from flask import Flask, Response, redirect, request, url_for
 from dotenv import load_dotenv
 
+from app.auth import client_ip
 from app.models import AccessLog, db
 from app.routes_admin import bp as admin_bp
 from app.routes_api_v1 import bp as api_v1_bp
@@ -71,7 +72,7 @@ def create_app() -> Flask:
                 app.logger.warning(
                     "security.watchlist_probe path=%s ip=%s ua=%s",
                     path,
-                    request.headers.get("X-Forwarded-For", request.remote_addr),
+                    client_ip(),
                     (request.user_agent.string or "")[:200],
                 )
             return Response("Not Found", status=404, mimetype="text/plain")
@@ -87,12 +88,11 @@ def create_app() -> Flask:
     @app.after_request
     def persist_access_log(response):
         path = request.path or ""
-        if path.startswith("/static/") or path == "/favicon.ico":
+        if path.startswith("/static/") or path in {"/favicon.ico", "/health", "/metrics"}:
             return response
 
         try:
-            forwarded = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
-            ip_address = forwarded or request.remote_addr or "unknown"
+            ip_address = client_ip()
             payload = {
                 "path": path[:255],
                 "method": (request.method or "GET")[:16],

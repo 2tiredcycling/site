@@ -6,6 +6,7 @@ import re
 
 from flask import Blueprint, Response, abort, current_app, redirect, render_template, request, send_from_directory, url_for
 
+from app.auth import client_ip
 from app.models import (
     FEEDBACK_APPROVED,
     Activity,
@@ -87,7 +88,7 @@ def site_feedback_submit():
     content = (request.form.get("content") or "").strip()
     contact = (request.form.get("contact") or "").strip()
     source = (request.form.get("source") or "").strip()
-    source_ip = ((request.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or request.remote_addr or "unknown")
+    source_ip = client_ip()
 
     allowed, retry_after = consume_fixed_window(
         "site_feedback_submit",
@@ -137,7 +138,7 @@ def site_feedback_submit():
         contact=contact,
         source_page=source or request.referrer or "",
         user_agent=(request.user_agent.string or "")[:255],
-        ip_address=(request.remote_addr or "")[:64],
+        ip_address=source_ip[:64],
         status=SITE_FEEDBACK_PENDING,
         created_at=utcnow(),
         updated_at=utcnow(),

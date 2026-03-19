@@ -117,7 +117,7 @@
     </section>
 
     <section class="card form-card">
-      <h2>最近安全事件（最多50条）</h2>
+      <h2>最近安全事件（分页）</h2>
       <form method="get" action="{{ url_for('admin.security_page') }}" class="single-form">
         <input type="hidden" name="days" value="{{ days }}">
         <input type="hidden" name="scope" value="{{ scope }}">

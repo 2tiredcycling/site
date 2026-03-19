@@ -1,6 +1,7 @@
 import json
 from functools import wraps
 import hmac
+import ipaddress
 import secrets
 
 from flask import abort, g, redirect, request, session, url_for
@@ -10,8 +11,32 @@ from app.services import write_audit_log
 
 
 def client_ip() -> str:
-    forwarded = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
-    return forwarded or request.remote_addr or "unknown"
+    # Prefer CDN-provided real client IP, then proxy chain, then direct source.
+    candidates = [
+        request.headers.get("CF-Connecting-IP"),
+        request.headers.get("X-Forwarded-For"),
+        request.headers.get("X-Real-IP"),
+        request.remote_addr,
+    ]
+    for raw in candidates:
+        value = _first_valid_ip(raw)
+        if value:
+            return value
+    return "unknown"
+
+
+def _first_valid_ip(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    for part in str(raw).split(","):
+        value = part.strip()
+        if not value:
+            continue
+        try:
+            return str(ipaddress.ip_address(value))
+        except ValueError:
+            continue
+    return None
 
 
 def _build_unauth_detail() -> str:
@@ -28,6 +53,8 @@ def _build_unauth_detail() -> str:
 
 
 def current_user() -> User | None:
+    if hasattr(g, "current_user"):
+        return g.current_user
     user_id = session.get("user_id")
     if not user_id:
         return None

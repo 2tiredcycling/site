@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, AuditLog, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, User, db
+from app.models import AccessLog, AuditLog, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -150,6 +150,42 @@ def test_access_log_persisted_for_web_request(app_and_client):
         )
         assert log is not None
         assert log.status_code == 200
+
+
+def test_access_log_prefers_cf_connecting_ip(app_and_client):
+    app, client = app_and_client
+    resp = client.get("/", headers={"CF-Connecting-IP": "198.51.100.8", "X-Forwarded-For": "203.0.113.77"})
+    assert resp.status_code == 200
+
+    with app.app_context():
+        log = (
+            AccessLog.query.filter_by(path="/", method="GET")
+            .order_by(AccessLog.id.desc())
+            .first()
+        )
+        assert log is not None
+        assert log.ip_address == "198.51.100.8"
+
+
+def test_site_feedback_records_forwarded_ip(app_and_client):
+    app, client = app_and_client
+    resp = client.post(
+        "/feedback",
+        data={
+            "category": "bug",
+            "content": "这里有一个页面展示问题，麻烦排查。",
+            "contact": "123456789",
+            "source": "/",
+        },
+        headers={"X-Forwarded-For": "203.0.113.66"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+
+    with app.app_context():
+        entry = SiteFeedback.query.order_by(SiteFeedback.id.desc()).first()
+        assert entry is not None
+        assert entry.ip_address == "203.0.113.66"
 
 
 def test_robots_txt_served(app_and_client):
@@ -335,7 +371,7 @@ def test_manage_dashboard_shows_security_entry(app_and_client):
     assert resp.status_code == 200
     text = resp.get_data(as_text=True)
     assert "安全监控" in text
-    assert "当前版本：v3.3.1" in text
+    assert "当前版本：v3.3.2" in text
 
 
 def test_manage_security_page_available_after_login(app_and_client):

@@ -22,15 +22,35 @@ from app.services import approved_rating_summary, write_audit_log
 bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
 
+def _rating_summary_map(route_ids: list[int]) -> dict[int, tuple[float, int]]:
+    if not route_ids:
+        return {}
+    rows = (
+        db.session.query(
+            RouteFeedback.route_id,
+            db.func.avg(RouteFeedback.rating).label("avg_rating"),
+            db.func.count(RouteFeedback.id).label("rating_count"),
+        )
+        .filter(RouteFeedback.route_id.in_(route_ids), RouteFeedback.status == FEEDBACK_APPROVED)
+        .group_by(RouteFeedback.route_id)
+        .all()
+    )
+    result = {route_id: (0.0, 0) for route_id in route_ids}
+    for route_id, avg_rating, rating_count in rows:
+        result[route_id] = (round(float(avg_rating or 0), 2), int(rating_count or 0))
+    return result
+
+
 @bp.get("/routes")
 def list_routes():
     query, filters = query_routes_from_request(include_unpublished=False)
     pagination = query.paginate(page=filters["page"], per_page=filters["per_page"], error_out=False)
+    rating_map = _rating_summary_map([item.id for item in pagination.items])
 
     items = []
     for item in pagination.items:
         payload = item.as_dict()
-        avg, count = approved_rating_summary(item.id)
+        avg, count = rating_map.get(item.id, (0.0, 0))
         payload["avg_rating"] = avg
         payload["rating_count"] = count
         items.append(payload)
@@ -259,7 +279,12 @@ def search():
 def route_stats():
     total = Route.query.filter_by(is_deleted=False).count()
     published = Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False).count()
-    total_downloads = sum(item.download_count or 0 for item in Route.query.filter_by(is_deleted=False).all())
+    total_downloads = int(
+        db.session.query(db.func.coalesce(db.func.sum(Route.download_count), 0))
+        .filter(Route.is_deleted.is_(False))
+        .scalar()
+        or 0
+    )
     total_activities = Activity.query.count()
     return jsonify(
         {

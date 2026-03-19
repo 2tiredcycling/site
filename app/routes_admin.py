@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
+import re
 
 from sqlalchemy import or_
 from flask import (
@@ -82,7 +83,6 @@ SH_TZ = timezone(timedelta(hours=8))
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCK_SECONDS = 15 * 60
-ANALYTICS_EXCLUDED_PATH = "/manage/analytics"
 PERMISSION_FIELDS = (
     "perm_view_analytics",
     "perm_view_security",
@@ -97,6 +97,15 @@ ROLE_LABELS = {
     ROLE_CONTENT_ADMIN: "content_admin（内容维护）",
     ROLE_VIEWER: "viewer（只读）",
 }
+
+
+def _display_app_version() -> str:
+    raw = str(current_app.config.get("APP_VERSION", "") or "").strip()
+    if not raw:
+        return "unknown"
+    if re.fullmatch(r"\d+\.\d+\.\d+", raw):
+        return f"v{raw}"
+    return raw
 
 
 def _to_local_time(value: datetime | None) -> datetime | None:
@@ -239,7 +248,7 @@ def _inject_csrf_token():
     return {
         "csrf_token": get_csrf_token,
         "to_local_time": _to_local_time,
-        "app_version": current_app.config.get("APP_VERSION", "unknown"),
+        "app_version": _display_app_version(),
     }
 
 
@@ -509,12 +518,16 @@ def analytics_page():
     )
     top_pages = [{"path": row[0], "hits": int(row[1] or 0)} for row in top_pages_rows]
 
-    logs_recent = AccessLog.query.filter(*recent_base_filter).all()
+    logs_recent = (
+        db.session.query(AccessLog.created_at, AccessLog.path, AccessLog.status_code)
+        .filter(*recent_base_filter)
+        .all()
+    )
     daily_map: dict = defaultdict(lambda: {"pv": 0, "downloads": 0})
-    for item in logs_recent:
-        local_day = _to_local_time(item.created_at).date()
+    for created_at, path, status_code in logs_recent:
+        local_day = _to_local_time(created_at).date()
         daily_map[local_day]["pv"] += 1
-        if (item.path or "").startswith("/download/") and item.status_code == 200:
+        if (path or "").startswith("/download/") and status_code == 200:
             daily_map[local_day]["downloads"] += 1
 
     daily_stats = []
@@ -660,7 +673,11 @@ def security_page():
         page=event_page, per_page=50, error_out=False
     )
     logs_recent = events_pagination.items
-    logs_for_trend = AccessLog.query.filter(*base_filter, security_expr).all()
+    logs_for_trend = (
+        db.session.query(AccessLog.created_at, AccessLog.path, AccessLog.status_code)
+        .filter(*base_filter, security_expr)
+        .all()
+    )
     watchlist_set = {item.lower() for item in WATCHLIST_PROBE_PATHS}
     event_rows = []
     for item in logs_recent:
@@ -678,12 +695,12 @@ def security_page():
         )
 
     daily_map: dict = defaultdict(lambda: {"probe": 0, "watchlist": 0, "throttled": 0})
-    for item in logs_for_trend:
-        local_day = _to_local_time(item.created_at).date()
-        normalized = (item.path or "").lower()
+    for created_at, path, status_code in logs_for_trend:
+        local_day = _to_local_time(created_at).date()
+        normalized = (path or "").lower()
         if normalized in watchlist_set or normalized.startswith("/wordpress/wp-admin/"):
             daily_map[local_day]["watchlist"] += 1
-        elif item.status_code == 429:
+        elif status_code == 429:
             daily_map[local_day]["throttled"] += 1
         else:
             daily_map[local_day]["probe"] += 1
