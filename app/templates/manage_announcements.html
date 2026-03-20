@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -32,7 +32,7 @@
       <h2>公告列表</h2>
       <table>
         <thead>
-          <tr><th>ID</th><th>标题</th><th>状态</th><th>置顶</th><th>排序</th><th>发布时间</th><th>操作</th></tr>
+          <tr><th>ID</th><th>标题</th><th>状态</th><th>置顶</th><th>排序</th><th>上线时间</th><th>下线时间</th><th>关联</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for item in announcements %}
@@ -43,12 +43,14 @@
               <td>{{ '是' if item.is_pinned else '否' }}</td>
               <td>{{ item.sort_order }}</td>
               <td>{{ to_local_time(item.published_at).strftime('%Y-%m-%d %H:%M') if item.published_at else '-' }}</td>
+              <td>{{ to_local_time(item.offline_at).strftime('%Y-%m-%d %H:%M') if item.offline_at else '-' }}</td>
+              <td>活动 {{ item.activities|length }} / 路线 {{ item.routes|length }}</td>
               <td class="row-actions">
                 <a class="btn" href="{{ url_for('admin.announcement_edit_page', announcement_id=item.id) }}">编辑</a>
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="7">暂无公告</td></tr>
+            <tr><td colspan="9">暂无公告</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ announcement.title }} | 公告详情 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '2Tired 骑行社公告详情。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <section class="card form-card">
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
+      </div>
+
+      <h1>{{ announcement.title }}</h1>
+      <p class="hint">
+        发布时间：{{ to_local_time(announcement.published_at).strftime('%Y-%m-%d %H:%M') if announcement.published_at else '-' }}
+        {% if announcement.offline_at %}
+          | 下线时间：{{ to_local_time(announcement.offline_at).strftime('%Y-%m-%d %H:%M') }}
+        {% endif %}
+      </p>
+      <div class="rich-text">{{ announcement.content | replace('\n', '<br>') | safe }}</div>
+    </section>
+
+    {% if announcement.activities %}
+      <section class="card form-card">
+        <h2>关联活动</h2>
+        <ul>
+          {% for item in announcement.activities %}
+            <li>
+              <a href="{{ url_for('web.events_detail', event_id=item.id) }}">{{ item.title }}</a>
+              （{{ to_local_time(item.activity_time).strftime('%Y-%m-%d') if item.activity_time else '-' }}）
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    {% if linked_routes %}
+      <section class="card form-card">
+        <h2>关联路线</h2>
+        <ul>
+          {% for item in linked_routes %}
+            <li><a href="{{ url_for('web.route_detail', route_id=item.id) }}">{{ item.route_name }}</a></li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

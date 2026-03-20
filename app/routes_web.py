@@ -71,6 +71,14 @@ def _published_site_page(slug: str) -> SitePage | None:
     return SitePage.query.filter_by(slug=slug, status=CONTENT_STATUS_PUBLISHED).first()
 
 
+def _announcement_visibility_filters(now_value):
+    return (
+        Announcement.status == CONTENT_STATUS_PUBLISHED,
+        db.or_(Announcement.published_at.is_(None), Announcement.published_at <= now_value),
+        db.or_(Announcement.offline_at.is_(None), Announcement.offline_at > now_value),
+    )
+
+
 def _activity_pagination(page: int, per_page: int):
     return Activity.query.order_by(Activity.activity_time.desc()).paginate(page=page, per_page=per_page, error_out=False)
 
@@ -113,6 +121,7 @@ def _format_lastmod(value) -> str:
 
 @bp.get("/")
 def index() -> str:
+    now = utcnow()
     latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(5).all()
     latest_routes = (
         Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False)
@@ -122,9 +131,10 @@ def index() -> str:
     )
     route_total = Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False).count()
     announcements = (
-        Announcement.query.filter_by(status=CONTENT_STATUS_PUBLISHED)
+        Announcement.query.filter(*_announcement_visibility_filters(now))
         .order_by(
             Announcement.is_pinned.desc(),
+            Announcement.sort_order.desc(),
             db.func.coalesce(Announcement.published_at, Announcement.updated_at).desc(),
             Announcement.updated_at.desc(),
         )
@@ -138,6 +148,24 @@ def index() -> str:
         route_total=route_total,
         announcements=announcements,
         meta_description="2Tired 骑行社官网：活动信息、路线共享、社团介绍与反馈入口。",
+    )
+
+
+@bp.get("/announcements/<int:announcement_id>")
+def announcement_detail(announcement_id: int) -> str:
+    now = utcnow()
+    announcement = Announcement.query.filter(
+        Announcement.id == announcement_id,
+        *_announcement_visibility_filters(now),
+    ).first()
+    if not announcement:
+        abort(404, description="Announcement not found")
+    visible_routes = [item for item in announcement.routes if item.status == STATUS_PUBLISHED and not item.is_deleted]
+    return render_template(
+        "announcement_detail.html",
+        announcement=announcement,
+        linked_routes=visible_routes,
+        meta_description=(announcement.content[:120] if announcement.content else f"{announcement.title} | 2Tired 骑行社公告"),
     )
 
 
@@ -437,6 +465,9 @@ def sitemap_xml() -> Response:
         .all()
     )
     activities = Activity.query.order_by(Activity.updated_at.desc()).all()
+    announcements = Announcement.query.filter(
+        *_announcement_visibility_filters(utcnow())
+    ).all()
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -459,6 +490,16 @@ def sitemap_xml() -> Response:
         lines.append("  <url>")
         lines.append(f"    <loc>{escape(url_for('web.events_detail', event_id=activity.id, _external=True))}</loc>")
         lastmod = _format_lastmod(activity.updated_at or activity.created_at)
+        if lastmod:
+            lines.append(f"    <lastmod>{lastmod}</lastmod>")
+        lines.append("  </url>")
+
+    for announcement in announcements:
+        lines.append("  <url>")
+        lines.append(
+            f"    <loc>{escape(url_for('web.announcement_detail', announcement_id=announcement.id, _external=True))}</loc>"
+        )
+        lastmod = _format_lastmod(announcement.updated_at or announcement.created_at)
         if lastmod:
             lines.append(f"    <lastmod>{lastmod}</lastmod>")
         lines.append("  </url>")

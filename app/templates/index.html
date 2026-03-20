@@ -62,14 +62,16 @@
       {% if announcements %}
         <div class="notice-list">
           {% for item in announcements %}
-            <article class="edit-item">
-              <div class="row-actions">
-                <strong>{{ item.title }}</strong>
-                {% if item.is_pinned %}<span class="hint">置顶</span>{% endif %}
-              </div>
-              <p>{{ item.content[:140] }}{% if item.content|length > 140 %}...{% endif %}</p>
-              <p class="hint">发布时间：{{ to_local_time(item.published_at).strftime('%Y-%m-%d %H:%M') if item.published_at else '-' }}</p>
-            </article>
+            <a class="quick-link" href="{{ url_for('web.announcement_detail', announcement_id=item.id) }}">
+              <article class="edit-item compact-item">
+                <div class="row-actions">
+                  <strong>{{ item.title }}</strong>
+                  {% if item.is_pinned %}<span class="hint">置顶</span>{% endif %}
+                </div>
+                <p>{{ item.content[:140] }}{% if item.content|length > 140 %}...{% endif %}</p>
+                <p class="hint">发布时间：{{ to_local_time(item.published_at).strftime('%Y-%m-%d %H:%M') if item.published_at else '-' }}</p>
+              </article>
+            </a>
           {% endfor %}
         </div>
       {% else %}

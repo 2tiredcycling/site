@@ -385,6 +385,7 @@ def dashboard():
     latest_announcements = (
         Announcement.query.order_by(
             Announcement.is_pinned.desc(),
+            Announcement.sort_order.desc(),
             db.func.coalesce(Announcement.published_at, Announcement.updated_at).desc(),
         )
         .limit(3)
@@ -1095,6 +1096,7 @@ def announcements_page():
     page = max(1, request.args.get("page", default=1, type=int))
     pagination = Announcement.query.order_by(
         Announcement.is_pinned.desc(),
+        Announcement.sort_order.desc(),
         db.func.coalesce(Announcement.published_at, Announcement.updated_at).desc(),
     ).paginate(page=page, per_page=20, error_out=False)
     return render_template(
@@ -1108,9 +1110,13 @@ def announcements_page():
 @bp.get("/announcements/new")
 @login_required
 def announcement_new_page():
+    routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
+    activities = Activity.query.order_by(Activity.activity_time.desc()).all()
     return render_template(
         "manage_announcement_form.html",
         announcement=None,
+        routes=routes,
+        activities=activities,
         can_edit=can_edit(g.current_user),
     )
 
@@ -1125,6 +1131,8 @@ def announcement_edit_page(announcement_id: int):
     return render_template(
         "manage_announcement_form.html",
         announcement=announcement,
+        routes=Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all(),
+        activities=Activity.query.order_by(Activity.activity_time.desc()).all(),
         can_edit=can_edit(g.current_user),
     )
 
@@ -1249,6 +1257,11 @@ def _announcement_from_form(announcement: Announcement | None = None) -> dict:
         sort_order = 0
     is_pinned = (request.form.get("is_pinned") or "0").strip() == "1"
     published_at = _parse_activity_time(request.form.get("published_at"))
+    offline_at = _parse_activity_time(request.form.get("offline_at"))
+    if published_at and offline_at and offline_at <= published_at:
+        offline_at = published_at + timedelta(minutes=1)
+    activity_ids = [item for item in request.form.getlist("activity_ids") if str(item).strip()]
+    route_ids = [item for item in request.form.getlist("route_ids") if str(item).strip()]
     return {
         "title": title,
         "content": content,
@@ -1256,6 +1269,9 @@ def _announcement_from_form(announcement: Announcement | None = None) -> dict:
         "sort_order": sort_order,
         "is_pinned": is_pinned,
         "published_at": published_at,
+        "offline_at": offline_at,
+        "activity_ids": activity_ids,
+        "route_ids": route_ids,
     }
 
 
@@ -1671,10 +1687,23 @@ def create_announcement():
         created_by=g.current_user.id,
         updated_by=g.current_user.id,
     )
+    selected_activities = (
+        Activity.query.filter(Activity.id.in_(payload["activity_ids"])).all()
+        if payload["activity_ids"]
+        else []
+    )
+    selected_routes = (
+        Route.query.filter(Route.id.in_(payload["route_ids"]), Route.is_deleted.is_(False)).all()
+        if payload["route_ids"]
+        else []
+    )
+    announcement.activities = selected_activities
+    announcement.routes = selected_routes
     if payload["status"] == CONTENT_STATUS_PUBLISHED:
         announcement.published_at = payload["published_at"] or utcnow()
     else:
         announcement.published_at = payload["published_at"]
+    announcement.offline_at = payload["offline_at"]
 
     db.session.add(announcement)
     db.session.commit()
@@ -1702,10 +1731,21 @@ def update_announcement(announcement_id: int):
     announcement.is_pinned = payload["is_pinned"]
     announcement.sort_order = payload["sort_order"]
     announcement.updated_by = g.current_user.id
+    announcement.activities = (
+        Activity.query.filter(Activity.id.in_(payload["activity_ids"])).all()
+        if payload["activity_ids"]
+        else []
+    )
+    announcement.routes = (
+        Route.query.filter(Route.id.in_(payload["route_ids"]), Route.is_deleted.is_(False)).all()
+        if payload["route_ids"]
+        else []
+    )
     if payload["status"] == CONTENT_STATUS_PUBLISHED:
         announcement.published_at = payload["published_at"] or announcement.published_at or utcnow()
     else:
         announcement.published_at = payload["published_at"]
+    announcement.offline_at = payload["offline_at"]
 
     db.session.commit()
     write_audit_log(g.current_user.id, "announcement.update", "announcement", str(announcement.id), announcement.title)

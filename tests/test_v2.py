@@ -235,6 +235,13 @@ def test_manage_announcements_crud(app_and_client):
     app, client = app_and_client
     assert login_admin(client).status_code == 200
     csrf_token = get_manage_csrf(client)
+    with app.app_context():
+        linked_route = Route(route_name="Announcement Route", gpx_filename="announcement_route.gpx", status="published")
+        linked_activity = Activity(title="Announcement Activity")
+        db.session.add_all([linked_route, linked_activity])
+        db.session.commit()
+        linked_route_id = linked_route.id
+        linked_activity_id = linked_activity.id
 
     create_resp = client.post(
         "/manage/announcements/create",
@@ -246,6 +253,9 @@ def test_manage_announcements_crud(app_and_client):
             "is_pinned": "1",
             "sort_order": "8",
             "published_at": "2026-03-20T12:00",
+            "offline_at": "2026-03-25T12:00",
+            "activity_ids": [str(linked_activity_id)],
+            "route_ids": [str(linked_route_id)],
         },
         follow_redirects=True,
     )
@@ -256,6 +266,8 @@ def test_manage_announcements_crud(app_and_client):
         assert item is not None
         assert item.is_pinned is True
         assert item.status == "published"
+        assert len(item.activities) == 1
+        assert len(item.routes) == 1
         announcement_id = item.id
 
     edit_page = client.get(f"/manage/announcements/{announcement_id}/edit")
@@ -271,6 +283,9 @@ def test_manage_announcements_crud(app_and_client):
             "is_pinned": "0",
             "sort_order": "2",
             "published_at": "",
+            "offline_at": "",
+            "activity_ids": [],
+            "route_ids": [],
         },
         follow_redirects=True,
     )
@@ -282,6 +297,8 @@ def test_manage_announcements_crud(app_and_client):
         assert item.title == "Announcement B"
         assert item.status == "offline"
         assert item.is_pinned is False
+        assert len(item.activities) == 0
+        assert len(item.routes) == 0
 
     list_resp = client.get("/manage/announcements")
     assert list_resp.status_code == 200
@@ -295,6 +312,62 @@ def test_manage_announcements_crud(app_and_client):
     assert delete_resp.status_code == 200
     with app.app_context():
         assert db.session.get(Announcement, announcement_id) is None
+
+
+def test_announcement_detail_visibility_and_associations(app_and_client):
+    app, client = app_and_client
+    now = datetime.now(timezone.utc)
+    with app.app_context():
+        route = Route(route_name="Ann Detail Route", gpx_filename="ann_detail_route.gpx", status="published")
+        activity = Activity(title="Ann Detail Activity")
+        announcement = Announcement(
+            title="Ann Detail",
+            content="公告详情正文",
+            status="published",
+            published_at=now - timedelta(hours=1),
+            offline_at=now + timedelta(days=1),
+        )
+        announcement.routes.append(route)
+        announcement.activities.append(activity)
+        db.session.add_all([route, activity, announcement])
+        db.session.commit()
+        announcement_id = announcement.id
+
+    detail = client.get(f"/announcements/{announcement_id}")
+    body = detail.get_data(as_text=True)
+    assert detail.status_code == 200
+    assert "Ann Detail" in body
+    assert "Ann Detail Route" in body
+    assert "Ann Detail Activity" in body
+
+
+def test_announcement_schedule_blocks_future_or_expired(app_and_client):
+    app, client = app_and_client
+    now = datetime.now(timezone.utc)
+    with app.app_context():
+        future_item = Announcement(
+            title="Future Ann",
+            content="not yet",
+            status="published",
+            published_at=now + timedelta(days=1),
+        )
+        expired_item = Announcement(
+            title="Expired Ann",
+            content="expired",
+            status="published",
+            published_at=now - timedelta(days=2),
+            offline_at=now - timedelta(days=1),
+        )
+        db.session.add_all([future_item, expired_item])
+        db.session.commit()
+        future_id = future_item.id
+        expired_id = expired_item.id
+
+    assert client.get(f"/announcements/{future_id}").status_code == 404
+    assert client.get(f"/announcements/{expired_id}").status_code == 404
+    index_body = client.get("/").get_data(as_text=True)
+    assert "Future Ann" not in index_body
+    assert "Expired Ann" not in index_body
 
 
 def test_route_detail_back_link_from_activity_detail(app_and_client):

@@ -300,6 +300,7 @@ class Announcement(db.Model):
     is_pinned = db.Column(db.Boolean, nullable=False, default=False)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
     published_at = db.Column(db.DateTime, nullable=True)
+    offline_at = db.Column(db.DateTime, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     updated_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
@@ -307,6 +308,28 @@ class Announcement(db.Model):
 
     creator = db.relationship("User", foreign_keys=[created_by], lazy="joined")
     updater = db.relationship("User", foreign_keys=[updated_by], lazy="joined")
+    activities = db.relationship("Activity", secondary="announcement_activities", backref="announcements", lazy="selectin")
+    routes = db.relationship("Route", secondary="announcement_routes", backref="announcements", lazy="selectin")
+
+
+class AnnouncementActivity(db.Model):
+    __tablename__ = "announcement_activities"
+    __table_args__ = (db.UniqueConstraint("announcement_id", "activity_id", name="uq_announcement_activity"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    announcement_id = db.Column(db.Integer, db.ForeignKey("announcements.id"), nullable=False)
+    activity_id = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
+class AnnouncementRoute(db.Model):
+    __tablename__ = "announcement_routes"
+    __table_args__ = (db.UniqueConstraint("announcement_id", "route_id", name="uq_announcement_route"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    announcement_id = db.Column(db.Integer, db.ForeignKey("announcements.id"), nullable=False)
+    route_id = db.Column(db.Integer, db.ForeignKey("routes.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
 class HomepageSection(db.Model):

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -43,13 +43,32 @@
           <label>排序（数字越大越靠前）
             <input type="number" name="sort_order" value="{{ announcement.sort_order if announcement else 0 }}" {% if not can_edit %}disabled{% endif %}>
           </label>
-          <label>发布时间
+          <label>自动上线时间
             <input type="datetime-local" name="published_at" value="{{ to_local_time(announcement.published_at).strftime('%Y-%m-%dT%H:%M') if announcement and announcement.published_at else '' }}" {% if not can_edit %}disabled{% endif %}>
+          </label>
+          <label>自动下线时间
+            <input type="datetime-local" name="offline_at" value="{{ to_local_time(announcement.offline_at).strftime('%Y-%m-%dT%H:%M') if announcement and announcement.offline_at else '' }}" {% if not can_edit %}disabled{% endif %}>
           </label>
           <label>置顶
             <select name="is_pinned" {% if not can_edit %}disabled{% endif %}>
               <option value="0" {% if not announcement or not announcement.is_pinned %}selected{% endif %}>否</option>
               <option value="1" {% if announcement and announcement.is_pinned %}selected{% endif %}>是</option>
+            </select>
+          </label>
+          <label>关联活动
+            {% set selected_activity_ids = announcement.activities | map(attribute='id') | list if announcement else [] %}
+            <select name="activity_ids" multiple size="8" {% if not can_edit %}disabled{% endif %}>
+              {% for item in activities %}
+                <option value="{{ item.id }}" {% if item.id in selected_activity_ids %}selected{% endif %}>{{ item.title }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>关联路线
+            {% set selected_route_ids = announcement.routes | map(attribute='id') | list if announcement else [] %}
+            <select name="route_ids" multiple size="8" {% if not can_edit %}disabled{% endif %}>
+              {% for item in routes %}
+                <option value="{{ item.id }}" {% if item.id in selected_route_ids %}selected{% endif %}>{{ item.route_name }}</option>
+              {% endfor %}
             </select>
           </label>
         </div>
