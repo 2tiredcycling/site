@@ -1081,6 +1081,7 @@ def activity_new_page():
         activity=None,
         routes=routes,
         media_assets=[],
+        route_option_items=[],
         route_option_map={},
         legacy_selected_ids=[],
         can_edit=True,
@@ -1122,6 +1123,7 @@ def activity_edit_page(activity_id: int):
         activity=activity,
         routes=routes,
         media_assets=media_assets,
+        route_option_items=route_option_items,
         route_option_map=route_option_map,
         legacy_selected_ids=[route.id for route in activity.routes],
         can_edit=can_edit(g.current_user),
@@ -1340,25 +1342,38 @@ def _activity_route_options_from_form() -> list[dict]:
 
 def _sync_activity_route_options(activity: Activity, option_items: list[dict]) -> None:
     existing_options = ActivityRouteOption.query.filter_by(activity_id=activity.id).all()
-    existing_ids = [item.id for item in existing_options]
-    if existing_ids:
-        MediaAsset.query.filter(MediaAsset.activity_route_option_id.in_(existing_ids)).update(
+    existing_by_level = {item.level_key: item for item in existing_options}
+    next_levels = {item["level_key"] for item in option_items}
+
+    for item in option_items:
+        option = existing_by_level.get(item["level_key"])
+        if option is None:
+            db.session.add(
+                ActivityRouteOption(
+                    activity_id=activity.id,
+                    route_id=item["route_id"],
+                    level_key=item["level_key"],
+                    level_label=item["level_label"],
+                    activity_time=item.get("activity_time"),
+                    participant_count=int(item.get("participant_count") or 0),
+                    sort_order=item["sort_order"],
+                )
+            )
+            continue
+        option.route_id = item["route_id"]
+        option.level_label = item["level_label"]
+        option.activity_time = item.get("activity_time")
+        option.participant_count = int(item.get("participant_count") or 0)
+        option.sort_order = item["sort_order"]
+
+    for option in existing_options:
+        if option.level_key in next_levels:
+            continue
+        MediaAsset.query.filter_by(activity_route_option_id=option.id).update(
             {MediaAsset.activity_route_option_id: None},
             synchronize_session=False,
         )
-    ActivityRouteOption.query.filter_by(activity_id=activity.id).delete()
-    for item in option_items:
-        db.session.add(
-            ActivityRouteOption(
-                activity_id=activity.id,
-                route_id=item["route_id"],
-                level_key=item["level_key"],
-                level_label=item["level_label"],
-                activity_time=item.get("activity_time"),
-                participant_count=int(item.get("participant_count") or 0),
-                sort_order=item["sort_order"],
-            )
-        )
+        db.session.delete(option)
 
 
 @bp.post("/routes/create")
@@ -1786,6 +1801,73 @@ def delete_activity(activity_id: int):
     write_audit_log(g.current_user.id, "activity.delete", "activity", str(activity_id), title)
     flash("活动删除成功", "success")
     return redirect(url_for("admin.activities_page"))
+
+
+@bp.post("/activities/<int:activity_id>/media/<int:asset_id>/delete")
+@login_required
+def delete_activity_media(activity_id: int, asset_id: int):
+    activity = Activity.query.filter_by(id=activity_id).first()
+    if not activity:
+        flash("活动不存在", "error")
+        return redirect(url_for("admin.activities_page"))
+
+    asset = MediaAsset.query.filter_by(id=asset_id, activity_id=activity_id).first()
+    if not asset:
+        flash("媒体文件不存在", "error")
+        return redirect(url_for("admin.activity_edit_page", activity_id=activity_id))
+
+    target_path = Path(current_app.config["MEDIA_UPLOAD_FOLDER"]) / (asset.storage_path or "")
+    db.session.delete(asset)
+    db.session.commit()
+    _cleanup_paths([target_path])
+    write_audit_log(
+        g.current_user.id,
+        "activity.media.delete",
+        "media_asset",
+        str(asset_id),
+        f"activity={activity_id}",
+    )
+    flash("媒体文件已删除", "success")
+    return redirect(url_for("admin.activity_edit_page", activity_id=activity_id))
+
+
+@bp.post("/activities/<int:activity_id>/media/<int:asset_id>/assign")
+@login_required
+def assign_activity_media(activity_id: int, asset_id: int):
+    activity = Activity.query.filter_by(id=activity_id).first()
+    if not activity:
+        flash("活动不存在", "error")
+        return redirect(url_for("admin.activities_page"))
+
+    asset = MediaAsset.query.filter_by(id=asset_id, activity_id=activity_id).first()
+    if not asset:
+        flash("媒体文件不存在", "error")
+        return redirect(url_for("admin.activity_edit_page", activity_id=activity_id))
+
+    option_raw = (request.form.get("activity_route_option_id") or "").strip()
+    option_id = None
+    if option_raw:
+        try:
+            option_id = int(option_raw)
+        except ValueError:
+            flash("路线分配参数无效", "error")
+            return redirect(url_for("admin.activity_edit_page", activity_id=activity_id))
+        option = ActivityRouteOption.query.filter_by(id=option_id, activity_id=activity_id).first()
+        if not option:
+            flash("目标路线不存在或不属于当前活动", "error")
+            return redirect(url_for("admin.activity_edit_page", activity_id=activity_id))
+
+    asset.activity_route_option_id = option_id
+    db.session.commit()
+    write_audit_log(
+        g.current_user.id,
+        "activity.media.assign",
+        "media_asset",
+        str(asset_id),
+        f"activity={activity_id},route_option={option_id or 'none'}",
+    )
+    flash("媒体路线归属已更新", "success")
+    return redirect(url_for("admin.activity_edit_page", activity_id=activity_id))
 
 
 @bp.post("/announcements/create")

@@ -122,6 +122,14 @@
           <div class="media-grid">
             {% for media in media_assets %}
               <article class="edit-item media-item">
+              <p class="hint">
+                当前归属：
+                {% if media.activity_route_option %}
+                  {{ media.activity_route_option.level_label }}路线 / {{ media.activity_route_option.route.route_name if media.activity_route_option.route else '未命名路线' }}
+                {% else %}
+                  未分配路线
+                {% endif %}
+              </p>
               {% if media.mime_type.startswith('image/') %}
                 <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}">
                 <div class="media-actions">
@@ -138,6 +146,30 @@
                 <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank">查看文件</a>
                 <div class="media-actions">
                   <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载附件</a>
+                </div>
+              {% endif %}
+              {% if can_edit and activity %}
+                <div class="media-actions">
+                  <form method="post" action="{{ url_for('admin.assign_activity_media', activity_id=activity.id, asset_id=media.id) }}" class="single-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label>分配到路线
+                      <select name="activity_route_option_id">
+                        <option value="" {% if not media.activity_route_option_id %}selected{% endif %}>未分配路线</option>
+                        {% for option in route_option_items %}
+                          <option value="{{ option.id }}" {% if media.activity_route_option_id == option.id %}selected{% endif %}>
+                            {{ option.level_label }}路线 / {{ option.route.route_name if option.route else ('路线#' ~ option.route_id) }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </label>
+                    <button class="btn" type="submit">保存分配</button>
+                  </form>
+                </div>
+                <div class="media-actions">
+                  <form method="post" action="{{ url_for('admin.delete_activity_media', activity_id=activity.id, asset_id=media.id) }}" onsubmit="return confirm('确认删除这个媒体文件吗？');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-danger" type="submit">删除媒体</button>
+                  </form>
                 </div>
               {% endif %}
             </article>

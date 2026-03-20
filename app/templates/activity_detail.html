@@ -20,13 +20,69 @@
 
       <h1>{{ activity.title }}</h1>
 
-      <h3>活动影像</h3>
+      <h3>关联路线</h3>
+      {% if route_cards %}
+        <div class="activity-route-grid">
+          {% for item in route_cards %}
+            {% set route_detail_url = url_for('web.route_detail', route_id=item.route.id, **(route_back_params or {})) %}
+            <article class="edit-item activity-route-card" data-route-href="{{ route_detail_url }}" tabindex="0" role="link" aria-label="查看{{ item.label }}路线详情">
+              <div class="row-actions">
+                <strong>{{ item.label }}路线</strong>
+              </div>
+              <h4>
+                <span class="route-name">{{ item.route.route_name }}</span>
+                <span class="hint route-stars">{{ item.difficulty_stars }}</span>
+              </h4>
+              <div class="filter-grid">
+                <div><strong>活动时间</strong><div>{{ to_local_time(item.activity_time).strftime('%Y-%m-%d %H:%M') if item.activity_time else '待定' }}</div></div>
+                <div><strong>参与人数</strong><div>{{ item.participant_count if item.participant_count is not none else 0 }}</div></div>
+                <div><strong>里程</strong><div>{{ '%.2f'|format(item.distance_km or 0) }} km</div></div>
+                <div><strong>累计爬升</strong><div>{{ ('%.1f'|format(item.ascent_m) ~ ' m') if item.ascent_m is not none else '暂无' }}</div></div>
+              </div>
+              {% if item.media_assets %}
+                {% set route_gallery_id = 'route-' ~ loop.index0 %}
+                <div class="media-grid">
+                  {% for media in item.media_assets %}
+                    <article class="edit-item media-item">
+                      {% if media.mime_type.startswith('image/') %}
+                        <button
+                          type="button"
+                          class="media-preview-trigger"
+                          data-media-src="{{ url_for('web.media_asset_file', asset_id=media.id) }}"
+                          data-media-alt="{{ item.label }}路线活动图片"
+                          data-media-gallery="{{ route_gallery_id }}"
+                        >
+                          <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ item.label }}路线活动图片">
+                        </button>
+                      {% elif media.mime_type.startswith('video/') %}
+                        <video controls preload="metadata">
+                          <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
+                        </video>
+                      {% endif %}
+                    </article>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="hint">暂无关联路线</p>
+      {% endif %}
+
       {% if media_assets %}
+        <h3>{{ '其他活动影像（未分配路线）' if route_cards else '活动影像' }}</h3>
         <div class="media-grid">
           {% for media in media_assets %}
             <article class="edit-item media-item">
               {% if media.mime_type.startswith('image/') %}
-                <button type="button" class="media-preview-trigger" data-media-src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" data-media-alt="{{ activity.title }} 活动图片">
+                <button
+                  type="button"
+                  class="media-preview-trigger"
+                  data-media-src="{{ url_for('web.media_asset_file', asset_id=media.id) }}"
+                  data-media-alt="{{ activity.title }} 活动图片"
+                  data-media-gallery="unassigned"
+                >
                   <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ activity.title }} 活动图片">
                 </button>
                 <div class="media-actions">
@@ -48,54 +104,9 @@
             </article>
           {% endfor %}
         </div>
-      {% else %}
+      {% elif not route_cards %}
+        <h3>活动影像</h3>
         <p class="hint">暂无活动图片或视频。</p>
-      {% endif %}
-
-      <h3>关联路线</h3>
-      {% if route_cards %}
-        <div class="activity-route-grid">
-          {% for item in route_cards %}
-            <article class="edit-item activity-route-card">
-              <div class="row-actions">
-                <strong>{{ item.label }}路线</strong>
-                <span class="hint">{{ item.difficulty_stars }}</span>
-              </div>
-              <h4>{{ item.route.route_name }}</h4>
-              <div class="filter-grid">
-                <div><strong>活动时间</strong><div>{{ to_local_time(item.activity_time).strftime('%Y-%m-%d %H:%M') if item.activity_time else '待定' }}</div></div>
-                <div><strong>参与人数</strong><div>{{ item.participant_count if item.participant_count is not none else 0 }}</div></div>
-                <div><strong>里程</strong><div>{{ '%.2f'|format(item.distance_km or 0) }} km</div></div>
-                <div><strong>累计爬升</strong><div>{{ ('%.1f'|format(item.ascent_m) ~ ' m') if item.ascent_m is not none else '暂无' }}</div></div>
-                <div><strong>难度</strong><div>{{ item.difficulty_stars }}</div></div>
-              </div>
-              <div class="row-actions">
-                <a class="quick-pill" href="{{ url_for('web.route_detail', route_id=item.route.id, **(route_back_params or {})) }}">
-                  <span aria-hidden="true">🧭</span><span>查看 {{ item.label }} 路线详情</span>
-                </a>
-              </div>
-              {% if item.media_assets %}
-                <div class="media-grid">
-                  {% for media in item.media_assets %}
-                    <article class="edit-item media-item">
-                      {% if media.mime_type.startswith('image/') %}
-                        <button type="button" class="media-preview-trigger" data-media-src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" data-media-alt="{{ item.label }}路线活动图片">
-                          <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ item.label }}路线活动图片">
-                        </button>
-                      {% elif media.mime_type.startswith('video/') %}
-                        <video controls preload="metadata">
-                          <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
-                        </video>
-                      {% endif %}
-                    </article>
-                  {% endfor %}
-                </div>
-              {% endif %}
-            </article>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p class="hint">暂无关联路线</p>
       {% endif %}
     </section>
   </main>
@@ -103,12 +114,15 @@
   <div id="mediaModal" class="media-modal" aria-hidden="true">
     <div class="media-modal-shell">
       <button type="button" class="media-modal-close" id="mediaModalClose" aria-label="关闭预览">关闭</button>
+      <button type="button" class="media-modal-nav media-modal-prev" id="mediaModalPrev" aria-label="上一张">‹</button>
+      <button type="button" class="media-modal-nav media-modal-next" id="mediaModalNext" aria-label="下一张">›</button>
       <div id="mediaModalStage" class="media-modal-stage">
         <img id="mediaModalImage" src="" alt="活动图片预览">
       </div>
       <div class="media-zoom-badge" id="mediaZoomBadge">100%</div>
       <div class="media-modal-toolbar">
         <span class="hint">滚轮缩放，双击预览区恢复</span>
+        <span class="hint" id="mediaModalNavHint"></span>
         <a class="btn" id="mediaModalDownload" href="#" download>下载原图</a>
       </div>
     </div>
@@ -121,12 +135,18 @@
       const modalStage = document.getElementById('mediaModalStage');
       const modalDownload = document.getElementById('mediaModalDownload');
       const closeButton = document.getElementById('mediaModalClose');
+      const prevButton = document.getElementById('mediaModalPrev');
+      const nextButton = document.getElementById('mediaModalNext');
       const zoomBadge = document.getElementById('mediaZoomBadge');
-      const triggers = document.querySelectorAll('.media-preview-trigger');
+      const navHint = document.getElementById('mediaModalNavHint');
+      const triggers = Array.from(document.querySelectorAll('.media-preview-trigger'));
       let zoomLevel = 1;
       let panX = 0;
       let panY = 0;
       let dragging = false;
+      let activeIndex = -1;
+      let activeGallery = [];
+      let navHintTimer = null;
       let dragStartX = 0;
       let dragStartY = 0;
       let dragStartPanX = 0;
@@ -153,33 +173,103 @@
         modal.setAttribute('aria-hidden', 'true');
         modalImage.src = '';
         modalDownload.href = '#';
+        activeIndex = -1;
+        activeGallery = [];
+        navHint.textContent = '';
         resetView();
       }
 
-      function openModal(src, altText) {
+      function showNavHint(text) {
+        if (!navHint) {
+          return;
+        }
+        navHint.textContent = text;
+        if (navHintTimer) {
+          clearTimeout(navHintTimer);
+        }
+        navHintTimer = setTimeout(function () {
+          navHint.textContent = '';
+        }, 1200);
+      }
+
+      function updateNavState() {
+        const multiple = activeGallery.length > 1;
+        if (!multiple) {
+          prevButton.style.display = 'none';
+          nextButton.style.display = 'none';
+          return;
+        }
+        prevButton.style.display = '';
+        nextButton.style.display = '';
+        prevButton.disabled = activeIndex <= 0;
+        nextButton.disabled = activeIndex >= activeGallery.length - 1;
+      }
+
+      function openModalAt(index) {
+        if (!activeGallery.length) {
+          return;
+        }
+        if (index < 0) {
+          showNavHint('已是第一张');
+          updateNavState();
+          return;
+        }
+        if (index >= activeGallery.length) {
+          showNavHint('已是最后一张');
+          updateNavState();
+          return;
+        }
+        const trigger = activeGallery[index];
+        const src = trigger.dataset.mediaSrc;
+        const altText = trigger.dataset.mediaAlt;
+        activeIndex = index;
         modalImage.src = src;
         modalImage.alt = altText || '活动图片预览';
         modalDownload.href = src;
         modal.classList.add('open');
         modal.setAttribute('aria-hidden', 'false');
+        updateNavState();
         resetView();
       }
 
-      triggers.forEach(function (trigger) {
+      function stepModal(step) {
+        if (!modal.classList.contains('open') || !activeGallery.length) {
+          return;
+        }
+        openModalAt(activeIndex + step);
+      }
+
+      triggers.forEach(function (trigger, index) {
         trigger.addEventListener('click', function () {
-          openModal(trigger.dataset.mediaSrc, trigger.dataset.mediaAlt);
+          const group = trigger.dataset.mediaGallery || '__default__';
+          activeGallery = triggers.filter(function (item) {
+            return (item.dataset.mediaGallery || '__default__') === group;
+          });
+          activeIndex = activeGallery.indexOf(trigger);
+          openModalAt(activeIndex);
         });
       });
 
       closeButton.addEventListener('click', closeModal);
+      prevButton.addEventListener('click', function () { stepModal(-1); });
+      nextButton.addEventListener('click', function () { stepModal(1); });
       modal.addEventListener('click', function (event) {
         if (event.target === modal) {
           closeModal();
         }
       });
       document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape' && modal.classList.contains('open')) {
+        if (!modal.classList.contains('open')) {
+          return;
+        }
+        if (event.key === 'Escape') {
           closeModal();
+        } else if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          stepModal(-1);
+        } else if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          stepModal(1);
         }
       });
       modalStage.addEventListener('wheel', function (event) {
@@ -229,6 +319,26 @@
       document.addEventListener('mouseup', function () {
         dragging = false;
         modalStage.classList.remove('dragging');
+      });
+
+      const routeCards = document.querySelectorAll('.activity-route-card[data-route-href]');
+      routeCards.forEach(function (card) {
+        const href = card.getAttribute('data-route-href');
+        if (!href) {
+          return;
+        }
+        card.addEventListener('click', function (event) {
+          if (event.target.closest('a, button, video, input, select, textarea, form')) {
+            return;
+          }
+          window.location.href = href;
+        });
+        card.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            window.location.href = href;
+          }
+        });
       });
     })();
   </script>
