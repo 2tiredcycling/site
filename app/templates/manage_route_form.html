@@ -11,7 +11,6 @@
   <main class="container">
     <header class="header">
       <h1>{{ '编辑路线 #' ~ route.id if route else '新增路线' }}</h1>
-      <p class="hint">当前版本：{{ app_version }}</p>
       <div class="row-actions">
         <a class="btn btn-muted" href="{{ url_for('admin.routes_page') }}">返回路线列表</a>
         {% if route %}

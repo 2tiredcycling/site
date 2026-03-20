@@ -682,7 +682,7 @@ def test_manage_dashboard_shows_security_entry(app_and_client):
     assert resp.status_code == 200
     text = resp.get_data(as_text=True)
     assert "安全监控" in text
-    assert "当前版本：v3.3.2" in text
+    assert "当前版本：" not in text
 
 
 def test_manage_security_page_available_after_login(app_and_client):
