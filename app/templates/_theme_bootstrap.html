@@ -1,0 +1,10 @@
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('site_theme');
+      if (t) {
+        document.documentElement.setAttribute('data-theme', t);
+      }
+    } catch (e) {}
+  })();
+</script>

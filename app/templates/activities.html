@@ -6,15 +6,14 @@
   <title>{{ list_title or '社团活动' }}</title>
   <meta name="description" content="{{ meta_description or '2Tired 骑行社活动中心与历史活动档案。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
     <section class="card form-card site-hero">
-      <div class="row-actions">
-        <a class="btn btn-muted" href="{{ url_for('web.index') }}"><span aria-hidden="true">🏠</span><span>返回首页</span></a>
-        <a class="btn" href="{{ url_for('web.routes_center') }}"><span aria-hidden="true">🗺️</span><span>路线共享中心</span></a>
-      </div>
       <h1>{{ list_title or '社团活动' }}</h1>
       <p class="hint">查看活动档案、路线关联与活动影像记录。</p>
     </section>

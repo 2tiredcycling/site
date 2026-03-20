@@ -6,48 +6,12 @@
   <title>2Tired 骑行社 | 社团官网与路线共享中心</title>
   <meta name="description" content="{{ meta_description or '2Tired 骑行社官网，提供社团介绍、活动信息、路线共享与反馈入口。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
-    <svg class="home-icon-sprite" aria-hidden="true" focusable="false">
-      <symbol id="i-home" viewBox="0 0 24 24">
-        <path d="M3 11.5L12 4l9 7.5" />
-        <path d="M6.5 10.5V20h11V10.5" />
-        <path d="M10 20v-5.5h4V20" />
-      </symbol>
-      <symbol id="i-book" viewBox="0 0 24 24">
-        <path d="M4 6.5a2.5 2.5 0 012.5-2.5H20v15H6.5A2.5 2.5 0 014 16.5z" />
-        <path d="M9 4v15" />
-        <path d="M20 19.5H6.5A2.5 2.5 0 014 17" />
-      </symbol>
-      <symbol id="i-team" viewBox="0 0 24 24">
-        <circle cx="8" cy="9" r="3" />
-        <circle cx="16" cy="8.5" r="2.5" />
-        <path d="M3.5 19a4.5 4.5 0 019 0" />
-        <path d="M12.5 19a3.5 3.5 0 017 0" />
-      </symbol>
-      <symbol id="i-bike" viewBox="0 0 24 24">
-        <circle cx="6" cy="17" r="3" />
-        <circle cx="18" cy="17" r="3" />
-        <path d="M6 17l4.2-7h3.2l2.1 7" />
-        <path d="M10.2 10l-1.6-3H12" />
-        <path d="M12.8 10H16" />
-      </symbol>
-      <symbol id="i-map" viewBox="0 0 24 24">
-        <path d="M3.5 6l5-2 7 2 5-2v14l-5 2-7-2-5 2z" />
-        <path d="M8.5 4v14" />
-        <path d="M15.5 6v14" />
-      </symbol>
-      <symbol id="i-pen" viewBox="0 0 24 24">
-        <path d="M4 16.5L15.8 4.7a2.1 2.1 0 013 3L7 19.5 4 20z" />
-        <path d="M13.8 6.7l3.5 3.5" />
-      </symbol>
-      <symbol id="i-mail" viewBox="0 0 24 24">
-        <rect x="3.5" y="6" width="17" height="12" rx="2" />
-        <path d="M4.5 7l7.5 6 7.5-6" />
-      </symbol>
-    </svg>
+    {% include '_site_icon_sprite.html' %}
 
     {% if request.args.get('feedback') == 'ok' %}
       <div class="alert alert-ok">问题反馈已提交，感谢你的建议。</div>

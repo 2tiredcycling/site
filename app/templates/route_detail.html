@@ -6,11 +6,14 @@
   <title>{{ route.route_name }} | 路线详情 | 2Tired 骑行社</title>
   <meta name="description" content="{{ meta_description or '2Tired 路线详情与 GPX 下载。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 </head>
 <body>
   <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
     <section class="card form-card">
       <div class="row-actions">
         <form method="post" action="{{ url_for('web.download_tracked', route_id=route.id) }}">

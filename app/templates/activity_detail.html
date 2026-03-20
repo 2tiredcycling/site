@@ -6,18 +6,14 @@
   <title>{{ activity.title }} | 活动详情 | 2Tired 骑行社</title>
   <meta name="description" content="{{ meta_description or '2Tired 骑行社活动详情页面。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
     <section class="card form-card">
-      <div class="row-actions">
-        <a class="btn" href="{{ back_url if back_url else url_for('web.events_list') }}"><span aria-hidden="true">↩️</span><span>{{ back_label if back_label else '返回活动中心' }}</span></a>
-        {% if not back_url %}
-          <a class="btn btn-muted" href="{{ url_for('web.index') }}"><span aria-hidden="true">🏠</span><span>返回首页</span></a>
-        {% endif %}
-      </div>
-
       <h1>{{ activity.title }}</h1>
 
       <h3>关联路线</h3>

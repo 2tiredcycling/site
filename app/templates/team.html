@@ -6,15 +6,14 @@
   <title>管理团队 | 2Tired 骑行社</title>
   <meta name="description" content="{{ meta_description or '2Tired 骑行社管理团队页面。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
     <section class="card form-card">
-      <div class="row-actions">
-        <a class="btn btn-muted" href="{{ url_for('web.index') }}"><span aria-hidden="true">🏠</span><span>返回首页</span></a>
-        <a class="btn" href="{{ url_for('web.contact_page') }}"><span aria-hidden="true">📮</span><span>联系团队</span></a>
-      </div>
       <h1>{{ page.title if page else '管理团队' }}</h1>
       {% if page and page.summary %}
         <p class="hint">{{ page.summary }}</p>

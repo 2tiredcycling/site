@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>页面未找到 - 2Tired</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
     <section class="card form-card">
       <h1>404</h1>
       <p>{{ error_message or "请求的页面不存在。" }}</p>
-      <div class="row-actions">
-        <a class="btn" href="{{ url_for('web.index') }}"><span aria-hidden="true">🏠</span><span>返回首页</span></a>
-      </div>
+      <a class="link-back" href="{{ url_for('web.index') }}">返回首页</a>
     </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>

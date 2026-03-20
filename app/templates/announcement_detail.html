@@ -6,15 +6,14 @@
   <title>{{ announcement.title }} | 公告详情 | 2Tired 骑行社</title>
   <meta name="description" content="{{ meta_description or '2Tired 骑行社公告详情。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
     <section class="card form-card">
-      <div class="row-actions">
-        <a class="btn btn-muted" href="{{ url_for('web.index') }}"><span aria-hidden="true">🏠</span><span>返回首页</span></a>
-      </div>
-
       <h1>{{ announcement.title }}</h1>
       <p class="hint">
         发布时间：{{ to_local_time(announcement.published_at).strftime('%Y-%m-%d %H:%M') if announcement.published_at else '-' }}
