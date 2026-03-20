@@ -14,9 +14,9 @@
     <section class="card form-card">
       <div class="row-actions">
         <form method="post" action="{{ url_for('web.download_tracked', route_id=route.id) }}">
-          <button class="btn" type="submit">下载 GPX</button>
+          <button class="quick-pill quick-pill-button" type="submit"><span aria-hidden="true">⬇️</span><span>下载 GPX</span></button>
         </form>
-        <a class="btn btn-muted" href="{{ back_url if back_url else url_for('web.routes_center') }}">{{ back_label if back_label else '返回路线中心' }}</a>
+        <a class="quick-pill" href="{{ back_url if back_url else url_for('web.routes_center') }}"><span aria-hidden="true">↩️</span><span>{{ back_label if back_label else '返回路线中心' }}</span></a>
       </div>
 
       <h1>{{ route.route_name }}</h1>

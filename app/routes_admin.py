@@ -39,6 +39,9 @@ from app.auth import (
     validate_csrf_token,
 )
 from app.models import (
+    CONTENT_STATUS_DRAFT,
+    CONTENT_STATUS_OFFLINE,
+    CONTENT_STATUS_PUBLISHED,
     FEEDBACK_APPROVED,
     FEEDBACK_PENDING,
     FEEDBACK_REJECTED,
@@ -57,6 +60,7 @@ from app.models import (
     Activity,
     AccessLog,
     AuditLog,
+    Announcement,
     ImportReport,
     MediaAsset,
     Route,
@@ -270,6 +274,7 @@ def _enforce_permission_matrix():
     if (
         path.startswith("/manage/routes")
         or path.startswith("/manage/activities")
+        or path.startswith("/manage/announcements")
         or path.startswith("/manage/bulk-import")
     ) and not can_edit(user):
         abort(403)
@@ -377,12 +382,23 @@ def dashboard():
     )
     latest_routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).limit(3).all() if can_edit_flag else []
     latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(3).all() if can_edit_flag else []
+    latest_announcements = (
+        Announcement.query.order_by(
+            Announcement.is_pinned.desc(),
+            db.func.coalesce(Announcement.published_at, Announcement.updated_at).desc(),
+        )
+        .limit(3)
+        .all()
+        if can_edit_flag
+        else []
+    )
     latest_feedback = RouteFeedback.query.order_by(RouteFeedback.created_at.desc()).limit(3).all() if can_review_flag else []
     latest_site_feedback = SiteFeedback.query.order_by(SiteFeedback.created_at.desc()).limit(3).all() if can_review_flag else []
     summary = {
         "route_total": Route.query.filter_by(is_deleted=False).count(),
         "route_deleted": Route.query.filter_by(is_deleted=True).count(),
         "activity_total": Activity.query.count(),
+        "announcement_total": Announcement.query.count(),
         "feedback_pending": pending_feedback_count,
         "site_feedback_pending": pending_site_feedback_count,
     }
@@ -446,6 +462,7 @@ def dashboard():
         audit_logs_pagination=audit_logs_pagination,
         latest_routes=latest_routes,
         latest_activities=latest_activities,
+        latest_announcements=latest_announcements,
         latest_feedback=latest_feedback,
         latest_site_feedback=latest_site_feedback,
         security_summary=security_summary,
@@ -1072,6 +1089,46 @@ def activity_edit_page(activity_id: int):
     )
 
 
+@bp.get("/announcements")
+@login_required
+def announcements_page():
+    page = max(1, request.args.get("page", default=1, type=int))
+    pagination = Announcement.query.order_by(
+        Announcement.is_pinned.desc(),
+        db.func.coalesce(Announcement.published_at, Announcement.updated_at).desc(),
+    ).paginate(page=page, per_page=20, error_out=False)
+    return render_template(
+        "manage_announcements.html",
+        announcements=pagination.items,
+        pagination=pagination,
+        can_edit=can_edit(g.current_user),
+    )
+
+
+@bp.get("/announcements/new")
+@login_required
+def announcement_new_page():
+    return render_template(
+        "manage_announcement_form.html",
+        announcement=None,
+        can_edit=can_edit(g.current_user),
+    )
+
+
+@bp.get("/announcements/<int:announcement_id>/edit")
+@login_required
+def announcement_edit_page(announcement_id: int):
+    announcement = Announcement.query.filter_by(id=announcement_id).first()
+    if not announcement:
+        flash("公告不存在", "error")
+        return redirect(url_for("admin.announcements_page"))
+    return render_template(
+        "manage_announcement_form.html",
+        announcement=announcement,
+        can_edit=can_edit(g.current_user),
+    )
+
+
 @bp.get("/users")
 @login_required
 def users_page():
@@ -1177,6 +1234,29 @@ def _parse_activity_time(value: str | None) -> datetime | None:
         parsed = parsed.replace(tzinfo=SH_TZ)
 
     return parsed.astimezone(timezone.utc)
+
+
+def _announcement_from_form(announcement: Announcement | None = None) -> dict:
+    title = (request.form.get("title") or (announcement.title if announcement else "")).strip()
+    content = (request.form.get("content") or (announcement.content if announcement else "")).strip()
+    status = (request.form.get("status") or (announcement.status if announcement else CONTENT_STATUS_DRAFT)).strip()
+    if status not in {CONTENT_STATUS_DRAFT, CONTENT_STATUS_PUBLISHED, CONTENT_STATUS_OFFLINE}:
+        status = CONTENT_STATUS_DRAFT
+    sort_order_raw = (request.form.get("sort_order") or (announcement.sort_order if announcement else "0")).strip()
+    try:
+        sort_order = int(sort_order_raw)
+    except (TypeError, ValueError):
+        sort_order = 0
+    is_pinned = (request.form.get("is_pinned") or "0").strip() == "1"
+    published_at = _parse_activity_time(request.form.get("published_at"))
+    return {
+        "title": title,
+        "content": content,
+        "status": status,
+        "sort_order": sort_order,
+        "is_pinned": is_pinned,
+        "published_at": published_at,
+    }
 
 
 @bp.post("/routes/create")
@@ -1572,6 +1652,81 @@ def delete_activity(activity_id: int):
     write_audit_log(g.current_user.id, "activity.delete", "activity", str(activity_id), title)
     flash("活动删除成功", "success")
     return redirect(url_for("admin.activities_page"))
+
+
+@bp.post("/announcements/create")
+@login_required
+def create_announcement():
+    payload = _announcement_from_form()
+    if not payload["title"]:
+        flash("参数错误：公告标题不能为空", "error")
+        return redirect(url_for("admin.announcements_page"))
+
+    announcement = Announcement(
+        title=payload["title"],
+        content=payload["content"],
+        status=payload["status"],
+        is_pinned=payload["is_pinned"],
+        sort_order=payload["sort_order"],
+        created_by=g.current_user.id,
+        updated_by=g.current_user.id,
+    )
+    if payload["status"] == CONTENT_STATUS_PUBLISHED:
+        announcement.published_at = payload["published_at"] or utcnow()
+    else:
+        announcement.published_at = payload["published_at"]
+
+    db.session.add(announcement)
+    db.session.commit()
+    write_audit_log(g.current_user.id, "announcement.create", "announcement", str(announcement.id), announcement.title)
+    flash("公告创建成功", "success")
+    return redirect(url_for("admin.announcements_page"))
+
+
+@bp.post("/announcements/<int:announcement_id>/update")
+@login_required
+def update_announcement(announcement_id: int):
+    announcement = Announcement.query.filter_by(id=announcement_id).first()
+    if not announcement:
+        flash("公告不存在", "error")
+        return redirect(url_for("admin.announcements_page"))
+
+    payload = _announcement_from_form(announcement)
+    if not payload["title"]:
+        flash("参数错误：公告标题不能为空", "error")
+        return redirect(url_for("admin.announcement_edit_page", announcement_id=announcement_id))
+
+    announcement.title = payload["title"]
+    announcement.content = payload["content"]
+    announcement.status = payload["status"]
+    announcement.is_pinned = payload["is_pinned"]
+    announcement.sort_order = payload["sort_order"]
+    announcement.updated_by = g.current_user.id
+    if payload["status"] == CONTENT_STATUS_PUBLISHED:
+        announcement.published_at = payload["published_at"] or announcement.published_at or utcnow()
+    else:
+        announcement.published_at = payload["published_at"]
+
+    db.session.commit()
+    write_audit_log(g.current_user.id, "announcement.update", "announcement", str(announcement.id), announcement.title)
+    flash("公告更新成功", "success")
+    return redirect(url_for("admin.announcements_page"))
+
+
+@bp.post("/announcements/<int:announcement_id>/delete")
+@login_required
+def delete_announcement(announcement_id: int):
+    announcement = Announcement.query.filter_by(id=announcement_id).first()
+    if not announcement:
+        flash("公告不存在", "error")
+        return redirect(url_for("admin.announcements_page"))
+
+    title = announcement.title
+    db.session.delete(announcement)
+    db.session.commit()
+    write_audit_log(g.current_user.id, "announcement.delete", "announcement", str(announcement_id), title)
+    flash("公告删除成功", "success")
+    return redirect(url_for("admin.announcements_page"))
 
 
 @bp.post("/users/create")

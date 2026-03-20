@@ -49,6 +49,33 @@ body {
   margin-bottom: 14px;
 }
 
+.quick-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  border: 1px solid #dbeafe;
+  background: #ffffffd9;
+  color: #1e3a8a;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.quick-pill:hover {
+  transform: translateY(-1px);
+  border-color: #93c5fd;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.14);
+  background: #fff;
+}
+
+.quick-pill-button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .hero-layout {
   display: grid;
   grid-template-columns: 2fr 1fr;

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ '编辑公告' if announcement else '新增公告' }} {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>{{ '编辑公告 #' ~ announcement.id if announcement else '新增公告' }}</h1>
+      <p class="hint">当前版本：{{ app_version }}</p>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.announcements_page') }}">返回公告列表</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <form method="post" action="{{ url_for('admin.update_announcement', announcement_id=announcement.id) if announcement else url_for('admin.create_announcement') }}" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="filter-grid">
+          <label>标题
+            <input type="text" name="title" value="{{ announcement.title if announcement else '' }}" required {% if not can_edit %}disabled{% endif %}>
+          </label>
+          <label>状态
+            <select name="status" {% if not can_edit %}disabled{% endif %}>
+              {% set current_status = announcement.status if announcement else 'draft' %}
+              <option value="draft" {% if current_status == 'draft' %}selected{% endif %}>draft</option>
+              <option value="published" {% if current_status == 'published' %}selected{% endif %}>published</option>
+              <option value="offline" {% if current_status == 'offline' %}selected{% endif %}>offline</option>
+            </select>
+          </label>
+          <label>排序（数字越大越靠前）
+            <input type="number" name="sort_order" value="{{ announcement.sort_order if announcement else 0 }}" {% if not can_edit %}disabled{% endif %}>
+          </label>
+          <label>发布时间
+            <input type="datetime-local" name="published_at" value="{{ to_local_time(announcement.published_at).strftime('%Y-%m-%dT%H:%M') if announcement and announcement.published_at else '' }}" {% if not can_edit %}disabled{% endif %}>
+          </label>
+          <label>置顶
+            <select name="is_pinned" {% if not can_edit %}disabled{% endif %}>
+              <option value="0" {% if not announcement or not announcement.is_pinned %}selected{% endif %}>否</option>
+              <option value="1" {% if announcement and announcement.is_pinned %}selected{% endif %}>是</option>
+            </select>
+          </label>
+        </div>
+        <label>内容
+          <textarea name="content" rows="8" {% if not can_edit %}disabled{% endif %}>{{ announcement.content if announcement else '' }}</textarea>
+        </label>
+        {% if can_edit %}
+          <button class="btn" type="submit">{{ '保存公告' if announcement else '创建公告' }}</button>
+        {% endif %}
+      </form>
+    </section>
+
+    {% if announcement and can_edit %}
+      <section class="card form-card">
+        <h2>维护操作</h2>
+        <form method="post" action="{{ url_for('admin.delete_announcement', announcement_id=announcement.id) }}" onsubmit="return confirm('确认删除该公告吗？');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-danger" type="submit">删除公告</button>
+        </form>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

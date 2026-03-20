@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, AuditLog, MediaAsset, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
+from app.models import AccessLog, Activity, Announcement, AuditLog, MediaAsset, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -229,6 +229,72 @@ def test_events_alias_pages_available(app_and_client):
     assert list_resp.status_code == 200
     detail_resp = client.get(f"/events/{activity_id}")
     assert detail_resp.status_code == 200
+
+
+def test_manage_announcements_crud(app_and_client):
+    app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    csrf_token = get_manage_csrf(client)
+
+    create_resp = client.post(
+        "/manage/announcements/create",
+        data={
+            "csrf_token": csrf_token,
+            "title": "Announcement A",
+            "content": "公告内容 A",
+            "status": "published",
+            "is_pinned": "1",
+            "sort_order": "8",
+            "published_at": "2026-03-20T12:00",
+        },
+        follow_redirects=True,
+    )
+    assert create_resp.status_code == 200
+
+    with app.app_context():
+        item = Announcement.query.filter_by(title="Announcement A").first()
+        assert item is not None
+        assert item.is_pinned is True
+        assert item.status == "published"
+        announcement_id = item.id
+
+    edit_page = client.get(f"/manage/announcements/{announcement_id}/edit")
+    assert edit_page.status_code == 200
+
+    update_resp = client.post(
+        f"/manage/announcements/{announcement_id}/update",
+        data={
+            "csrf_token": csrf_token,
+            "title": "Announcement B",
+            "content": "公告内容 B",
+            "status": "offline",
+            "is_pinned": "0",
+            "sort_order": "2",
+            "published_at": "",
+        },
+        follow_redirects=True,
+    )
+    assert update_resp.status_code == 200
+
+    with app.app_context():
+        item = db.session.get(Announcement, announcement_id)
+        assert item is not None
+        assert item.title == "Announcement B"
+        assert item.status == "offline"
+        assert item.is_pinned is False
+
+    list_resp = client.get("/manage/announcements")
+    assert list_resp.status_code == 200
+    assert "Announcement B" in list_resp.get_data(as_text=True)
+
+    delete_resp = client.post(
+        f"/manage/announcements/{announcement_id}/delete",
+        data={"csrf_token": csrf_token},
+        follow_redirects=True,
+    )
+    assert delete_resp.status_code == 200
+    with app.app_context():
+        assert db.session.get(Announcement, announcement_id) is None
 
 
 def test_route_detail_back_link_from_activity_detail(app_and_client):
