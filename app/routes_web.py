@@ -34,6 +34,142 @@ SITE_FEEDBACK_LIMIT_PER_MINUTE = 5
 SITE_FEEDBACK_WINDOW_SECONDS = 60
 
 
+def _palette_presets() -> list[dict]:
+    return [
+        {
+            "key": "1",
+            "name": "森林绿系",
+            "summary": "沉稳自然，户外骑行氛围强。",
+            "primary": "#12372A",
+            "secondary": "#436850",
+            "accent": "#ADBC9F",
+            "bg": "#FBFADA",
+            "swatches": [
+                {"name": "a", "value": "#12372A"},
+                {"name": "b", "value": "#436850"},
+                {"name": "c", "value": "#ADBC9F"},
+                {"name": "d", "value": "#FBFADA"},
+            ],
+        },
+        {
+            "key": "2",
+            "name": "紫粉渐变系",
+            "summary": "夜色紫调，偏视觉冲击。",
+            "primary": "#1F2544",
+            "secondary": "#474F7A",
+            "accent": "#FFD0EC",
+            "bg": "#81689D",
+            "swatches": [
+                {"name": "a", "value": "#1F2544"},
+                {"name": "b", "value": "#474F7A"},
+                {"name": "c", "value": "#81689D"},
+                {"name": "d", "value": "#FFD0EC"},
+            ],
+        },
+        {
+            "key": "3",
+            "name": "粉紫蓝渐变系",
+            "summary": "柔和层次强，偏艺术化。",
+            "primary": "#2E365A",
+            "secondary": "#6B597F",
+            "accent": "#BD6C73",
+            "bg": "#92A1C2",
+            "swatches": [
+                {"name": "a", "value": "#2E365A"},
+                {"name": "b", "value": "#6B597F"},
+                {"name": "c", "value": "#A2869C"},
+                {"name": "d", "value": "#BD6C73"},
+                {"name": "e", "value": "#92A1C2"},
+                {"name": "f", "value": "#3F5B8D"},
+            ],
+        },
+        {
+            "key": "4",
+            "name": "冷灰蓝系",
+            "summary": "科技理性，克制稳重。",
+            "primary": "#11212D",
+            "secondary": "#4A5C6A",
+            "accent": "#9BA8AB",
+            "bg": "#CCD0CF",
+            "swatches": [
+                {"name": "a", "value": "#06141B"},
+                {"name": "b", "value": "#11212D"},
+                {"name": "c", "value": "#253745"},
+                {"name": "d", "value": "#4A5C6A"},
+                {"name": "e", "value": "#9BA8AB"},
+                {"name": "f", "value": "#CCD0CF"},
+            ],
+        },
+        {
+            "key": "5",
+            "name": "湖蓝青系",
+            "summary": "清凉湖感，运动与路线感明显。",
+            "primary": "#072E33",
+            "secondary": "#0F969C",
+            "accent": "#6DA5C0",
+            "bg": "#294D61",
+            "swatches": [
+                {"name": "a", "value": "#051B1A"},
+                {"name": "b", "value": "#072E33"},
+                {"name": "c", "value": "#0C707B"},
+                {"name": "d", "value": "#0F969C"},
+                {"name": "e", "value": "#6DA5C0"},
+                {"name": "f", "value": "#294D61"},
+            ],
+        },
+        {
+            "key": "6",
+            "name": "浅蓝渐变系",
+            "summary": "亮度高、现代感强、清透。",
+            "primary": "#052659",
+            "secondary": "#7DA0CA",
+            "accent": "#C1E8FF",
+            "bg": "#5483B3",
+            "swatches": [
+                {"name": "a", "value": "#021024"},
+                {"name": "b", "value": "#052659"},
+                {"name": "c", "value": "#5483B3"},
+                {"name": "d", "value": "#7DA0CA"},
+                {"name": "e", "value": "#C1E8FF"},
+            ],
+        },
+        {
+            "key": "7",
+            "name": "马卡龙粉绿系",
+            "summary": "轻松柔和，校园社团友好。",
+            "primary": "#657166",
+            "secondary": "#99CDD8",
+            "accent": "#E5C9B2",
+            "bg": "#EAEBE1",
+            "swatches": [
+                {"name": "a", "value": "#99CDD8"},
+                {"name": "b", "value": "#EAEBE1"},
+                {"name": "c", "value": "#FDEBD3"},
+                {"name": "d", "value": "#E5C9B2"},
+                {"name": "e", "value": "#CFE6D4"},
+                {"name": "f", "value": "#657166"},
+            ],
+        },
+        {
+            "key": "8",
+            "name": "暖紫灰系",
+            "summary": "氛围感强，适合夜骑主题。",
+            "primary": "#2B124C",
+            "secondary": "#854F6C",
+            "accent": "#DFB6B2",
+            "bg": "#FBE4D8",
+            "swatches": [
+                {"name": "a", "value": "#190019"},
+                {"name": "b", "value": "#2B124C"},
+                {"name": "c", "value": "#522B5B"},
+                {"name": "d", "value": "#854F6C"},
+                {"name": "e", "value": "#DFB6B2"},
+                {"name": "f", "value": "#FBE4D8"},
+            ],
+        },
+    ]
+
+
 def _to_local_time(value):
     if value is None:
         return None
@@ -245,6 +381,55 @@ def index() -> str:
         route_total=route_total,
         announcements=announcements,
         meta_description="2Tired 骑行社官网：活动信息、路线共享、社团介绍与反馈入口。",
+    )
+
+
+@bp.get("/palette-preview")
+def palette_preview() -> str:
+    palettes = _palette_presets()
+    return render_template(
+        "palette_preview.html",
+        palettes=palettes,
+        meta_description="2Tired V4.2 色调候选预览页面。",
+    )
+
+
+@bp.get("/palette-preview/<string:palette_key>")
+def palette_preview_home(palette_key: str) -> str:
+    palettes = _palette_presets()
+    palette_map = {item["key"]: item for item in palettes}
+    palette = palette_map.get((palette_key or "").strip().lower())
+    if not palette:
+        abort(404)
+    now = utcnow()
+    latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(5).all()
+    latest_routes = (
+        Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False)
+        .order_by(Route.updated_at.desc())
+        .limit(5)
+        .all()
+    )
+    route_total = Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False).count()
+    announcements = (
+        Announcement.query.filter(*_announcement_visibility_filters(now))
+        .order_by(
+            Announcement.is_pinned.desc(),
+            Announcement.sort_order.desc(),
+            db.func.coalesce(Announcement.published_at, Announcement.updated_at).desc(),
+            Announcement.updated_at.desc(),
+        )
+        .limit(5)
+        .all()
+    )
+    return render_template(
+        "palette_preview_home.html",
+        palettes=palettes,
+        palette=palette,
+        latest_activities=latest_activities,
+        latest_routes=latest_routes,
+        route_total=route_total,
+        announcements=announcements,
+        meta_description=f"2Tired V4.2 首页色调预览：{palette['name']}",
     )
 
 

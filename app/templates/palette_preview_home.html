@@ -1,0 +1,167 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ palette.name }} · 首页预览 | 2Tired</title>
+  <meta name="description" content="{{ meta_description or '首页色调预览。' }}">
+  <style>
+    :root {
+      --primary: {{ palette.primary }};
+      --secondary: {{ palette.secondary }};
+      --accent: {{ palette.accent }};
+      --bg: {{ palette.bg }};
+      --tone-a: {{ palette.swatches[0].value if palette.swatches|length > 0 else palette.primary }};
+      --tone-b: {{ palette.swatches[1].value if palette.swatches|length > 1 else palette.secondary }};
+      --tone-c: {{ palette.swatches[2].value if palette.swatches|length > 2 else palette.accent }};
+      --tone-d: {{ palette.swatches[3].value if palette.swatches|length > 3 else palette.bg }};
+      --tone-e: {{ palette.swatches[4].value if palette.swatches|length > 4 else palette.bg }};
+      --tone-f: {{ palette.swatches[5].value if palette.swatches|length > 5 else palette.primary }};
+      --text: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background:
+      radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--tone-b) 30%, #ffffff 70%), transparent 35%),
+      radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--tone-c) 24%, #ffffff 76%), transparent 28%),
+      linear-gradient(180deg, color-mix(in srgb, var(--tone-d) 24%, #ffffff 76%), #eef2f7 52%, #e8edf5); color: var(--text); }
+    .container { max-width: 1220px; margin: 28px auto; padding: 0 16px; }
+    .card {
+      background: linear-gradient(180deg, #ffffff, color-mix(in srgb, var(--tone-e) 10%, #ffffff 90%));
+      border: 1px solid color-mix(in srgb, var(--tone-b) 45%, #ffffff 55%);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 12px 24px rgba(15,23,42,0.06);
+    }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      border: 1px solid color-mix(in srgb, var(--tone-b) 70%, #ffffff 30%);
+      background: color-mix(in srgb, var(--tone-e) 18%, #ffffff 82%);
+      color: var(--tone-f);
+      border-radius: 999px;
+      padding: 8px 12px;
+    }
+    .btn.main { background: var(--tone-a); border-color: var(--tone-a); color: #fff; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .tab { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--tone-c) 62%, #ffffff 38%); background: color-mix(in srgb, var(--tone-e) 18%, #ffffff 82%); color: var(--tone-f); padding: 8px 12px; font-size: 13px; }
+    .tab.active { background: var(--tone-a); color: #fff; border-color: var(--tone-a); }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid color-mix(in srgb, var(--tone-c) 70%, #ffffff 30%); border-radius: 999px; background: color-mix(in srgb, var(--tone-d) 22%, #ffffff 78%); color: var(--tone-f); padding: 8px 12px; text-decoration: none; }
+    .hero { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+    .hero h1 { margin: 0 0 8px; font-size: 42px; color: var(--tone-a); }
+    .hero p { margin: 0; font-size: 18px; }
+    .hero-art {
+      margin-top: 12px;
+      height: 130px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--tone-b) 55%, #ffffff 45%);
+      background:
+        linear-gradient(120deg, color-mix(in srgb, var(--tone-a) 55%, #ffffff 45%), transparent 45%),
+        linear-gradient(220deg, color-mix(in srgb, var(--tone-c) 50%, #ffffff 50%), transparent 60%),
+        linear-gradient(180deg, #ffffff, color-mix(in srgb, var(--tone-d) 65%, #ffffff 35%));
+    }
+    .metrics { display: grid; gap: 8px; }
+    .metrics > div {
+      border: 1px solid color-mix(in srgb, var(--tone-b) 60%, #ffffff 40%);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--tone-e) 16%, #fff 84%));
+    }
+    .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .item {
+      border: 1px solid color-mix(in srgb, var(--tone-c) 30%, #e5e7eb 70%);
+      border-left: 4px solid var(--tone-b);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: #fff;
+    }
+    .item h3 { margin: 0 0 6px; color: var(--tone-a); }
+    .hint { color: #64748b; margin: 0; font-size: 13px; }
+    .badge {
+      display: inline-flex;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--tone-c);
+      color: var(--tone-f);
+      background: color-mix(in srgb, var(--tone-c) 20%, #fff 80%);
+      font-size: 12px;
+    }
+    @media (max-width: 920px) { .hero, .split { grid-template-columns: 1fr; } .hero h1 { font-size: 34px; } }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="card">
+      <div class="topbar">
+        <div>
+          <strong>当前方案：{{ palette.name }}</strong>
+          <span class="badge">主色 {{ palette.primary }}</span>
+        </div>
+        <div>
+          <a class="btn" href="{{ url_for('web.palette_preview') }}">返回色板总览</a>
+          <a class="btn main" href="{{ url_for('web.index') }}">回到真实首页</a>
+        </div>
+      </div>
+      <nav class="tabs">
+        {% for p in palettes %}
+          <a class="tab {% if p.key == palette.key %}active{% endif %}" href="{{ url_for('web.palette_preview_home', palette_key=p.key) }}">方案{{ p.key }} · {{ p.name }}</a>
+        {% endfor %}
+      </nav>
+    </section>
+
+    <section class="card">
+      <nav class="nav">
+        <a class="pill" href="#">🏠 首页</a>
+        <a class="pill" href="#">📖 社团介绍</a>
+        <a class="pill" href="#">👥 管理团队</a>
+        <a class="pill" href="#">🚴 活动</a>
+        <a class="pill" href="#">🗺️ 路线</a>
+        <a class="pill" href="#">📝 反馈</a>
+        <a class="pill" href="#">📮 联系</a>
+      </nav>
+      <div class="hero">
+        <div>
+          <h1>2Tired 骑行社</h1>
+          <p>把活动、路线与社团信息整合成一个轻量官网入口。</p>
+          <div class="hero-art"></div>
+        </div>
+        <div class="metrics">
+          <div><strong>公开路线</strong><div>{{ route_total }}</div></div>
+          <div><strong>近期活动</strong><div>{{ latest_activities|length }}</div></div>
+          <div><strong>公告条数</strong><div>{{ announcements|length }}</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="split">
+      <section class="card">
+        <h2 style="margin-top:0;color:var(--primary);">最新活动</h2>
+        {% for activity in latest_activities %}
+          <article class="item">
+            <h3>{{ activity.title }}</h3>
+            <p class="hint">日期：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-' }}</p>
+          </article>
+        {% else %}
+          <p class="hint">暂无活动</p>
+        {% endfor %}
+      </section>
+      <section class="card">
+        <h2 style="margin-top:0;color:var(--primary);">最新路线</h2>
+        {% for route in latest_routes %}
+          <article class="item">
+            <h3>{{ route.route_name }}</h3>
+            <p class="hint">{{ '%.1f'|format(route.distance_km or 0) }} km，下载 {{ route.download_count or 0 }} 次</p>
+          </article>
+        {% else %}
+          <p class="hint">暂无路线</p>
+        {% endfor %}
+      </section>
+    </section>
+  </main>
+</body>
+</html>

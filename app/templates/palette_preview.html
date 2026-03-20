@@ -1,0 +1,166 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V4.2 色调预览 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '2Tired V4.2 色调候选预览。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: radial-gradient(circle at 12% 8%, #f6f9fd, #edf2f8 48%, #e8eef6); color: #1f2937; }
+    .container { max-width: 1240px; margin: 28px auto; padding: 0 16px; }
+    .head { margin-bottom: 16px; }
+    .head h1 { margin: 0 0 8px; }
+    .head p { margin: 0; color: #6b7280; }
+    .row-actions { margin-top: 12px; display: flex; gap: 8px; }
+    .btn { display: inline-block; text-decoration: none; border-radius: 999px; border: 1px solid #d1d5db; background: #fff; color: #1f2937; padding: 8px 12px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+    .tab { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; border-radius: 999px; border: 1px solid #cbd5e1; background: #fff; color: #334155; padding: 7px 11px; font-size: 13px; }
+    .tab:hover { border-color: #93c5fd; color: #1e40af; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card {
+      border-radius: 14px;
+      border: 1px solid color-mix(in srgb, var(--tone-b) 45%, #d1d5db 55%);
+      overflow: hidden;
+      background: color-mix(in srgb, var(--tone-d) 16%, #ffffff 84%);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+    }
+    .card-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid color-mix(in srgb, var(--tone-c) 35%, #e5e7eb 65%);
+      background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--tone-a) 10%, #ffffff 90%),
+        color-mix(in srgb, var(--tone-b) 15%, #ffffff 85%)
+      );
+    }
+    .card-head h2 { margin: 0 0 6px; font-size: 22px; }
+    .card-head p { margin: 0; color: #6b7280; }
+    .canvas { padding: 14px; min-height: 360px; }
+    .swatches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .swatch {
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--tone-c) 30%, rgba(15,23,42,0.08) 70%);
+      overflow: hidden;
+      background: #fff;
+    }
+    .swatch-color { height: 48px; }
+    .swatch-label { padding: 6px 8px; font-size: 12px; color: #475569; border-top: 1px solid #e2e8f0; }
+    .mood {
+      border-radius: 12px;
+      border: 1px solid rgba(15,23,42,0.08);
+      margin-bottom: 12px;
+      height: 96px;
+      background-size: cover;
+      background-position: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .mood::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(15,23,42,0.26) 100%);
+    }
+    .demo-card {
+      border: 1px solid color-mix(in srgb, var(--tone-b) 35%, rgba(15,23,42,0.12) 65%);
+      border-radius: 12px;
+      background: linear-gradient(
+        180deg,
+        #ffffff,
+        color-mix(in srgb, var(--tone-d) 12%, #ffffff 88%)
+      );
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .demo-title { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+    .demo-text { margin: 0; color: #475569; }
+    .demo-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid; text-decoration: none; padding: 8px 12px; font-size: 14px; line-height: 1; }
+    .vote-tip { margin-top: 8px; font-size: 14px; color: #334155; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="head">
+      <h1>V4.2 色调预览</h1>
+      <p>请从 1-8 里选一套。建议看 30 秒整体观感，再决定。</p>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('web.index') }}">返回首页</a>
+      </div>
+      <nav class="tabs">
+        {% for p in palettes %}
+          <a class="tab" href="{{ url_for('web.palette_preview_home', palette_key=p.key) }}">方案{{ p.key }} · {{ p.name }}</a>
+        {% endfor %}
+      </nav>
+    </header>
+
+    <section class="grid">
+      {% for p in palettes %}
+        {% set tone_a = p.swatches[0].value if p.swatches|length > 0 else p.primary %}
+        {% set tone_b = p.swatches[1].value if p.swatches|length > 1 else p.secondary %}
+        {% set tone_c = p.swatches[2].value if p.swatches|length > 2 else p.accent %}
+        {% set tone_d = p.swatches[3].value if p.swatches|length > 3 else p.bg %}
+        {% set tone_e = p.swatches[4].value if p.swatches|length > 4 else p.bg %}
+        {% set tone_f = p.swatches[5].value if p.swatches|length > 5 else p.primary %}
+        <article
+          class="card"
+          style="
+            --tone-a: {{ tone_a }};
+            --tone-b: {{ tone_b }};
+            --tone-c: {{ tone_c }};
+            --tone-d: {{ tone_d }};
+            --tone-e: {{ tone_e }};
+            --tone-f: {{ tone_f }};
+          "
+        >
+          <header class="card-head">
+            <h2>{{ p.key }} · {{ p.name }}</h2>
+            <p>{{ p.summary }}</p>
+          </header>
+          <div
+            class="canvas"
+            style="
+              background:
+                radial-gradient(circle at 85% 12%, color-mix(in srgb, var(--tone-b) 30%, transparent 70%), transparent 55%),
+                linear-gradient(165deg, color-mix(in srgb, var(--tone-d) 30%, #ffffff 70%), color-mix(in srgb, var(--tone-e) 24%, #ffffff 76%));
+            "
+          >
+            <div class="swatches">
+              {% for sw in p.swatches %}
+                <div class="swatch">
+                  <div class="swatch-color" style="background: {{ sw.value }};"></div>
+                  <div class="swatch-label">{{ sw.name }} {{ sw.value }}</div>
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="mood" style="background:
+              linear-gradient(120deg, color-mix(in srgb, var(--tone-b) 60%, transparent 40%), transparent 40%),
+              linear-gradient(220deg, color-mix(in srgb, var(--tone-a) 68%, transparent 32%), transparent 55%),
+              linear-gradient(180deg, color-mix(in srgb, var(--tone-d) 42%, #ffffff 58%), color-mix(in srgb, var(--tone-f) 14%, #ffffff 86%));">
+            </div>
+
+            <div class="demo-card">
+              <h3 class="demo-title" style="color: var(--tone-a);">2Tired 骑行社</h3>
+              <p class="demo-text">把活动、路线与社团信息整合成一个轻量官网入口。</p>
+              <div class="demo-actions">
+                <a class="pill" href="#" style="color: var(--tone-f); border-color: var(--tone-b); background: color-mix(in srgb, var(--tone-e) 16%, #ffffff 84%);">🏠 返回首页</a>
+                <a class="pill" href="#" style="color: #fff; border-color: var(--tone-a); background: var(--tone-a);">🚴 查看活动</a>
+                <a class="pill" href="#" style="color: var(--tone-f); border-color: var(--tone-c); background: color-mix(in srgb, var(--tone-c) 14%, #ffffff 86%);">📝 提交反馈</a>
+              </div>
+            </div>
+
+            <div class="row-actions">
+              <a class="btn" href="{{ url_for('web.palette_preview_home', palette_key=p.key) }}">打开该色调首页</a>
+            </div>
+            <p class="vote-tip"><strong>投票建议：</strong>回复我“选 {{ p.key }}”。</p>
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+  </main>
+</body>
+</html>
