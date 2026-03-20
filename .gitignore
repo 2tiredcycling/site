@@ -17,3 +17,8 @@ deploy/certs/*.pem
 deploy/certs/*.key
 deploy/certs/*.crt
 deploy/certs/*.p12
+
+# Hero cover assets: keep final images, ignore backups/temp/raw sources
+app/static/hero-covers/_original_backup_*/
+app/static/hero-covers/*.tmp.jpg
+app/static/hero-covers/raw/

@@ -1,16 +1,26 @@
 ﻿(function () {
   var STORAGE_KEY = 'site_theme';
-  var DEFAULT_THEME = 'theme-6';
+  var DEFAULT_THEME = 'theme-1';
   var THEMES = [
-    { value: 'theme-1', label: '1 森林绿' },
-    { value: 'theme-2', label: '2 紫粉渐变' },
-    { value: 'theme-3', label: '3 粉紫蓝渐变' },
-    { value: 'theme-4', label: '4 冷灰蓝' },
-    { value: 'theme-5', label: '5 湖蓝青' },
-    { value: 'theme-6', label: '6 浅蓝渐变' },
-    { value: 'theme-7', label: '7 马卡龙粉绿' },
-    { value: 'theme-8', label: '8 暖紫灰' }
+    { value: 'theme-1', label: '森林绿' },
+    { value: 'theme-2', label: '夜幕紫' },
+    { value: 'theme-3', label: '霞影蓝' },
+    { value: 'theme-4', label: '冷雾灰蓝' },
+    { value: 'theme-5', label: '湖湾青' },
+    { value: 'theme-6', label: '晴空蓝' },
+    { value: 'theme-7', label: '马卡龙粉' },
+    { value: 'theme-8', label: '暖夜紫灰' }
   ];
+  var HERO_COVERS = {
+    'theme-1': '/static/hero-covers/forest-green.jpg',
+    'theme-2': '/static/hero-covers/night-purple.jpg',
+    'theme-3': '/static/hero-covers/haze-blue.jpg',
+    'theme-4': '/static/hero-covers/mist-gray-blue.jpg',
+    'theme-5': '/static/hero-covers/lake-cyan.jpg',
+    'theme-6': '/static/hero-covers/sky-blue.jpg',
+    'theme-7': '/static/hero-covers/macaron-pink.jpg',
+    'theme-8': '/static/hero-covers/warm-night-purple-gray.jpg'
+  };
 
   function safeGetTheme() {
     try {
@@ -27,6 +37,25 @@
   function applyTheme(theme) {
     var root = document.documentElement;
     root.setAttribute('data-theme', theme);
+    applyHeroCover(theme);
+  }
+
+  function applyHeroCover(theme) {
+    var root = document.documentElement;
+    var cover = HERO_COVERS[theme];
+    if (!cover) {
+      root.style.setProperty('--hero-cover-image', 'none');
+      return;
+    }
+    var img = new Image();
+    img.onload = function () {
+      root.style.setProperty('--hero-cover-image', "url('" + cover + "')");
+    };
+    img.onerror = function () {
+      // Missing image should gracefully fall back to default gradient style.
+      root.style.setProperty('--hero-cover-image', 'none');
+    };
+    img.src = cover;
   }
 
   function saveTheme(theme) {
