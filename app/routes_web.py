@@ -12,6 +12,7 @@ from app.models import (
     CONTENT_STATUS_PUBLISHED,
     FEEDBACK_APPROVED,
     Activity,
+    ActivityRouteOption,
     Announcement,
     Route,
     RouteFeedback,
@@ -25,6 +26,7 @@ from app.models import (
 )
 from app.querying import query_routes_from_request
 from app.security_limits import consume_fixed_window
+from app.gpx_utils import parse_gpx_points_and_stats
 
 bp = Blueprint("web", __name__)
 SH_TZ = timezone(timedelta(hours=8))
@@ -88,6 +90,86 @@ def _activity_detail_or_404(activity_id: int) -> Activity:
     if not activity:
         abort(404, description="Activity not found")
     return activity
+
+
+def _difficulty_stars(value: str | None) -> str:
+    raw = (value or "").strip().lower()
+    mapping = {
+        "1": 1,
+        "2": 2,
+        "3": 3,
+        "4": 4,
+        "5": 5,
+        "easy": 2,
+        "medium": 3,
+        "hard": 4,
+    }
+    level = mapping.get(raw, 3)
+    return "★" * level + "☆" * (5 - level)
+
+
+def _activity_route_cards(activity: Activity) -> list[dict]:
+    cards: list[dict] = []
+    options = (
+        ActivityRouteOption.query.filter_by(activity_id=activity.id)
+        .order_by(ActivityRouteOption.sort_order.asc(), ActivityRouteOption.id.asc())
+        .all()
+    )
+
+    if not options:
+        fallback_labels = ["初级", "中级", "高级"]
+        for index, route in enumerate(activity.routes):
+            label = fallback_labels[index] if index < len(fallback_labels) else f"扩展路线 {index + 1}"
+            options.append(
+                ActivityRouteOption(
+                    activity_id=activity.id,
+                    route_id=route.id,
+                    level_key=f"legacy_{index + 1}",
+                    level_label=label,
+                    activity_time=activity.activity_time,
+                    participant_count=int(activity.participant_count or 0),
+                    sort_order=index + 1,
+                    route=route,
+                )
+            )
+
+    media_assets = MediaAsset.query.filter_by(activity_id=activity.id).order_by(MediaAsset.created_at.desc()).all()
+    media_by_option: dict[int, list[MediaAsset]] = {}
+    for media in media_assets:
+        option_id = media.activity_route_option_id
+        if not option_id:
+            continue
+        media_by_option.setdefault(option_id, []).append(media)
+
+    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+    for item in options:
+        route = item.route
+        if route is None or route.is_deleted or route.status != STATUS_PUBLISHED:
+            continue
+        distance_km = float(route.distance_km or 0)
+        ascent_m = None
+        file_path = upload_folder / (route.gpx_filename or "")
+        if file_path.exists() and file_path.is_file():
+            try:
+                _points, stats, _profile = parse_gpx_points_and_stats(file_path)
+                if stats.get("distance_km") is not None:
+                    distance_km = float(stats["distance_km"])
+                ascent_m = stats.get("ascent_m")
+            except Exception:
+                ascent_m = None
+        cards.append(
+            {
+                "label": item.level_label or "路线",
+                "route": route,
+                "media_assets": media_by_option.get(item.id, []),
+                "activity_time": item.activity_time or activity.activity_time,
+                "participant_count": int(item.participant_count or 0),
+                "distance_km": round(distance_km, 2),
+                "ascent_m": round(float(ascent_m), 1) if ascent_m is not None else None,
+                "difficulty_stars": _difficulty_stars(route.difficulty),
+            }
+        )
+    return cards
 
 
 def _published_route_or_404(route_id: int) -> Route:
@@ -349,7 +431,12 @@ def events_list() -> str:
 @bp.get("/activities/<int:activity_id>")
 def activity_detail(activity_id: int) -> str:
     activity = _activity_detail_or_404(activity_id)
-    media_assets = MediaAsset.query.filter_by(activity_id=activity.id).order_by(MediaAsset.created_at.desc()).all()
+    media_assets = (
+        MediaAsset.query.filter_by(activity_id=activity.id, activity_route_option_id=None)
+        .order_by(MediaAsset.created_at.desc())
+        .all()
+    )
+    route_cards = _activity_route_cards(activity)
     source = (request.args.get("source") or "").strip()
     if source == "manage":
         back_url = url_for("admin.activities_page")
@@ -361,6 +448,7 @@ def activity_detail(activity_id: int) -> str:
         "activity_detail.html",
         activity=activity,
         media_assets=media_assets,
+        route_cards=route_cards,
         route_back_params={
             "from_activity_id": activity.id,
             "from_detail": "web.activity_detail",
@@ -375,7 +463,12 @@ def activity_detail(activity_id: int) -> str:
 @bp.get("/events/<int:event_id>")
 def events_detail(event_id: int) -> str:
     activity = _activity_detail_or_404(event_id)
-    media_assets = MediaAsset.query.filter_by(activity_id=activity.id).order_by(MediaAsset.created_at.desc()).all()
+    media_assets = (
+        MediaAsset.query.filter_by(activity_id=activity.id, activity_route_option_id=None)
+        .order_by(MediaAsset.created_at.desc())
+        .all()
+    )
+    route_cards = _activity_route_cards(activity)
     source = (request.args.get("source") or "").strip()
     if source == "manage":
         back_url = url_for("admin.activities_page")
@@ -387,6 +480,7 @@ def events_detail(event_id: int) -> str:
         "activity_detail.html",
         activity=activity,
         media_assets=media_assets,
+        route_cards=route_cards,
         route_back_params={
             "from_activity_id": activity.id,
             "from_detail": "web.events_detail",

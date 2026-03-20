@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, Announcement, AuditLog, MediaAsset, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -393,10 +393,82 @@ def test_route_detail_back_link_from_activity_detail(app_and_client):
     assert f"/events/{activity_id}" in body
 
 
+def test_activity_route_options_saved_and_rendered(app_and_client):
+    app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    csrf_token = get_manage_csrf(client)
+    create_route(client, csrf_token, name="Tier Route A")
+    create_route(client, csrf_token, name="Tier Route B")
+    create_route(client, csrf_token, name="Tier Route C")
+    routes = client.get("/api/v1/routes").get_json()["items"]
+    route_ids = [item["id"] for item in routes[:3]]
+
+    resp = client.post(
+        "/manage/activities/create",
+        data={
+            "csrf_token": csrf_token,
+            "title": "Tier Activity",
+            "route_option_beginner": str(route_ids[0]),
+            "route_option_beginner_time": "2026-03-21T09:00",
+            "route_option_beginner_participants": "12",
+            "route_option_intermediate": str(route_ids[1]),
+            "route_option_intermediate_time": "2026-03-21T09:30",
+            "route_option_intermediate_participants": "8",
+            "route_option_advanced": str(route_ids[2]),
+            "route_option_advanced_time": "2026-03-21T10:00",
+            "route_option_advanced_participants": "5",
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+
+    with app.app_context():
+        activity = Activity.query.filter_by(title="Tier Activity").first()
+        assert activity is not None
+        options = ActivityRouteOption.query.filter_by(activity_id=activity.id).all()
+        assert len(options) == 3
+        assert len(activity.routes) >= 3
+        assert sum(item.participant_count for item in options) == 25
+        activity_id = activity.id
+
+    detail = client.get(f"/events/{activity_id}")
+    body = detail.get_data(as_text=True)
+    assert detail.status_code == 200
+    assert "初级路线" in body
+    assert "中级路线" in body
+    assert "高级路线" in body
+    assert "参与人数" in body
+
+
+def test_activity_detail_legacy_route_relation_compatible(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        route = Route(
+            route_name="Legacy Activity Route",
+            gpx_filename="legacy_activity_route.gpx",
+            status="published",
+            is_deleted=False,
+            distance_km=12.3,
+        )
+        activity = Activity(title="Legacy Activity Detail")
+        activity.routes.append(route)
+        db.session.add_all([route, activity])
+        db.session.commit()
+        activity_id = activity.id
+
+    resp = client.get(f"/events/{activity_id}")
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "初级路线" in body
+    assert "Legacy Activity Route" in body
+
+
 def test_activity_media_upload_and_render(app_and_client):
     app, client = app_and_client
     assert login_admin(client).status_code == 200
     csrf_token = get_manage_csrf(client)
+    create_route(client, csrf_token, name="Media Route")
+    route_id = client.get("/api/v1/routes").get_json()["items"][0]["id"]
 
     png_bytes = b"\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x08\\x02\\x00\\x00\\x00\\x90wS\\xde\\x00\\x00\\x00\\x0cIDATx\\x9cc``\\x00\\x00\\x00\\x04\\x00\\x01\\x0b\\xe7\\x02\\x9d\\x00\\x00\\x00\\x00IEND\\xaeB`\\x82"
     mp4_bytes = b"\\x00\\x00\\x00\\x18ftypmp42\\x00\\x00\\x00\\x00mp42isom"
@@ -406,11 +478,10 @@ def test_activity_media_upload_and_render(app_and_client):
         data={
             "csrf_token": csrf_token,
             "title": "Media Event",
-            "activity_time": "2026-03-20T10:00",
-            "participant_count": "15",
-            "weather": "sunny",
-            "summary": "with media",
-            "media_files": [
+            "route_option_beginner": str(route_id),
+            "route_option_beginner_time": "2026-03-20T10:00",
+            "route_option_beginner_participants": "15",
+            "media_files_beginner": [
                 (BytesIO(png_bytes), "photo.png"),
                 (BytesIO(mp4_bytes), "clip.mp4"),
             ],

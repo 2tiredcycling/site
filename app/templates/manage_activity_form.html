@@ -31,26 +31,84 @@
     <section class="card form-card">
       <form method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_activity', activity_id=activity.id) if activity else url_for('admin.create_activity') }}" class="single-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="filter-grid">
-          <label>活动名<input type="text" name="title" value="{{ activity.title if activity else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
-          <label>活动时间
-            <input type="datetime-local" name="activity_time" value="{{ to_local_time(activity.activity_time).strftime('%Y-%m-%dT%H:%M') if activity and activity.activity_time else '' }}" {% if not can_edit %}disabled{% endif %}>
-          </label>
-          <label>参与人数<input type="number" name="participant_count" min="0" value="{{ activity.participant_count if activity else 0 }}" {% if not can_edit %}disabled{% endif %}></label>
-          <label>天气<input type="text" name="weather" value="{{ activity.weather if activity else '' }}" {% if not can_edit %}disabled{% endif %}></label>
-          <label>关联路线
-            <select name="route_ids" multiple size="10" {% if not can_edit %}disabled{% endif %}>
-              {% set selected_ids = activity.routes | map(attribute='id') | list if activity else [] %}
-              {% for route in routes %}
-                <option value="{{ route.id }}" {% if route.id in selected_ids %}selected{% endif %}>{{ route.route_name }}</option>
-              {% endfor %}
-            </select>
-          </label>
-        </div>
-        <label>活动总结<textarea name="summary" rows="3" {% if not can_edit %}disabled{% endif %}>{{ activity.summary if activity else '' }}</textarea></label>
-        <label>活动图片/视频（可多选）
-          <input type="file" name="media_files" accept="image/*,video/*" multiple {% if not can_edit %}disabled{% endif %}>
-        </label>
+        <label>活动名<input type="text" name="title" value="{{ activity.title if activity else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
+
+        <section class="activity-level-rows">
+          <article class="activity-level-row">
+            <h3>初级路线</h3>
+            <div class="activity-level-fields">
+              <label>关联路线
+                <select name="route_option_beginner" data-route-select {% if not can_edit %}disabled{% endif %}>
+                  <option value="">未设置</option>
+                  {% for route in routes %}
+                    <option value="{{ route.id }}" {% if route_option_map and route_option_map.get('beginner') and route_option_map.get('beginner').get('route_id') == route.id %}selected{% endif %}>{{ route.route_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div class="activity-level-detail-fields" data-route-details>
+                <label>参与人数
+                  <input type="number" name="route_option_beginner_participants" min="0" value="{{ route_option_map.get('beginner').get('participant_count') if route_option_map and route_option_map.get('beginner') else 0 }}" {% if not can_edit %}disabled{% endif %}>
+                </label>
+                <label><span>活动时间</span>
+                  <input type="datetime-local" name="route_option_beginner_time" value="{{ to_local_time(route_option_map.get('beginner').get('activity_time')).strftime('%Y-%m-%dT%H:%M') if route_option_map and route_option_map.get('beginner') and route_option_map.get('beginner').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
+                </label>
+                <label>路线图片/视频
+                  <input type="file" name="media_files_beginner" accept="image/*,video/*" multiple {% if not can_edit %}disabled{% endif %}>
+                </label>
+              </div>
+            </div>
+          </article>
+
+          <article class="activity-level-row">
+            <h3>中级路线</h3>
+            <div class="activity-level-fields">
+              <label>关联路线
+                <select name="route_option_intermediate" data-route-select {% if not can_edit %}disabled{% endif %}>
+                  <option value="">未设置</option>
+                  {% for route in routes %}
+                    <option value="{{ route.id }}" {% if route_option_map and route_option_map.get('intermediate') and route_option_map.get('intermediate').get('route_id') == route.id %}selected{% endif %}>{{ route.route_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div class="activity-level-detail-fields" data-route-details>
+                <label>参与人数
+                  <input type="number" name="route_option_intermediate_participants" min="0" value="{{ route_option_map.get('intermediate').get('participant_count') if route_option_map and route_option_map.get('intermediate') else 0 }}" {% if not can_edit %}disabled{% endif %}>
+                </label>
+                <label><span>活动时间</span>
+                  <input type="datetime-local" name="route_option_intermediate_time" value="{{ to_local_time(route_option_map.get('intermediate').get('activity_time')).strftime('%Y-%m-%dT%H:%M') if route_option_map and route_option_map.get('intermediate') and route_option_map.get('intermediate').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
+                </label>
+                <label>路线图片/视频
+                  <input type="file" name="media_files_intermediate" accept="image/*,video/*" multiple {% if not can_edit %}disabled{% endif %}>
+                </label>
+              </div>
+            </div>
+          </article>
+
+          <article class="activity-level-row">
+            <h3>高级路线</h3>
+            <div class="activity-level-fields">
+              <label>关联路线
+                <select name="route_option_advanced" data-route-select {% if not can_edit %}disabled{% endif %}>
+                  <option value="">未设置</option>
+                  {% for route in routes %}
+                    <option value="{{ route.id }}" {% if route_option_map and route_option_map.get('advanced') and route_option_map.get('advanced').get('route_id') == route.id %}selected{% endif %}>{{ route.route_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div class="activity-level-detail-fields" data-route-details>
+                <label>参与人数
+                  <input type="number" name="route_option_advanced_participants" min="0" value="{{ route_option_map.get('advanced').get('participant_count') if route_option_map and route_option_map.get('advanced') else 0 }}" {% if not can_edit %}disabled{% endif %}>
+                </label>
+                <label><span>活动时间</span>
+                  <input type="datetime-local" name="route_option_advanced_time" value="{{ to_local_time(route_option_map.get('advanced').get('activity_time')).strftime('%Y-%m-%dT%H:%M') if route_option_map and route_option_map.get('advanced') and route_option_map.get('advanced').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
+                </label>
+                <label>路线图片/视频
+                  <input type="file" name="media_files_advanced" accept="image/*,video/*" multiple {% if not can_edit %}disabled{% endif %}>
+                </label>
+              </div>
+            </div>
+          </article>
+        </section>
         {% if can_edit %}
           <button class="btn" type="submit">{{ '保存活动' if activity else '新增活动' }}</button>
         {% endif %}
@@ -101,6 +159,42 @@
       </section>
     {% endif %}
   </main>
+  <script>
+    (function () {
+      const rows = document.querySelectorAll(".activity-level-row");
+      rows.forEach((row) => {
+        const routeSelect = row.querySelector("[data-route-select]");
+        const details = row.querySelector("[data-route-details]");
+        if (!routeSelect || !details) {
+          return;
+        }
+        const editable = !routeSelect.disabled;
+        const detailInputs = Array.from(details.querySelectorAll("input, select, textarea"));
+
+        const sync = () => {
+          const hasRoute = Boolean((routeSelect.value || "").trim());
+          details.hidden = !hasRoute;
+          row.classList.toggle("activity-level-row-empty", !hasRoute);
+          detailInputs.forEach((input) => {
+            if (!editable) {
+              return;
+            }
+            input.disabled = !hasRoute;
+            if (!hasRoute && input.type !== "file") {
+              if (input.type === "number") {
+                input.value = "0";
+              } else {
+                input.value = "";
+              }
+            }
+          });
+        };
+
+        routeSelect.addEventListener("change", sync);
+        sync();
+      });
+    })();
+  </script>
 </body>
 </html>
 

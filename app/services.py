@@ -113,6 +113,9 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("event_registrations", "user_agent", "user_agent VARCHAR(255) DEFAULT '' NOT NULL")
         _add_column_if_missing("event_registrations", "created_at", "created_at DATETIME")
         _add_column_if_missing("event_registrations", "updated_at", "updated_at DATETIME")
+        _add_column_if_missing("activity_route_options", "activity_time", "activity_time DATETIME")
+        _add_column_if_missing("activity_route_options", "participant_count", "participant_count INTEGER DEFAULT 0 NOT NULL")
+        _add_column_if_missing("media_assets", "activity_route_option_id", "activity_route_option_id INTEGER")
     else:
         _add_column_if_missing("routes", "updated_at", "updated_at TIMESTAMP")
         _add_column_if_missing("routes", "uploaded_at", "uploaded_at TIMESTAMP")
@@ -178,6 +181,9 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("event_registrations", "user_agent", "user_agent VARCHAR(255) DEFAULT '' NOT NULL")
         _add_column_if_missing("event_registrations", "created_at", "created_at TIMESTAMP")
         _add_column_if_missing("event_registrations", "updated_at", "updated_at TIMESTAMP")
+        _add_column_if_missing("activity_route_options", "activity_time", "activity_time TIMESTAMP")
+        _add_column_if_missing("activity_route_options", "participant_count", "participant_count INTEGER DEFAULT 0 NOT NULL")
+        _add_column_if_missing("media_assets", "activity_route_option_id", "activity_route_option_id INTEGER")
 
     with db.engine.begin() as conn:
         conn.execute(text("UPDATE routes SET uploaded_at = created_at WHERE uploaded_at IS NULL"))
@@ -258,6 +264,7 @@ def ensure_schema_compat() -> None:
         conn.execute(text("UPDATE event_registrations SET user_agent = '' WHERE user_agent IS NULL"))
         conn.execute(text("UPDATE event_registrations SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
         conn.execute(text("UPDATE event_registrations SET updated_at = created_at WHERE updated_at IS NULL"))
+        conn.execute(text("UPDATE activity_route_options SET participant_count = 0 WHERE participant_count IS NULL"))
 
 
 def ensure_default_admin(username: str, password: str) -> None:

@@ -166,6 +166,12 @@ class Activity(db.Model):
 
     creator = db.relationship("User", lazy="joined")
     routes = db.relationship("Route", secondary="activity_routes", backref="activities", lazy="selectin")
+    route_options = db.relationship(
+        "ActivityRouteOption",
+        back_populates="activity",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
     def as_dict(self) -> dict:
         return {
@@ -284,6 +290,29 @@ class SitePage(db.Model):
 
     creator = db.relationship("User", foreign_keys=[created_by], lazy="joined")
     updater = db.relationship("User", foreign_keys=[updated_by], lazy="joined")
+
+
+class ActivityRouteOption(db.Model):
+    __tablename__ = "activity_route_options"
+    __table_args__ = (
+        db.UniqueConstraint("activity_id", "level_key", name="uq_activity_route_option_level"),
+        Index("idx_activity_route_options_activity_sort", "activity_id", "sort_order"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    activity_id = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=False)
+    route_id = db.Column(db.Integer, db.ForeignKey("routes.id"), nullable=False)
+    level_key = db.Column(db.String(32), nullable=False, default="beginner")
+    level_label = db.Column(db.String(32), nullable=False, default="")
+    activity_time = db.Column(db.DateTime, nullable=True)
+    participant_count = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    activity = db.relationship("Activity", back_populates="route_options", lazy="joined")
+    route = db.relationship("Route", lazy="joined")
+    media_assets = db.relationship("MediaAsset", back_populates="activity_route_option", lazy="selectin")
 
 
 class Announcement(db.Model):
@@ -414,6 +443,7 @@ class MediaAsset(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     activity_id = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=True)
+    activity_route_option_id = db.Column(db.Integer, db.ForeignKey("activity_route_options.id"), nullable=True)
     route_id = db.Column(db.Integer, db.ForeignKey("routes.id"), nullable=True)
     original_filename = db.Column(db.String(255), nullable=False)
     storage_path = db.Column(db.String(255), nullable=False)
@@ -422,12 +452,14 @@ class MediaAsset(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
     activity = db.relationship("Activity", lazy="joined")
+    activity_route_option = db.relationship("ActivityRouteOption", back_populates="media_assets", lazy="joined")
     route = db.relationship("Route", lazy="joined")
 
     def as_dict(self) -> dict:
         return {
             "id": self.id,
             "activity_id": self.activity_id,
+            "activity_route_option_id": self.activity_route_option_id,
             "route_id": self.route_id,
             "original_filename": self.original_filename,
             "storage_path": self.storage_path,

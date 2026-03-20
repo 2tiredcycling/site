@@ -32,15 +32,14 @@
       <h2>活动列表</h2>
       <table>
         <thead>
-          <tr><th>ID</th><th>活动名</th><th>时间</th><th>参与人数</th><th>关联路线</th><th>操作</th></tr>
+          <tr><th>ID</th><th>活动名</th><th>路线方案数</th><th>关联路线</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for activity in activities %}
             <tr>
               <td>{{ activity.id }}</td>
               <td>{{ activity.title }}</td>
-              <td>{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</td>
-              <td>{{ activity.participant_count }}</td>
+              <td>{{ activity.route_options|length if activity.route_options is defined else 0 }}</td>
               <td>{{ activity.routes|length }}</td>
               <td class="row-actions">
                 <a class="btn btn-muted" href="{{ url_for('web.activity_detail', activity_id=activity.id, source='manage') }}">查看</a>
@@ -48,7 +47,7 @@
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="6">暂无活动</td></tr>
+            <tr><td colspan="5">暂无活动</td></tr>
           {% endfor %}
         </tbody>
       </table>

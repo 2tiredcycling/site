@@ -19,10 +19,6 @@
       </div>
 
       <h1>{{ activity.title }}</h1>
-      <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
-      <p>参与人数：{{ activity.participant_count }}</p>
-      <p>天气：{{ activity.weather or '-' }}</p>
-      <p>总结：{{ activity.summary or '暂无' }}</p>
 
       <h3>活动影像</h3>
       {% if media_assets %}
@@ -57,13 +53,50 @@
       {% endif %}
 
       <h3>关联路线</h3>
-      <ul>
-        {% for route in activity.routes %}
-          <li><a href="{{ url_for('web.route_detail', route_id=route.id, **(route_back_params or {})) }}">{{ route.route_name }}</a></li>
-        {% else %}
-          <li>暂无关联路线</li>
-        {% endfor %}
-      </ul>
+      {% if route_cards %}
+        <div class="activity-route-grid">
+          {% for item in route_cards %}
+            <article class="edit-item activity-route-card">
+              <div class="row-actions">
+                <strong>{{ item.label }}路线</strong>
+                <span class="hint">{{ item.difficulty_stars }}</span>
+              </div>
+              <h4>{{ item.route.route_name }}</h4>
+              <div class="filter-grid">
+                <div><strong>活动时间</strong><div>{{ to_local_time(item.activity_time).strftime('%Y-%m-%d %H:%M') if item.activity_time else '待定' }}</div></div>
+                <div><strong>参与人数</strong><div>{{ item.participant_count if item.participant_count is not none else 0 }}</div></div>
+                <div><strong>里程</strong><div>{{ '%.2f'|format(item.distance_km or 0) }} km</div></div>
+                <div><strong>累计爬升</strong><div>{{ ('%.1f'|format(item.ascent_m) ~ ' m') if item.ascent_m is not none else '暂无' }}</div></div>
+                <div><strong>难度</strong><div>{{ item.difficulty_stars }}</div></div>
+              </div>
+              <div class="row-actions">
+                <a class="quick-pill" href="{{ url_for('web.route_detail', route_id=item.route.id, **(route_back_params or {})) }}">
+                  <span aria-hidden="true">🧭</span><span>查看 {{ item.label }} 路线详情</span>
+                </a>
+              </div>
+              {% if item.media_assets %}
+                <div class="media-grid">
+                  {% for media in item.media_assets %}
+                    <article class="edit-item media-item">
+                      {% if media.mime_type.startswith('image/') %}
+                        <button type="button" class="media-preview-trigger" data-media-src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" data-media-alt="{{ item.label }}路线活动图片">
+                          <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ item.label }}路线活动图片">
+                        </button>
+                      {% elif media.mime_type.startswith('video/') %}
+                        <video controls preload="metadata">
+                          <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
+                        </video>
+                      {% endif %}
+                    </article>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="hint">暂无关联路线</p>
+      {% endif %}
     </section>
   </main>
 

@@ -58,6 +58,7 @@ from app.models import (
     STATUS_PENDING_REVIEW,
     STATUS_PUBLISHED,
     Activity,
+    ActivityRouteOption,
     AccessLog,
     AuditLog,
     Announcement,
@@ -105,6 +106,11 @@ ROLE_LABELS = {
     ROLE_CONTENT_ADMIN: "content_admin（内容维护）",
     ROLE_VIEWER: "viewer（只读）",
 }
+ACTIVITY_ROUTE_LEVELS = (
+    ("beginner", "初级"),
+    ("intermediate", "中级"),
+    ("advanced", "高级"),
+)
 
 
 def _display_app_version() -> str:
@@ -206,7 +212,7 @@ def _permissions_from_form(role: str) -> dict[str, bool]:
     return result
 
 
-def _save_activity_media(activity_id: int, uploads) -> int:
+def _save_activity_media(activity_id: int, uploads, activity_route_option_id: int | None = None) -> int:
     media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
     media_dir.mkdir(parents=True, exist_ok=True)
     allowed_exts = {str(item).lower() for item in current_app.config.get("ALLOWED_MEDIA_EXTENSIONS", set())}
@@ -230,6 +236,7 @@ def _save_activity_media(activity_id: int, uploads) -> int:
         db.session.add(
             MediaAsset(
                 activity_id=activity_id,
+                activity_route_option_id=activity_route_option_id,
                 original_filename=original_name[:255],
                 storage_path=token,
                 mime_type=mime_type[:128],
@@ -1069,7 +1076,15 @@ def activities_page():
 @login_required
 def activity_new_page():
     routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
-    return render_template("manage_activity_form.html", activity=None, routes=routes, media_assets=[], can_edit=True)
+    return render_template(
+        "manage_activity_form.html",
+        activity=None,
+        routes=routes,
+        media_assets=[],
+        route_option_map={},
+        legacy_selected_ids=[],
+        can_edit=True,
+    )
 
 
 @bp.get("/activities/<int:activity_id>/edit")
@@ -1081,11 +1096,34 @@ def activity_edit_page(activity_id: int):
         return redirect(url_for("admin.activities_page"))
     routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all()
     media_assets = MediaAsset.query.filter_by(activity_id=activity.id).order_by(MediaAsset.created_at.desc()).all()
+    route_option_items = (
+        ActivityRouteOption.query.filter_by(activity_id=activity.id)
+        .order_by(ActivityRouteOption.sort_order.asc(), ActivityRouteOption.id.asc())
+        .all()
+    )
+    route_option_map = {
+        item.level_key: {
+            "route_id": item.route_id,
+            "participant_count": int(item.participant_count or 0),
+            "activity_time": item.activity_time,
+        }
+        for item in route_option_items
+    }
+    if not route_option_map:
+        legacy_levels = [key for key, _label in ACTIVITY_ROUTE_LEVELS]
+        for index, route in enumerate(activity.routes[: len(legacy_levels)]):
+            route_option_map[legacy_levels[index]] = {
+                "route_id": route.id,
+                "participant_count": int(activity.participant_count or 0),
+                "activity_time": activity.activity_time,
+            }
     return render_template(
         "manage_activity_form.html",
         activity=activity,
         routes=routes,
         media_assets=media_assets,
+        route_option_map=route_option_map,
+        legacy_selected_ids=[route.id for route in activity.routes],
         can_edit=can_edit(g.current_user),
     )
 
@@ -1273,6 +1311,54 @@ def _announcement_from_form(announcement: Announcement | None = None) -> dict:
         "activity_ids": activity_ids,
         "route_ids": route_ids,
     }
+
+
+def _activity_route_options_from_form() -> list[dict]:
+    items: list[dict] = []
+    for sort_order, (level_key, level_label) in enumerate(ACTIVITY_ROUTE_LEVELS, start=1):
+        raw = (request.form.get(f"route_option_{level_key}") or "").strip()
+        if not raw:
+            continue
+        try:
+            route_id = int(raw)
+        except ValueError:
+            continue
+        participant_count = parse_distance(request.form.get(f"route_option_{level_key}_participants") or "0")
+        option_time = _parse_activity_time(request.form.get(f"route_option_{level_key}_time"))
+        items.append(
+            {
+                "level_key": level_key,
+                "level_label": level_label,
+                "sort_order": sort_order,
+                "route_id": route_id,
+                "participant_count": int(participant_count or 0),
+                "activity_time": option_time,
+            }
+        )
+    return items
+
+
+def _sync_activity_route_options(activity: Activity, option_items: list[dict]) -> None:
+    existing_options = ActivityRouteOption.query.filter_by(activity_id=activity.id).all()
+    existing_ids = [item.id for item in existing_options]
+    if existing_ids:
+        MediaAsset.query.filter(MediaAsset.activity_route_option_id.in_(existing_ids)).update(
+            {MediaAsset.activity_route_option_id: None},
+            synchronize_session=False,
+        )
+    ActivityRouteOption.query.filter_by(activity_id=activity.id).delete()
+    for item in option_items:
+        db.session.add(
+            ActivityRouteOption(
+                activity_id=activity.id,
+                route_id=item["route_id"],
+                level_key=item["level_key"],
+                level_label=item["level_label"],
+                activity_time=item.get("activity_time"),
+                participant_count=int(item.get("participant_count") or 0),
+                sort_order=item["sort_order"],
+            )
+        )
 
 
 @bp.post("/routes/create")
@@ -1573,33 +1659,49 @@ def delete_feedback(feedback_id: int):
 @login_required
 def create_activity():
     title = (request.form.get("title") or "").strip()
-    participant_count = parse_distance(request.form.get("participant_count") or "0")
-    weather = (request.form.get("weather") or "").strip()
-    summary = (request.form.get("summary") or "").strip()
-    route_ids = request.form.getlist("route_ids")
+    option_items = _activity_route_options_from_form()
+    selected_route_ids = [item["route_id"] for item in option_items]
+    selected_route_ids = list(dict.fromkeys(selected_route_ids))
 
     if not title:
         flash("参数错误：活动标题不能为空", "error")
         return redirect(url_for("admin.activities_page"))
 
-    parsed_activity_time = _parse_activity_time(request.form.get("activity_time"))
-
     activity = Activity(
         title=title,
-        participant_count=int(participant_count or 0),
-        weather=weather,
-        summary=summary,
+        participant_count=0,
+        weather="",
+        summary="",
         created_by=g.current_user.id,
     )
-    if parsed_activity_time:
-        activity.activity_time = parsed_activity_time
 
-    selected_routes = Route.query.filter(Route.id.in_(route_ids), Route.is_deleted.is_(False)).all() if route_ids else []
+    selected_routes = (
+        Route.query.filter(Route.id.in_(selected_route_ids), Route.is_deleted.is_(False)).all()
+        if selected_route_ids
+        else []
+    )
     activity.routes = selected_routes
 
     db.session.add(activity)
     db.session.commit()
-    uploaded_count = _save_activity_media(activity.id, request.files.getlist("media_files"))
+    valid_route_ids = {route.id for route in selected_routes}
+    option_items = [item for item in option_items if item["route_id"] in valid_route_ids]
+    option_times = [item.get("activity_time") for item in option_items if item.get("activity_time")]
+    activity.activity_time = min(option_times) if option_times else activity.activity_time
+    activity.participant_count = int(sum(int(item.get("participant_count") or 0) for item in option_items))
+    _sync_activity_route_options(activity, option_items)
+    db.session.flush()
+    option_map = {item.level_key: item for item in ActivityRouteOption.query.filter_by(activity_id=activity.id).all()}
+    uploaded_count = 0
+    for level_key, _label in ACTIVITY_ROUTE_LEVELS:
+        option = option_map.get(level_key)
+        if not option:
+            continue
+        uploaded_count += _save_activity_media(
+            activity.id,
+            request.files.getlist(f"media_files_{level_key}"),
+            activity_route_option_id=option.id,
+        )
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.create", "activity", str(activity.id), activity.title)
     if uploaded_count > 0:
@@ -1622,23 +1724,39 @@ def update_activity(activity_id: int):
         flash("参数错误：活动标题不能为空", "error")
         return redirect(url_for("admin.activities_page"))
 
-    participant_count = parse_distance(request.form.get("participant_count") or "0")
-    weather = (request.form.get("weather") or "").strip()
-    summary = (request.form.get("summary") or "").strip()
-    route_ids = request.form.getlist("route_ids")
-    parsed_activity_time = _parse_activity_time(request.form.get("activity_time"))
+    option_items = _activity_route_options_from_form()
+    selected_route_ids = [item["route_id"] for item in option_items]
+    selected_route_ids = list(dict.fromkeys(selected_route_ids))
 
     activity.title = title
-    activity.participant_count = int(participant_count or 0)
-    activity.weather = weather
-    activity.summary = summary
-    if parsed_activity_time:
-        activity.activity_time = parsed_activity_time
+    activity.weather = ""
+    activity.summary = ""
 
-    selected_routes = Route.query.filter(Route.id.in_(route_ids), Route.is_deleted.is_(False)).all() if route_ids else []
+    selected_routes = (
+        Route.query.filter(Route.id.in_(selected_route_ids), Route.is_deleted.is_(False)).all()
+        if selected_route_ids
+        else []
+    )
     activity.routes = selected_routes
 
-    uploaded_count = _save_activity_media(activity.id, request.files.getlist("media_files"))
+    valid_route_ids = {route.id for route in selected_routes}
+    option_items = [item for item in option_items if item["route_id"] in valid_route_ids]
+    option_times = [item.get("activity_time") for item in option_items if item.get("activity_time")]
+    activity.activity_time = min(option_times) if option_times else activity.activity_time
+    activity.participant_count = int(sum(int(item.get("participant_count") or 0) for item in option_items))
+    _sync_activity_route_options(activity, option_items)
+    db.session.flush()
+    option_map = {item.level_key: item for item in ActivityRouteOption.query.filter_by(activity_id=activity.id).all()}
+    uploaded_count = 0
+    for level_key, _label in ACTIVITY_ROUTE_LEVELS:
+        option = option_map.get(level_key)
+        if not option:
+            continue
+        uploaded_count += _save_activity_media(
+            activity.id,
+            request.files.getlist(f"media_files_{level_key}"),
+            activity_route_option_id=option.id,
+        )
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.update", "activity", str(activity.id), activity.title)
     if uploaded_count > 0:
