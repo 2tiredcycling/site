@@ -61,14 +61,13 @@ body {
   padding: 8px 12px;
   font-size: 14px;
   line-height: 1;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .quick-pill:hover {
-  transform: translateY(-1px);
   border-color: #93c5fd;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.14);
   background: #fff;
+  color: #1d4ed8;
 }
 
 .quick-pill-button {
@@ -132,6 +131,18 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.section-head h2 {
+  margin: 0;
 }
 
 .notice-list .edit-item {
@@ -387,35 +398,56 @@ td {
 }
 
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   text-decoration: none;
-  padding: 8px 14px;
-  border-radius: 8px;
-  background: #2563eb;
-  color: #fff;
-  border: none;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #dbeafe;
+  background: #ffffffd9;
   font-size: 14px;
+  line-height: 1;
+  font-weight: 400;
   cursor: pointer;
+  color: #1e40af;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .btn:hover {
-  background: #1d4ed8;
+  border-color: #93c5fd;
+  background: #fff;
+  color: #1d4ed8;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .btn-danger {
-  background: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .btn-danger:hover {
-  background: #b91c1c;
+  border-color: #fca5a5;
+  background: #fff1f2;
+  color: #991b1b;
 }
 
 .btn-muted {
-  background: #4b5563;
+  color: #1e40af;
+  border-color: #dbeafe;
+  background: #ffffffd9;
 }
 
 .btn-muted:hover {
-  background: #374151;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  background: #fff;
 }
 
 .row-actions {

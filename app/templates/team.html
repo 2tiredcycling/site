@@ -12,8 +12,8 @@
   <main class="container">
     <section class="card form-card">
       <div class="row-actions">
-        <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
-        <a class="btn" href="{{ url_for('web.contact_page') }}">联系团队</a>
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}"><span aria-hidden="true">🏠</span><span>返回首页</span></a>
+        <a class="btn" href="{{ url_for('web.contact_page') }}"><span aria-hidden="true">📮</span><span>联系团队</span></a>
       </div>
       <h1>{{ page.title if page else '管理团队' }}</h1>
       {% if page and page.summary %}

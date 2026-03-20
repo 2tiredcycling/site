@@ -85,6 +85,21 @@ def _activity_pagination(page: int, per_page: int):
     return Activity.query.order_by(Activity.activity_time.desc()).paginate(page=page, per_page=per_page, error_out=False)
 
 
+def _event_display_date(activity: Activity):
+    option_times = [
+        item.activity_time
+        for item in (activity.route_options or [])
+        if getattr(item, "activity_time", None) is not None
+    ]
+    if option_times:
+        return min(option_times)
+    return activity.activity_time
+
+
+def _event_display_date_map(activities: list[Activity]) -> dict[int, object]:
+    return {item.id: _event_display_date(item) for item in activities}
+
+
 def _activity_detail_or_404(activity_id: int) -> Activity:
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
@@ -371,6 +386,9 @@ def route_detail(route_id: int) -> str:
         else:
             back_url = url_for("web.activity_detail", activity_id=from_activity_id, **route_back_params)
             back_label = "返回活动详情"
+    elif source == "home":
+        back_url = url_for("web.index")
+        back_label = "返回首页"
     return render_template(
         "route_detail.html",
         route=route,
@@ -420,6 +438,7 @@ def events_list() -> str:
     return render_template(
         "activities.html",
         activities=pagination.items,
+        event_display_date_map=_event_display_date_map(pagination.items),
         pagination=pagination,
         detail_endpoint="web.events_detail",
         list_endpoint="web.events_list",
@@ -441,6 +460,9 @@ def activity_detail(activity_id: int) -> str:
     if source == "manage":
         back_url = url_for("admin.activities_page")
         back_label = "返回活动管理"
+    elif source == "home":
+        back_url = url_for("web.index")
+        back_label = "返回首页"
     else:
         back_url = url_for("web.activity_list")
         back_label = "返回活动列表"
@@ -473,6 +495,9 @@ def events_detail(event_id: int) -> str:
     if source == "manage":
         back_url = url_for("admin.activities_page")
         back_label = "返回活动管理"
+    elif source == "home":
+        back_url = url_for("web.index")
+        back_label = "返回首页"
     else:
         back_url = url_for("web.events_list")
         back_label = "返回活动中心"

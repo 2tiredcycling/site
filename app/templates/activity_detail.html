@@ -12,9 +12,9 @@
   <main class="container">
     <section class="card form-card">
       <div class="row-actions">
-        <a class="btn" href="{{ back_url if back_url else url_for('web.events_list') }}">{{ back_label if back_label else '返回活动中心' }}</a>
+        <a class="btn" href="{{ back_url if back_url else url_for('web.events_list') }}"><span aria-hidden="true">↩️</span><span>{{ back_label if back_label else '返回活动中心' }}</span></a>
         {% if not back_url %}
-          <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回首页</a>
+          <a class="btn btn-muted" href="{{ url_for('web.index') }}"><span aria-hidden="true">🏠</span><span>返回首页</span></a>
         {% endif %}
       </div>
 
@@ -86,19 +86,19 @@
                   <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ activity.title }} 活动图片">
                 </button>
                 <div class="media-actions">
-                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载图片</a>
+                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download><span aria-hidden="true">⬇️</span><span>下载图片</span></a>
                 </div>
               {% elif media.mime_type.startswith('video/') %}
                 <video controls preload="metadata">
                   <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
                 </video>
                 <div class="media-actions">
-                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载视频</a>
+                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download><span aria-hidden="true">⬇️</span><span>下载视频</span></a>
                 </div>
               {% else %}
-                <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank">查看附件</a>
+                <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank"><span aria-hidden="true">📎</span><span>查看附件</span></a>
                 <div class="media-actions">
-                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载附件</a>
+                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download><span aria-hidden="true">⬇️</span><span>下载附件</span></a>
                 </div>
               {% endif %}
             </article>
@@ -123,7 +123,7 @@
       <div class="media-modal-toolbar">
         <span class="hint">滚轮缩放，双击预览区恢复</span>
         <span class="hint" id="mediaModalNavHint"></span>
-        <a class="btn" id="mediaModalDownload" href="#" download>下载原图</a>
+        <a class="btn" id="mediaModalDownload" href="#" download><span aria-hidden="true">⬇️</span><span>下载原图</span></a>
       </div>
     </div>
   </div>

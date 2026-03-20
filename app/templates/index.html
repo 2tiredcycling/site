@@ -81,26 +81,36 @@
 
     <section class="split-grid">
       <section class="card form-card">
-        <h2>最新活动</h2>
+        <div class="section-head">
+          <h2>最新活动</h2>
+          <a class="quick-pill" href="{{ url_for('web.events_list') }}">显示全部</a>
+        </div>
         {% for activity in latest_activities %}
-          <article class="edit-item compact-item">
-            <h3><a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a></h3>
-            <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
-            <p class="hint">人数：{{ activity.participant_count }}，关联路线：{{ activity.routes|length }}</p>
-          </article>
+          <a class="quick-link" href="{{ url_for('web.events_detail', event_id=activity.id, source='home') }}">
+            <article class="edit-item compact-item">
+              <h3>{{ activity.title }}</h3>
+              <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
+              <p class="hint">人数：{{ activity.participant_count }}，关联路线：{{ activity.routes|length }}</p>
+            </article>
+          </a>
         {% else %}
           <p>暂无活动</p>
         {% endfor %}
       </section>
 
       <section class="card form-card">
-        <h2>最新路线</h2>
+        <div class="section-head">
+          <h2>最新路线</h2>
+          <a class="quick-pill" href="{{ url_for('web.routes_center') }}">显示全部</a>
+        </div>
         {% for route in latest_routes %}
-          <article class="edit-item compact-item">
-            <h3><a href="{{ url_for('web.route_detail', route_id=route.id) }}">{{ route.route_name }}</a></h3>
-            <p>{{ '%.1f'|format(route.distance_km or 0) }} km，下载 {{ route.download_count or 0 }} 次</p>
-            <p class="hint">更新：{{ to_local_time(route.updated_at).strftime('%Y-%m-%d %H:%M') if route.updated_at else '-' }}</p>
-          </article>
+          <a class="quick-link" href="{{ url_for('web.route_detail', route_id=route.id, source='home') }}">
+            <article class="edit-item compact-item">
+              <h3>{{ route.route_name }}</h3>
+              <p>{{ '%.1f'|format(route.distance_km or 0) }} km，下载 {{ route.download_count or 0 }} 次</p>
+              <p class="hint">更新：{{ to_local_time(route.updated_at).strftime('%Y-%m-%d %H:%M') if route.updated_at else '-' }}</p>
+            </article>
+          </a>
         {% else %}
           <p>暂无路线</p>
         {% endfor %}
