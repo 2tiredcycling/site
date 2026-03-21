@@ -13,21 +13,65 @@
   <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
-    <section class="card form-card">
-      <h1>{{ page.title if page else '联系我们' }}</h1>
-      {% if page and page.summary %}
-        <p class="hint">{{ page.summary }}</p>
-      {% endif %}
+    <section class="card form-card contact-hero">
+      <div class="contact-hero-main">
+        <p class="contact-eyebrow">CONTACT 2TIRED</p>
+        <h1>{{ page.title if page else '联系我们' }}</h1>
+        {% if page and page.summary %}
+          <p class="hint">{{ page.summary }}</p>
+        {% else %}
+          <p class="hint">活动咨询、合作交流或加入意向，欢迎通过社团邮箱联系我们。</p>
+        {% endif %}
+      </div>
+      <div class="contact-hero-note">
+        <strong>响应说明</strong>
+        <span>我们会在收到邮件后尽快回复，重要通知会统一通过官方渠道同步。</span>
+      </div>
+    </section>
 
-      {% if page and page.content %}
-        <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
-      {% else %}
-        <div class="edit-item">
-          <p><strong>社团邮箱：</strong><a href="mailto:st_2tiredcc@link.cuhk.edu.cn">st_2tiredcc@link.cuhk.edu.cn</a></p>
+    <section class="contact-grid">
+      <section class="card form-card contact-content-card">
+        {% if page and page.content %}
+          <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
+        {% else %}
+          <div class="contact-flow">
+            <h2>联系建议</h2>
+            <ol>
+              <li>邮件标题建议写明事项，如“活动咨询 / 加入意向”。</li>
+              <li>正文可附上你的年级或身份，以及希望我们回复的重点问题。</li>
+              <li>如涉及活动安排，建议附上可参与时间段，方便我们快速对接。</li>
+            </ol>
+          </div>
+        {% endif %}
+      </section>
+
+      <aside class="card form-card contact-panel-card">
+        <h2>官方联系邮箱</h2>
+        <p class="contact-mail-line">
+          <a href="mailto:st_2tiredcc@link.cuhk.edu.cn">st_2tiredcc@link.cuhk.edu.cn</a>
+        </p>
+        <div class="row-actions">
+          <a class="btn" href="mailto:st_2tiredcc@link.cuhk.edu.cn"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-mail"></use></svg></span><span>发送邮件</span></a>
+          <button class="btn btn-muted" type="button" id="copyContactEmailBtn"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-attach"></use></svg></span><span>复制邮箱</span></button>
+          <a class="btn btn-muted" href="{{ url_for('web.site_feedback', source=request.path) }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span><span>提交反馈</span></a>
         </div>
-      {% endif %}
+      </aside>
     </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+  <script>
+    (function () {
+      const copyBtn = document.getElementById('copyContactEmailBtn');
+      if (!copyBtn || !navigator.clipboard) return;
+      copyBtn.addEventListener('click', function () {
+        navigator.clipboard.writeText('st_2tiredcc@link.cuhk.edu.cn').then(function () {
+          copyBtn.lastElementChild.textContent = '已复制';
+          setTimeout(function () {
+            copyBtn.lastElementChild.textContent = '复制邮箱';
+          }, 1600);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

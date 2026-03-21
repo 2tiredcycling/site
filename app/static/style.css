@@ -556,6 +556,100 @@ form {
   cursor: not-allowed;
 }
 
+.contact-hero {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 76%, #ffffff 24%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--brand-surface-soft) 84%, #ffffff 16%),
+    color-mix(in srgb, var(--brand-surface-soft-2) 70%, #ffffff 30%)
+  );
+}
+
+.contact-eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.contact-hero-main h1 {
+  margin: 0 0 10px;
+}
+
+.contact-hero-main .hint {
+  margin: 0;
+}
+
+.contact-hero-note {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 78%, #ffffff 22%);
+  border-radius: 12px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 78%, #ffffff 22%);
+  display: grid;
+  align-content: center;
+  gap: 6px;
+}
+
+.contact-hero-note strong {
+  color: var(--brand-primary);
+}
+
+.contact-hero-note span {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 14px;
+}
+
+.contact-content-card,
+.contact-panel-card {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+}
+
+.contact-flow h2,
+.contact-panel-card h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+  color: var(--brand-primary);
+}
+
+.contact-flow ol {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: var(--text-main);
+}
+
+.contact-flow li {
+  line-height: 1.7;
+}
+
+.contact-mail-line {
+  margin: 0 0 12px;
+  font-size: 18px;
+  word-break: break-all;
+}
+
+.contact-mail-line a {
+  color: var(--brand-primary-strong);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.contact-mail-line a:hover {
+  text-decoration: underline;
+}
+
 .filter-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1082,6 +1176,14 @@ td {
 
 @media (max-width: 720px) {
   .feedback-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-grid {
     grid-template-columns: 1fr;
   }
 
