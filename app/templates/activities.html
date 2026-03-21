@@ -13,58 +13,62 @@
   <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
-    <section class="card form-card site-hero">
-      <h1>{{ list_title or '社团活动' }}</h1>
-      <p class="hint">查看活动档案、路线关联与活动影像记录。</p>
+    <section class="activity-hub-head">
+      <div>
+        <p class="hero-kicker">Activity Center</p>
+        <h1>{{ list_title or '社团活动' }}</h1>
+        <p class="hint">按时间查看活动记录、参与规模与关联路线，点击卡片可进入活动详情。</p>
+      </div>
+      <div class="activity-hub-stats">
+        <div><strong>总活动</strong><span>{{ pagination.total }}</span></div>
+        <div><strong>当前页</strong><span>{{ pagination.page }}/{{ pagination.pages or 1 }}</span></div>
+        <div><strong>本页条目</strong><span>{{ activities|length }}</span></div>
+      </div>
     </section>
 
-    <section class="card form-card">
-      <h2>活动列表</h2>
+    <section class="card form-card activity-hub-body">
       {% set is_events_view = (detail_endpoint or 'web.events_detail') == 'web.events_detail' %}
-      {% for activity in activities %}
-        {% if is_events_view %}
-          <a class="quick-link" href="{{ url_for('web.events_detail', event_id=activity.id) }}">
-        {% endif %}
-        <article class="edit-item activity-card{{ ' card-link' if is_events_view else '' }}">
-          <h3>
+      <ol class="activity-timeline-list">
+        {% for activity in activities %}
+          {% set activity_date = to_local_time(event_display_date_map.get(activity.id)).strftime('%Y-%m-%d') if is_events_view and event_display_date_map and event_display_date_map.get(activity.id) else (to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-') %}
+          <li class="activity-timeline-item">
+            <div class="activity-time-rail">
+              <span class="activity-time-dot"></span>
+              <strong>{{ activity_date }}</strong>
+              <em>{{ activity.participant_count }} 人</em>
+            </div>
             {% if is_events_view %}
-              {{ activity.title }}
-            {% elif (detail_endpoint or 'web.events_detail') == 'web.activity_detail' %}
-              <a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a>
-            {% else %}
-              <a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a>
+              <a class="activity-timeline-link" href="{{ url_for('web.events_detail', event_id=activity.id) }}">
             {% endif %}
-          </h3>
-          <div class="filter-grid">
-            <div>
-              <strong>日期</strong>
-              <div>
-                {% if is_events_view %}
-                  {{ to_local_time(event_display_date_map.get(activity.id)).strftime('%Y-%m-%d') if event_display_date_map and event_display_date_map.get(activity.id) else '-' }}
-                {% else %}
-                  {{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}
-                {% endif %}
-              </div>
-            </div>
-            <div><strong>人数</strong><div>{{ activity.participant_count }}</div></div>
-            <div>
-              <strong>关联路线</strong>
-              <div>
-                {% if activity.routes %}
-                  {{ activity.routes | map(attribute='route_name') | join('；') }}
-                {% else %}
-                  -
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </article>
-        {% if is_events_view %}
-          </a>
-        {% endif %}
-      {% else %}
-        <p>暂无活动</p>
-      {% endfor %}
+            <article class="activity-timeline-card{{ ' card-link' if is_events_view else '' }}">
+              <header>
+                <h3>
+                  {% if is_events_view %}
+                    {{ activity.title }}
+                  {% elif (detail_endpoint or 'web.events_detail') == 'web.activity_detail' %}
+                    <a href="{{ url_for('web.activity_detail', activity_id=activity.id) }}">{{ activity.title }}</a>
+                  {% else %}
+                    <a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a>
+                  {% endif %}
+                </h3>
+                <span class="activity-open-hint">查看详情</span>
+              </header>
+              {% if activity.routes %}
+                <div class="activity-route-tags">
+                  {% for route in activity.routes %}
+                    <span>{{ route.route_name }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </article>
+            {% if is_events_view %}
+              </a>
+            {% endif %}
+          </li>
+        {% else %}
+          <li class="activity-empty">暂无活动</li>
+        {% endfor %}
+      </ol>
 
       <div class="pagination row-actions">
         {% if pagination.has_prev %}
