@@ -13,10 +13,22 @@
   <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
-    <section class="card form-card">
+    <section class="activity-detail-head card form-card">
+      <div class="row-actions">
+        {% if back_url and back_label %}
+          <a class="btn btn-muted" href="{{ back_url }}"><span class="home-icon-badge"><svg class="home-icon-svg home-icon-back"><use href="#i-back"></use></svg></span><span>{{ back_label }}</span></a>
+        {% else %}
+          <a class="btn btn-muted" href="{{ url_for('web.events_list') }}"><span class="home-icon-badge"><svg class="home-icon-svg home-icon-back"><use href="#i-back"></use></svg></span><span>返回活动中心</span></a>
+        {% endif %}
+      </div>
       <h1>{{ activity.title }}</h1>
+    </section>
 
-      <h3>关联路线</h3>
+    <section class="activity-detail-section card form-card">
+      <div class="section-head">
+        <h2>路线</h2>
+        <span class="hint">点击路线卡片可查看路线详情</span>
+      </div>
       {% if route_cards %}
         <div class="activity-route-grid">
           {% for item in route_cards %}
@@ -65,9 +77,13 @@
       {% else %}
         <p class="hint">暂无关联路线</p>
       {% endif %}
+    </section>
 
-      {% if media_assets %}
-        <h3>{{ '其他活动影像（未分配路线）' if route_cards else '活动影像' }}</h3>
+    {% if media_assets %}
+      <section class="activity-detail-section card form-card">
+        <div class="section-head">
+          <h2>{{ '其他活动影像（未分配路线）' if route_cards else '活动影像' }}</h2>
+        </div>
         <div class="media-grid">
           {% for media in media_assets %}
             <article class="edit-item media-item">
@@ -100,11 +116,8 @@
             </article>
           {% endfor %}
         </div>
-      {% elif not route_cards %}
-        <h3>活动影像</h3>
-        <p class="hint">暂无活动图片或视频。</p>
-      {% endif %}
-    </section>
+      </section>
+    {% endif %}
   </main>
 
   <div id="mediaModal" class="media-modal" aria-hidden="true">

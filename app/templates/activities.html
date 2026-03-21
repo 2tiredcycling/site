@@ -28,10 +28,26 @@
 
     <section class="card form-card activity-hub-body">
       {% set is_events_view = (detail_endpoint or 'web.events_detail') == 'web.events_detail' %}
+      <div class="activity-toolbar">
+        <label class="activity-search">
+          <span aria-hidden="true">🔎</span>
+          <input id="activity-search-input" type="text" placeholder="搜索活动标题或路线名">
+        </label>
+        <div class="activity-filter-tabs" role="tablist" aria-label="活动筛选">
+          <button class="activity-tab is-active" type="button" data-filter="all" role="tab" aria-selected="true">全部</button>
+          <button class="activity-tab" type="button" data-filter="upcoming" role="tab" aria-selected="false">即将开始</button>
+          <button class="activity-tab" type="button" data-filter="past" role="tab" aria-selected="false">历史活动</button>
+        </div>
+        <div class="activity-toolbar-stats">
+          <span id="activity-visible-count">{{ activities|length }}</span>
+          <em>条可见</em>
+        </div>
+      </div>
+
       <ol class="activity-timeline-list">
         {% for activity in activities %}
           {% set activity_date = to_local_time(event_display_date_map.get(activity.id)).strftime('%Y-%m-%d') if is_events_view and event_display_date_map and event_display_date_map.get(activity.id) else (to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-') %}
-          <li class="activity-timeline-item">
+          <li class="activity-timeline-item" data-date="{{ activity_date }}" data-title="{{ activity.title|lower }}" data-routes="{{ (activity.routes | map(attribute='route_name') | join(' '))|lower if activity.routes else '' }}">
             <div class="activity-time-rail">
               <span class="activity-time-dot"></span>
               <strong>{{ activity_date }}</strong>
@@ -51,7 +67,10 @@
                     <a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a>
                   {% endif %}
                 </h3>
-                <span class="activity-open-hint">查看详情</span>
+                <div class="activity-card-head-right">
+                  <span class="activity-status-badge" data-status-badge>待判断</span>
+                  <span class="activity-open-hint">查看详情</span>
+                </div>
               </header>
               {% if activity.routes %}
                 <div class="activity-route-tags">
@@ -82,5 +101,77 @@
     </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+  <script>
+    (function () {
+      var list = document.querySelector('.activity-timeline-list');
+      if (!list) return;
+      var items = Array.prototype.slice.call(list.querySelectorAll('.activity-timeline-item'));
+      var searchInput = document.getElementById('activity-search-input');
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('.activity-tab'));
+      var visibleCount = document.getElementById('activity-visible-count');
+      var activeFilter = 'all';
+
+      function getItemStatus(item) {
+        var d = item.getAttribute('data-date') || '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return 'unknown';
+        var today = new Date();
+        today.setHours(0, 0, 0, 0);
+        var activityDate = new Date(d + 'T00:00:00');
+        if (isNaN(activityDate.getTime())) return 'unknown';
+        return activityDate >= today ? 'upcoming' : 'past';
+      }
+
+      function paintBadge(item) {
+        var badge = item.querySelector('[data-status-badge]');
+        if (!badge) return;
+        var status = getItemStatus(item);
+        badge.classList.remove('is-upcoming', 'is-past', 'is-unknown');
+        if (status === 'upcoming') {
+          badge.textContent = '即将开始';
+          badge.classList.add('is-upcoming');
+        } else if (status === 'past') {
+          badge.textContent = '历史活动';
+          badge.classList.add('is-past');
+        } else {
+          badge.textContent = '时间待定';
+          badge.classList.add('is-unknown');
+        }
+      }
+
+      function filterItems() {
+        var keyword = (searchInput && searchInput.value ? searchInput.value : '').trim().toLowerCase();
+        var count = 0;
+        items.forEach(function (item) {
+          var title = item.getAttribute('data-title') || '';
+          var routes = item.getAttribute('data-routes') || '';
+          var status = getItemStatus(item);
+          var passKeyword = !keyword || title.indexOf(keyword) >= 0 || routes.indexOf(keyword) >= 0;
+          var passFilter = activeFilter === 'all' || activeFilter === status;
+          var show = passKeyword && passFilter;
+          item.style.display = show ? '' : 'none';
+          if (show) count += 1;
+        });
+        if (visibleCount) visibleCount.textContent = String(count);
+      }
+
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          activeFilter = tab.getAttribute('data-filter') || 'all';
+          tabs.forEach(function (btn) {
+            var isActive = btn === tab;
+            btn.classList.toggle('is-active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          });
+          filterItems();
+        });
+      });
+
+      items.forEach(paintBadge);
+      if (searchInput) {
+        searchInput.addEventListener('input', filterItems);
+      }
+      filterItems();
+    })();
+  </script>
 </body>
 </html>
