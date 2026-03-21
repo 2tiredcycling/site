@@ -13,45 +13,60 @@
   <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
-    <section class="card form-card">
-      <h1>{{ page.title if page else '管理团队' }}</h1>
-      {% if page and page.summary %}
-        <p class="hint">{{ page.summary }}</p>
-      {% else %}
-        <p class="hint">各岗位可由 1 名或多名成员组成，当前为占位名单，后续可替换为真实姓名。</p>
-      {% endif %}
+    <section class="team-layout">
+      <aside class="card form-card team-side">
+        <p class="hero-kicker">Team Structure</p>
+        <h1 class="about-title">{{ page.title if page else '管理团队' }}</h1>
+        {% if page and page.summary %}
+          <p class="about-sub">{{ page.summary }}</p>
+        {% else %}
+          <p class="about-sub">以骑行活动组织为核心，保障社团稳定运行与持续发展。</p>
+        {% endif %}
+        <p class="about-intro">当前管理团队由社长、副社长、活动部、宣传部和财务部组成，分别承担统筹协调、活动执行、内容传播与财务保障等职责。</p>
+        <ul class="team-side-list">
+          <li>组织结构：五类核心岗位，职责边界清晰</li>
+          <li>协作方式：支持一岗多人，按活动任务协同推进</li>
+          <li>人员机制：结合学期节奏进行分工优化与岗位调整</li>
+        </ul>
+      </aside>
 
-      {% if page and page.content %}
-        <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
-      {% else %}
-        <div class="team-grid">
-          <article class="edit-item">
-            <strong>社长</strong>
-            <p class="hint">负责社团整体规划与统筹协调。</p>
-            <p>成员：同学1</p>
+      <div class="team-main">
+        {% if page and page.content %}
+          <section class="card form-card">
+            <h2>团队说明</h2>
+            <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
+          </section>
+        {% else %}
+          <article class="card form-card team-role-lead">
+            <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-team"></use></svg></span>社长</h3>
+            <p class="hint">负责社团整体规划、跨部门协同与对外代表。</p>
+            <p class="team-members"><strong>成员</strong><span class="member-pill">同学1</span></p>
           </article>
-          <article class="edit-item">
-            <strong>副社长</strong>
-            <p class="hint">协助社长推进日常管理与执行。</p>
-            <p>成员：同学2</p>
-          </article>
-          <article class="edit-item">
-            <strong>活动部</strong>
-            <p class="hint">负责活动策划、组织与现场安排。</p>
-            <p>成员：同学3、同学4</p>
-          </article>
-          <article class="edit-item">
-            <strong>宣传部</strong>
-            <p class="hint">负责社团宣传与活动传播。</p>
-            <p>成员：同学5、同学6</p>
-          </article>
-          <article class="edit-item">
-            <strong>财务部</strong>
-            <p class="hint">负责社团经费管理与财务记录。</p>
-            <p>成员：同学7</p>
-          </article>
-        </div>
-      {% endif %}
+
+          <section class="team-role-grid">
+            <article class="card form-card team-role-card">
+              <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-team"></use></svg></span>副社长</h3>
+              <p class="hint">协助社长推进制度执行、日常管理与重点事项落地。</p>
+              <p class="team-members"><strong>成员</strong><span class="member-pill">同学2</span></p>
+            </article>
+            <article class="card form-card team-role-card">
+              <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span>活动部</h3>
+              <p class="hint">负责活动策划、流程编排、现场组织与安全协同。</p>
+              <p class="team-members"><strong>成员</strong><span class="member-pill">同学3</span><span class="member-pill">同学4</span></p>
+            </article>
+            <article class="card form-card team-role-card">
+              <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span>宣传部</h3>
+              <p class="hint">负责内容策划、活动传播、图文发布与社团形象维护。</p>
+              <p class="team-members"><strong>成员</strong><span class="member-pill">同学5</span><span class="member-pill">同学6</span></p>
+            </article>
+            <article class="card form-card team-role-card">
+              <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-map"></use></svg></span>财务部</h3>
+              <p class="hint">负责经费记录、预算执行、报销归档与财务透明管理。</p>
+              <p class="team-members"><strong>成员</strong><span class="member-pill">同学7</span></p>
+            </article>
+          </section>
+        {% endif %}
+      </div>
     </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>

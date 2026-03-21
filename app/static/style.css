@@ -1631,6 +1631,236 @@ td {
   color: color-mix(in srgb, var(--text-main) 82%, #000000 18%);
 }
 
+/* Team page v4.2 polish */
+.team-hero {
+  margin-bottom: 22px;
+  border: 1px solid color-mix(in srgb, var(--brand-border-strong) 45%, #ffffff 55%);
+  background: linear-gradient(
+    142deg,
+    color-mix(in srgb, var(--brand-surface-soft) 80%, #ffffff 20%),
+    color-mix(in srgb, var(--brand-accent-surface) 26%, #ffffff 74%)
+  );
+}
+
+.team-hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.team-metrics {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.team-metrics > div {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 76%, #ffffff 24%);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 68%, #ffffff 32%);
+  display: grid;
+  gap: 2px;
+}
+
+.team-metrics strong {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.team-metrics span {
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+
+.team-hero-side {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 70%, #ffffff 30%);
+  border-radius: 12px;
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--brand-primary) 10%, #ffffff 90%),
+    color-mix(in srgb, var(--brand-surface-soft-2) 62%, #ffffff 38%)
+  );
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  align-content: center;
+}
+
+.team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--brand-border-strong) 62%, #ffffff 38%);
+  background: color-mix(in srgb, var(--brand-surface) 84%, #ffffff 16%);
+  padding: 6px 10px;
+}
+
+.team-chip .home-icon-svg {
+  width: 13px;
+  height: 13px;
+}
+
+.team-chip em {
+  font-style: normal;
+  color: var(--brand-primary);
+  font-size: 13px;
+}
+
+.team-dept-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.team-dept-card {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%),
+    color-mix(in srgb, var(--brand-surface-soft-2) 68%, #ffffff 32%)
+  );
+}
+
+.team-dept-card h3 {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand-primary);
+}
+
+.team-members {
+  margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.member-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--brand-border-strong) 58%, #ffffff 42%);
+  background: color-mix(in srgb, var(--brand-primary) 10%, #ffffff 90%);
+  color: var(--brand-primary);
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+@media (max-width: 960px) {
+  .team-hero-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .team-dept-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .team-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Team page v4.2.6 alternate layout */
+.team-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
+  gap: 16px;
+}
+
+.team-side {
+  border: 1px solid color-mix(in srgb, var(--brand-border-strong) 42%, #ffffff 58%);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--brand-surface-soft) 80%, #ffffff 20%),
+    color-mix(in srgb, var(--brand-accent-surface) 22%, #ffffff 78%)
+  );
+  height: fit-content;
+  position: sticky;
+  top: 20px;
+}
+
+.team-side-list {
+  margin-top: 14px;
+  margin-bottom: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.team-side-list li {
+  color: color-mix(in srgb, var(--text-main) 86%, #000000 14%);
+  line-height: 1.7;
+}
+
+.team-side-list li::marker {
+  color: var(--brand-primary);
+}
+
+.team-main {
+  display: grid;
+  gap: 12px;
+}
+
+.team-role-lead {
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 34%, #ffffff 66%);
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--brand-primary) 12%, #ffffff 88%),
+    color-mix(in srgb, var(--brand-surface-soft) 70%, #ffffff 30%)
+  );
+}
+
+.team-role-lead h3 {
+  margin: 0 0 8px;
+  color: var(--brand-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.team-role-card {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%),
+    color-mix(in srgb, var(--brand-surface-soft-2) 68%, #ffffff 32%)
+  );
+}
+
+.team-role-card h3 {
+  margin: 0 0 8px;
+  color: var(--brand-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 960px) {
+  .team-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .team-side {
+    position: static;
+  }
+
+  .team-role-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 960px) {
   .about-hero-layout {
     grid-template-columns: 1fr;
