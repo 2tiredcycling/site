@@ -53,6 +53,7 @@ V4.0 文档入口：
 - `docs/V4_SEO_BASELINE.md`
 - `docs/V4_ENCODING_GUIDE.md`
 - `docs/V4_TEST_PLAN.md`
+- `docs/PRE_PUSH_CHECKLIST.md`
 
 ## V4.1 已完成内容（v4.1.0）
 
