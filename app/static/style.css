@@ -15,7 +15,8 @@
   --card-border: #e5e7eb;
   --card-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
   
-  --hero-cover-image: none;
+  --hero-cover-image-home: none;
+  --hero-cover-image-about: none;
 }
 html[data-theme="theme-1"] {
   --page-bg-start: #eff5ef;
@@ -1250,7 +1251,7 @@ td {
   border-radius: 12px;
   border: 1px solid var(--brand-border);
   background-image:
-    var(--hero-cover-image, none),
+    var(--hero-cover-image-home, none),
     radial-gradient(circle at 82% 18%, color-mix(in srgb, var(--brand-primary) 24%, transparent 76%), transparent 42%),
     radial-gradient(circle at 16% 70%, color-mix(in srgb, var(--brand-border-strong) 38%, transparent 62%), transparent 50%),
     linear-gradient(125deg, var(--brand-surface-soft), color-mix(in srgb, var(--brand-accent-surface) 45%, #ffffff 55%));
@@ -1456,3 +1457,116 @@ td {
   }
 }
 
+/* About page v4.2 detail polish */
+.about-hero {
+  margin-bottom: 24px;
+  border: 1px solid color-mix(in srgb, var(--brand-border-strong) 45%, #ffffff 55%);
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--brand-surface-soft) 82%, #ffffff 18%),
+    color-mix(in srgb, var(--brand-accent-surface) 28%, #ffffff 72%)
+  );
+}
+
+.about-hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.about-title {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1.12;
+  color: var(--brand-primary);
+  font-family: "STKaiti", "KaiTi", "Kaiti SC", "Times New Roman", serif;
+  letter-spacing: 0.02em;
+}
+
+.about-sub {
+  margin: 10px 0 0;
+  font-size: 17px;
+  color: color-mix(in srgb, var(--text-main) 86%, #000000 14%);
+}
+
+.about-intro {
+  margin: 14px 0 0;
+  max-width: 50ch;
+  line-height: 1.85;
+}
+
+.about-hero-cover {
+  border-radius: 12px;
+  border: 1px solid var(--brand-border);
+  background-image:
+    var(--hero-cover-image-about, none),
+    radial-gradient(circle at 78% 18%, color-mix(in srgb, var(--brand-primary) 20%, transparent 80%), transparent 40%),
+    linear-gradient(125deg, var(--brand-surface-soft), color-mix(in srgb, var(--brand-accent-surface) 42%, #ffffff 58%));
+  background-size: cover, auto, auto;
+  background-position: center center, center center, center center;
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  min-height: 220px;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.about-panel {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 70%, #ffffff 30%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%),
+    color-mix(in srgb, var(--brand-surface-soft-2) 72%, #ffffff 28%)
+  );
+}
+
+.about-panel h2 {
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand-primary);
+}
+
+.about-panel p {
+  margin: 0 0 10px;
+  line-height: 1.8;
+}
+
+.about-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid color-mix(in srgb, var(--brand-border-strong) 65%, #ffffff 35%);
+  display: grid;
+  gap: 12px;
+}
+
+.about-timeline li {
+  display: grid;
+  gap: 4px;
+}
+
+.about-timeline strong {
+  color: var(--brand-primary);
+}
+
+.about-timeline span {
+  color: color-mix(in srgb, var(--text-main) 80%, #000000 20%);
+  line-height: 1.7;
+}
+
+@media (max-width: 960px) {
+  .about-hero-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+}

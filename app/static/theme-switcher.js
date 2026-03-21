@@ -11,15 +11,25 @@
     { value: 'theme-7', label: '马卡龙粉' },
     { value: 'theme-8', label: '暖夜紫灰' }
   ];
-  var HERO_COVERS = {
-    'theme-1': '/static/hero-covers/forest-green.jpg',
-    'theme-2': '/static/hero-covers/night-purple.jpg',
-    'theme-3': '/static/hero-covers/haze-blue.jpg',
-    'theme-4': '/static/hero-covers/mist-gray-blue.jpg',
-    'theme-5': '/static/hero-covers/lake-cyan.jpg',
-    'theme-6': '/static/hero-covers/sky-blue.jpg',
-    'theme-7': '/static/hero-covers/macaron-pink.jpg',
-    'theme-8': '/static/hero-covers/warm-night-purple-gray.jpg'
+  var HOME_HERO_COVERS = {
+    'theme-1': '/static/hero-covers/home/forest.jpg',
+    'theme-2': '/static/hero-covers/home/night.jpg',
+    'theme-3': '/static/hero-covers/home/haze.jpg',
+    'theme-4': '/static/hero-covers/home/mist.jpg',
+    'theme-5': '/static/hero-covers/home/lake.jpg',
+    'theme-6': '/static/hero-covers/home/sky.jpg',
+    'theme-7': '/static/hero-covers/home/pink.jpg',
+    'theme-8': '/static/hero-covers/home/warm.jpg'
+  };
+  var ABOUT_HERO_COVERS = {
+    'theme-1': '/static/hero-covers/about/forest.jpg',
+    'theme-2': '/static/hero-covers/about/night.jpg',
+    'theme-3': '/static/hero-covers/about/haze.jpg',
+    'theme-4': '/static/hero-covers/about/mist.jpg',
+    'theme-5': '/static/hero-covers/about/lake.jpg',
+    'theme-6': '/static/hero-covers/about/sky.jpg',
+    'theme-7': '/static/hero-covers/about/pink.jpg',
+    'theme-8': '/static/hero-covers/about/warm.jpg'
   };
 
   function safeGetTheme() {
@@ -41,19 +51,28 @@
   }
 
   function applyHeroCover(theme) {
+    applySingleCoverVar(
+      '--hero-cover-image-home',
+      HOME_HERO_COVERS[theme]
+    );
+    applySingleCoverVar(
+      '--hero-cover-image-about',
+      ABOUT_HERO_COVERS[theme]
+    );
+  }
+
+  function applySingleCoverVar(cssVarName, cover) {
     var root = document.documentElement;
-    var cover = HERO_COVERS[theme];
     if (!cover) {
-      root.style.setProperty('--hero-cover-image', 'none');
+      root.style.setProperty(cssVarName, 'none');
       return;
     }
     var img = new Image();
     img.onload = function () {
-      root.style.setProperty('--hero-cover-image', "url('" + cover + "')");
+      root.style.setProperty(cssVarName, "url('" + cover + "')");
     };
     img.onerror = function () {
-      // Missing image should gracefully fall back to default gradient style.
-      root.style.setProperty('--hero-cover-image', 'none');
+      root.style.setProperty(cssVarName, 'none');
     };
     img.src = cover;
   }

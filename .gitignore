@@ -21,4 +21,11 @@ deploy/certs/*.p12
 # Hero cover assets: keep final images, ignore backups/temp/raw sources
 app/static/hero-covers/_original_backup_*/
 app/static/hero-covers/*.tmp.jpg
+app/static/hero-covers/**/*.tmp.jpg
+app/static/hero-covers/**/*.tmp.*
 app/static/hero-covers/raw/
+
+# New structure: keep only themed covers under home/about, ignore legacy flat files
+app/static/hero-covers/*.jpg
+!app/static/hero-covers/home/*.jpg
+!app/static/hero-covers/about/*.jpg

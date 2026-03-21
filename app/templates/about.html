@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -13,24 +13,66 @@
   <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
-    <section class="card form-card">
-      <h1>{{ page.title if page else '社团介绍' }}</h1>
-      {% if page and page.summary %}
-        <p class="hint">{{ page.summary }}</p>
-      {% endif %}
 
-      {% if page and page.content %}
-        <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
-      {% else %}
-        <h3>社团宗旨</h3>
-        <p>成为香港中文大学（深圳）骑行爱好者的聚集地，为骑行爱好者提供骑行的平台和机会。</p>
-        <p>通过持续活动提升成员身体素质，平衡身心健康，促进港中大（深圳）骑行与运动文化发扬光大。</p>
-        <h3>发展历程</h3>
-        <p>社团于 <strong>2024 年 7 月</strong> 启动，逐步从骑行活动组织发展到“活动 + 路线 + 社团官网”一体化平台。</p>
-        <h3>加入方式</h3>
-        <p>请前往 <a href="{{ url_for('web.contact_page') }}">联系我们</a> 页面与我们联系，我们会尽快回复。</p>
-      {% endif %}
+    <section class="card form-card about-hero">
+      <div class="about-hero-layout">
+        <div>
+          <p class="hero-kicker">About 2Tired</p>
+          <h1 class="about-title">{{ page.title if page else '社团介绍' }}</h1>
+          <p class="about-sub">在校园里，把骑行变成一种长期习惯。</p>
+          <p class="about-intro">
+            {{ page.summary if page and page.summary else '成为香港中文大学（深圳）骑行爱好者的聚集地，为骑行爱好者提供平台和机会，提升成员身体素质，平衡身心健康，促进骑行与运动文化发扬光大。' }}
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-solid" href="{{ url_for('web.contact_page') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-mail"></use></svg></span><span>联系社团</span></a>
+            <a class="btn" href="{{ url_for('web.events_list') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span><span>查看近期活动</span></a>
+          </div>
+        </div>
+        <div class="about-hero-cover" aria-hidden="true"></div>
+      </div>
     </section>
+
+    <section class="about-grid">
+      <article class="card form-card about-panel">
+        <h2><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-map"></use></svg></span>发展历程</h2>
+        <ul class="about-timeline">
+          <li>
+            <strong>2024 年 7 月</strong>
+            <span>社团启动，形成初始骑行组织。</span>
+          </li>
+          <li>
+            <strong>2025 年</strong>
+            <span>逐步形成“活动 + 路线”协同机制。</span>
+          </li>
+          <li>
+            <strong>V4 阶段</strong>
+            <span>升级为社团官网化入口，连接活动、路线与反馈。</span>
+          </li>
+        </ul>
+      </article>
+
+      <article class="card form-card about-panel">
+        <h2><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-team"></use></svg></span>未来计划与目标</h2>
+        <p>持续扩大骑行参与人群，形成“每周可参与、每月有亮点、每学期有成长”的社团节奏。</p>
+        <p class="hint">阶段目标：路线分层更清晰、活动组织更稳定、新成员融入更顺畅。</p>
+      </article>
+
+      <article class="card form-card about-panel">
+        <h2><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span>加入方式</h2>
+        <p>目前通过“联系我们”页面统一接收加入和合作咨询。</p>
+        <p class="hint">你可以先浏览活动与路线，再通过联系页提交信息，我们会尽快回复。</p>
+        <div class="row-actions">
+          <a class="btn btn-solid" href="{{ url_for('web.contact_page') }}">前往联系页面</a>
+        </div>
+      </article>
+    </section>
+
+    {% if page and page.content %}
+      <section class="card form-card">
+        <h2>补充说明</h2>
+        <div class="rich-text">{{ page.content | e | replace('\n', '<br>') | safe }}</div>
+      </section>
+    {% endif %}
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
 </body>
