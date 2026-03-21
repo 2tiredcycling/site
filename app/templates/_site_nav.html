@@ -6,9 +6,6 @@
     <a class="quick-pill {% if request.endpoint == 'web.about_page' %}is-active{% endif %}" href="{{ url_for('web.about_page') }}" {% if request.endpoint == 'web.about_page' %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-book"></use></svg></span><span>社团介绍</span>
     </a>
-    <a class="quick-pill {% if request.endpoint == 'web.team_page' %}is-active{% endif %}" href="{{ url_for('web.team_page') }}" {% if request.endpoint == 'web.team_page' %}aria-current="page"{% endif %}>
-      <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-team"></use></svg></span><span>管理团队</span>
-    </a>
     <a class="quick-pill {% if request.endpoint in ['web.events_list', 'web.events_detail', 'web.activity_list', 'web.activity_detail'] %}is-active{% endif %}" href="{{ url_for('web.events_list') }}" {% if request.endpoint in ['web.events_list', 'web.events_detail', 'web.activity_list', 'web.activity_detail'] %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span><span>活动</span>
     </a>

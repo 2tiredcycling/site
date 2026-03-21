@@ -21,7 +21,6 @@
       <nav class="site-nav">
         <a class="quick-pill is-active" href="{{ url_for('web.index') }}" aria-current="page"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-home"></use></svg></span><span>首页</span></a>
         <a class="quick-pill" href="{{ url_for('web.about_page') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-book"></use></svg></span><span>社团介绍</span></a>
-        <a class="quick-pill" href="{{ url_for('web.team_page') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-team"></use></svg></span><span>管理团队</span></a>
         <a class="quick-pill" href="{{ url_for('web.events_list') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span><span>活动</span></a>
         <a class="quick-pill" href="{{ url_for('web.routes_center') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-map"></use></svg></span><span>路线</span></a>
         <a class="quick-pill" href="{{ url_for('web.site_feedback', source=url_for('web.index')) }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span><span>反馈</span></a>
@@ -57,10 +56,6 @@
       <a class="card form-card portal-card" href="{{ url_for('web.about_page') }}">
         <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-book"></use></svg></span>社团介绍</h3>
         <p>宗旨、历史与加入方式</p>
-      </a>
-      <a class="card form-card portal-card" href="{{ url_for('web.team_page') }}">
-        <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-team"></use></svg></span>管理团队</h3>
-        <p>组织架构与职责分工</p>
       </a>
       <a class="card form-card portal-card" href="{{ url_for('web.events_list') }}">
         <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span>活动中心</h3>

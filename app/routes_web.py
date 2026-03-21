@@ -463,12 +463,7 @@ def about_page() -> str:
 
 @bp.get("/team")
 def team_page() -> str:
-    page = _published_site_page("team")
-    return render_template(
-        "team.html",
-        page=page,
-        meta_description="2Tired 骑行社管理团队与职责分工。",
-    )
+    abort(404, description="Team page is temporarily unavailable")
 
 
 @bp.get("/contact")
@@ -757,7 +752,6 @@ def sitemap_xml() -> Response:
         url_for("web.index", _external=True),
         url_for("web.routes_center", _external=True),
         url_for("web.about_page", _external=True),
-        url_for("web.team_page", _external=True),
         url_for("web.contact_page", _external=True),
         url_for("web.events_list", _external=True),
         url_for("web.site_feedback", _external=True),
