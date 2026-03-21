@@ -29,3 +29,4 @@ app/static/hero-covers/raw/
 app/static/hero-covers/*.jpg
 !app/static/hero-covers/home/*.jpg
 !app/static/hero-covers/about/*.jpg
+app/static/hero-covers/**/_original_backup_*/
