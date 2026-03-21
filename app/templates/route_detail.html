@@ -14,33 +14,17 @@
   <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
-    <section class="card form-card">
-      <div class="row-actions">
-        <form method="post" action="{{ url_for('web.download_tracked', route_id=route.id) }}">
-          <button class="btn" type="submit">下载 GPX</button>
-        </form>
-        <a class="btn btn-muted" href="{{ back_url if back_url else url_for('web.routes_center') }}">{{ back_label if back_label else '返回路线中心' }}</a>
-      </div>
-
-      <h1>{{ route.route_name }}</h1>
-      <p>{{ route.description or '暂无简介' }}</p>
-
-      <div class="filter-grid">
-        <div><strong>里程</strong><div>{{ '%.1f'|format(route.distance_km or 0) }} km</div></div>
-        <div><strong>建议用时</strong><div>{{ '%.1f'|format(route.suggested_duration_hours or 0) }} h</div></div>
-        <div>
-          <strong>用户评分</strong>
-          <div>
-            {% if rating_info and rating_info.rating_count > 0 %}
-              {{ '%.1f'|format(rating_info.avg_rating) }} / 5（{{ rating_info.rating_count }} 条）
-            {% else %}
-              暂无评分
-            {% endif %}
-          </div>
+    <section class="route-detail-layout">
+      <section class="route-detail-head card form-card">
+        <div class="route-back-row">
+          <a class="route-back-link" href="{{ back_url if back_url else url_for('web.routes_center') }}">
+            <span aria-hidden="true">←</span>
+            <span>{{ back_label if back_label else '返回路线中心' }}</span>
+          </a>
         </div>
-        <div>
-          <strong>难度</strong>
-          <div>
+        <h1 class="route-title-row">
+          <span>{{ route.route_name }}</span>
+          <span class="route-title-difficulty" aria-label="路线难度">
             {% if route.difficulty == '1' %}
               ★☆☆☆☆
             {% elif route.difficulty == '2' or route.difficulty == 'easy' %}
@@ -52,70 +36,97 @@
             {% elif route.difficulty == '5' %}
               ★★★★★
             {% else %}
-              {{ route.difficulty }}
+              {{ route.difficulty or '暂无' }}
             {% endif %}
+          </span>
+        </h1>
+        <p class="route-summary">{{ route.description or '暂无简介' }}</p>
+        <div class="route-overview-grid">
+          <div><strong>里程</strong><span>{{ '%.1f'|format(route.distance_km or 0) }} km</span></div>
+          <div><strong>建议用时</strong><span>{{ '%.1f'|format(route.suggested_duration_hours or 0) }} h</span></div>
+          <div><strong>下载次数</strong><span>{{ route.download_count or 0 }}</span></div>
+          <div><strong>累计爬升</strong><span id="auto-ascent">计算中...</span></div>
+          <div>
+            <strong>用户评分</strong>
+            <span>
+              {% if rating_info and rating_info.rating_count > 0 %}
+                {{ '%.1f'|format(rating_info.avg_rating) }} / 5（{{ rating_info.rating_count }} 条）
+              {% else %}
+                暂无评分
+              {% endif %}
+            </span>
           </div>
         </div>
-        <div><strong>补给点</strong><div>{{ route.supply_points or '暂无' }}</div></div>
-        <div><strong>风险提示</strong><div>{{ route.risk_warning or '暂无' }}</div></div>
-        <div><strong>下载次数</strong><div>{{ route.download_count or 0 }}</div></div>
-        <div><strong>GPX识别里程</strong><div id="auto-distance">计算中...</div></div>
-        <div><strong>累计爬升</strong><div id="auto-ascent">计算中...</div></div>
-      </div>
-
-      <h3>海拔剖面图</h3>
-      <div class="elevation-profile">
-        <svg id="elevation-profile" viewBox="0 0 760 220" preserveAspectRatio="none"></svg>
-        <p id="elevation-profile-msg" class="hint">加载中...</p>
-      </div>
-
-      <h3>地图预览（GPX 轨迹）</h3>
-      <div id="route-map" class="map-canvas"></div>
-      <p id="map-source-status" class="hint">底图状态：初始化中...</p>
-      <pre id="preview-box" class="hint">加载中...</pre>
-
-      <h3>关联历史活动</h3>
-      {% if route.activities %}
-        <ul>
-          {% for activity in route.activities %}
-            <li>
-              <a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a>
-              （{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-' }}）
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p>暂无关联活动</p>
-      {% endif %}
-
-      <h3>提交反馈</h3>
-      <form id="feedback-form" class="single-form">
-        <div class="filter-grid">
-          <label>评分
-            <select name="rating">
-              <option value="5">5</option>
-              <option value="4">4</option>
-              <option value="3">3</option>
-              <option value="2">2</option>
-              <option value="1">1</option>
-            </select>
-          </label>
-          <label>标注类型
-            <select name="report_type">
-              <option value="normal">正常反馈</option>
-              <option value="outdated">信息过期</option>
-              <option value="changed">路线变更</option>
-            </select>
-          </label>
+        <div class="route-detail-tags">
+          <span><strong>补给点</strong><em>{{ route.supply_points or '暂无' }}</em></span>
+          <span><strong>风险提示</strong><em>{{ route.risk_warning or '暂无' }}</em></span>
         </div>
-        <label>评论<textarea name="comment" rows="2"></textarea></label>
-        <label>路况更新<textarea name="road_condition_update" rows="2"></textarea></label>
-        <button class="btn" type="submit"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span><span>提交反馈（待审核）</span></button>
-      </form>
-      <p id="feedback-msg" class="hint"></p>
 
+        <div class="route-inline-activities">
+          <div class="section-head">
+            <h2>关联历史活动</h2>
+          </div>
+          {% if route.activities %}
+            {% set linked_activities = route.activities | sort(attribute='id', reverse=true) %}
+            <ul class="route-linked-activities route-linked-activities-compact">
+              {% for activity in linked_activities[:5] %}
+                <li>
+                  <a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a>
+                  <span>{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-' }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="hint">暂无关联活动</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="route-detail-section card form-card route-visual-stack">
+        <article class="route-visual-card">
+          <h3>海拔剖面图</h3>
+          <div class="elevation-profile route-elevation-compact">
+            <svg id="elevation-profile" viewBox="0 0 760 220" preserveAspectRatio="none"></svg>
+            <p id="elevation-profile-msg" class="hint">加载中...</p>
+          </div>
+        </article>
+        <article class="route-visual-card route-map-card">
+          <div class="route-map-head">
+            <h3>地图预览（GPX 轨迹）</h3>
+            <div class="route-map-actions">
+              <form method="post" action="{{ url_for('web.download_tracked', route_id=route.id) }}">
+                <button class="btn" type="submit"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-download"></use></svg></span><span>下载 GPX</span></button>
+              </form>
+              <button class="btn btn-muted" id="routeMapFullscreenBtn" type="button">
+                <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-map"></use></svg></span>
+                <span>全屏查看</span>
+              </button>
+            </div>
+          </div>
+          <div id="route-map" class="map-canvas route-map-compact"></div>
+          <p id="map-source-status" class="hint">底图状态：初始化中...</p>
+          <p id="preview-box" class="hint route-map-debug">加载中...</p>
+        </article>
+      </section>
+    </section>
+
+    <section class="route-detail-section card form-card">
+      <div class="section-head">
+        <h2>路线反馈</h2>
+      </div>
+      <p class="hint">如需补充路况、提出建议或纠错，请通过反馈页提交。</p>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('web.site_feedback', source=request.path) }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span><span>进入反馈页面</span></a>
+      </div>
     </section>
   </main>
+
+  <div id="routeMapModal" class="route-map-modal" aria-hidden="true">
+    <div class="route-map-modal-shell">
+      <button type="button" class="route-map-modal-close" id="routeMapModalClose" aria-label="关闭全屏地图">关闭</button>
+      <div id="route-map-fullscreen" class="route-map-fullscreen"></div>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
@@ -123,11 +134,16 @@
     (function () {
       const previewBox = document.getElementById('preview-box');
       const mapSourceStatus = document.getElementById('map-source-status');
-      const autoDistance = document.getElementById('auto-distance');
+      const fullBtn = document.getElementById('routeMapFullscreenBtn');
+      const modal = document.getElementById('routeMapModal');
+      const modalClose = document.getElementById('routeMapModalClose');
       const autoAscent = document.getElementById('auto-ascent');
       const profileSvg = document.getElementById('elevation-profile');
       const profileMsg = document.getElementById('elevation-profile-msg');
       const previewEndpoint = "{{ preview_endpoint if preview_endpoint else url_for('api_v1.route_preview', route_id=route.id) }}";
+      let correctedPoints = [];
+      let fullMap = null;
+      let fullLine = null;
       if (typeof window.L === 'undefined') {
         mapSourceStatus.textContent = '底图状态：Leaflet 加载失败';
         previewBox.textContent = '地图组件未加载，请检查本地网络。';
@@ -256,7 +272,13 @@
 
         profileMsg.textContent = `剖面点：${profile.length}，海拔范围：${eleMin.toFixed(1)}m - ${eleMax.toFixed(1)}m`;
       }
-      const map = L.map('route-map');
+      const map = L.map('route-map', {
+        scrollWheelZoom: false,
+        touchZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false
+      });
       const gaodeVector = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
         subdomains: ['1', '2', '3', '4'],
         maxZoom: 18,
@@ -267,98 +289,101 @@
         maxZoom: 18,
         attribution: '&copy; Gaode'
       });
-      const tencentVector = L.tileLayer('https://rt{s}.map.gtimg.com/tile?z={z}&x={x}&y={y}&styleid=2&scene=0&version=347', {
-        subdomains: ['0', '1', '2', '3'],
-        maxZoom: 18,
-        attribution: '&copy; Tencent'
-      });
-      const openStreet = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-      });
-      const openTopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-        maxZoom: 17,
-        attribution: '&copy; OpenTopoMap contributors'
-      });
-
-      const tileCandidates = [
-        {name: 'Gaode Vector', layer: gaodeVector},
-        {name: 'Gaode Satellite', layer: gaodeImage},
-        {name: 'Tencent Vector', layer: tencentVector},
-        {name: 'OpenStreetMap', layer: openStreet},
-        {name: 'OpenTopoMap', layer: openTopo}
-      ];
-
-      function useTileLayer(index) {
-        if (index >= tileCandidates.length) {
-          mapSourceStatus.textContent = '底图状态：所有底图源均不可用';
-          previewBox.textContent = '轨迹已加载，但地图底图不可用（网络或瓦片源限制）。';
-          map.setView([22.3193, 114.1694], 11);
-          return;
-        }
-
-        const candidate = tileCandidates[index];
-        const layer = candidate.layer;
-        let loaded = false;
-        let errorCount = 0;
-        const maxError = 6;
-        const loadTimeoutMs = 6000;
-        mapSourceStatus.textContent = '底图状态：尝试 ' + candidate.name;
-
-        const cleanup = () => {
-          layer.off('tileload', onLoad);
-          layer.off('tileerror', onError);
-        };
-        const onLoad = () => {
-          loaded = true;
-          cleanup();
-          mapSourceStatus.textContent = '当前底图：' + candidate.name + '（加载成功）';
-        };
-        const onError = () => {
-          errorCount += 1;
-          if (!loaded && errorCount >= maxError) {
-            cleanup();
-            map.removeLayer(layer);
-            mapSourceStatus.textContent = '底图状态：' + candidate.name + ' 失败，切换中...';
-            useTileLayer(index + 1);
-          }
-        };
-
-        layer.on('tileload', onLoad);
-        layer.on('tileerror', onError);
-        layer.addTo(map);
-
-        window.setTimeout(() => {
-          if (!loaded) {
-            cleanup();
-            map.removeLayer(layer);
-            mapSourceStatus.textContent = '底图状态：' + candidate.name + ' 超时，切换中...';
-            useTileLayer(index + 1);
-          }
-        }, loadTimeoutMs);
-      }
 
       L.control.layers(
         {
           '高德矢量': gaodeVector,
-          '高德影像': gaodeImage,
-          '腾讯矢量': tencentVector,
-          'OpenStreetMap': openStreet,
-          'OpenTopoMap': openTopo
+          '高德影像': gaodeImage
         },
         {}
       ).addTo(map);
 
-      useTileLayer(0);
+      gaodeVector.addTo(map);
+      mapSourceStatus.textContent = '当前底图：高德矢量';
+      map.on('baselayerchange', function (event) {
+        mapSourceStatus.textContent = '当前底图：' + (event && event.name ? event.name : '已切换');
+      });
+
+      function ensureFullMap() {
+        if (fullMap) {
+          return;
+        }
+        fullMap = L.map('route-map-fullscreen');
+        const fullGaodeVector = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+          subdomains: ['1', '2', '3', '4'],
+          maxZoom: 18,
+          attribution: '&copy; Gaode'
+        });
+        const fullGaodeImage = L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+          subdomains: ['1', '2', '3', '4'],
+          maxZoom: 18,
+          attribution: '&copy; Gaode'
+        });
+        L.control.layers(
+          {
+            '高德矢量': fullGaodeVector,
+            '高德影像': fullGaodeImage
+          },
+          {}
+        ).addTo(fullMap);
+        fullGaodeVector.addTo(fullMap);
+      }
+
+      function openMapModal() {
+        if (!modal) {
+          return;
+        }
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        ensureFullMap();
+        if (fullLine) {
+          fullMap.removeLayer(fullLine);
+          fullLine = null;
+        }
+        if (correctedPoints.length > 1) {
+          fullLine = L.polyline(correctedPoints, {color: '#2563eb', weight: 4}).addTo(fullMap);
+          fullMap.fitBounds(fullLine.getBounds(), {padding: [26, 26]});
+        } else {
+          fullMap.setView([22.3193, 114.1694], 11);
+        }
+        window.setTimeout(function () {
+          fullMap.invalidateSize();
+        }, 120);
+      }
+
+      function closeMapModal() {
+        if (!modal) {
+          return;
+        }
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+      }
+
+      if (fullBtn) {
+        fullBtn.addEventListener('click', openMapModal);
+      }
+      if (modalClose) {
+        modalClose.addEventListener('click', closeMapModal);
+      }
+      if (modal) {
+        modal.addEventListener('click', function (event) {
+          if (event.target === modal) {
+            closeMapModal();
+          }
+        });
+      }
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && modal && modal.classList.contains('open')) {
+          closeMapModal();
+        }
+      });
 
       fetch(previewEndpoint)
         .then((resp) => resp.json())
         .then((data) => {
           if (data.stats) {
-            autoDistance.textContent = (data.stats.distance_km ?? 0) + ' km';
             autoAscent.textContent = data.stats.ascent_m != null ? (data.stats.ascent_m + ' m') : '暂无海拔数据';
           } else {
-            autoDistance.textContent = '暂无';
             autoAscent.textContent = '暂无';
           }
           renderElevationProfile(data.elevation_profile);
@@ -369,48 +394,25 @@
           }
 
           // GPX 通常是 WGS84，国内底图（高德/腾讯）是 GCJ-02，先做坐标转换以减少偏移。
-          const correctedPoints = data.points.map((point) => wgs84ToGcj02(point[0], point[1]));
+          correctedPoints = data.points.map((point) => wgs84ToGcj02(point[0], point[1]));
           const line = L.polyline(correctedPoints, {color: '#2563eb', weight: 4}).addTo(map);
           map.fitBounds(line.getBounds(), {padding: [20, 20]});
           previewBox.textContent = '轨迹点数：' + correctedPoints.length;
+          if (fullMap && modal && modal.classList.contains('open')) {
+            if (fullLine) {
+              fullMap.removeLayer(fullLine);
+            }
+            fullLine = L.polyline(correctedPoints, {color: '#2563eb', weight: 4}).addTo(fullMap);
+            fullMap.fitBounds(fullLine.getBounds(), {padding: [26, 26]});
+            fullMap.invalidateSize();
+          }
         })
         .catch(() => {
           previewBox.textContent = '预览加载失败';
-          autoDistance.textContent = '计算失败';
           autoAscent.textContent = '计算失败';
           profileMsg.textContent = '剖面加载失败';
           map.setView([22.3193, 114.1694], 11);
         });
-
-      const form = document.getElementById('feedback-form');
-      const msg = document.getElementById('feedback-msg');
-      form.addEventListener('submit', function (event) {
-        event.preventDefault();
-        const payload = {
-          rating: form.rating.value,
-          report_type: form.report_type.value,
-          comment: form.comment.value,
-          road_condition_update: form.road_condition_update.value,
-        };
-
-        fetch("{{ url_for('api_v1.create_feedback', route_id=route.id) }}", {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(payload),
-        })
-          .then((resp) => resp.json())
-          .then((data) => {
-            if (data.error) {
-              msg.textContent = '提交失败：' + data.error;
-              return;
-            }
-            msg.textContent = '提交成功，当前状态：' + data.status;
-            form.reset();
-          })
-          .catch(() => {
-            msg.textContent = '提交失败，请稍后重试';
-          });
-      });
     })();
   </script>
 </body>
