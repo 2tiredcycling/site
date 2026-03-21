@@ -88,6 +88,7 @@
       <h1>V4.2 色调预览</h1>
       <p>请从 1-8 里选一套。建议看 30 秒整体观感，再决定。</p>
       <div class="row-actions">
+        <a class="btn" href="{{ request.args.get('source') or url_for('web.index') }}">返回上一页</a>
         <a class="btn" href="{{ url_for('web.index') }}">返回首页</a>
       </div>
       <nav class="tabs">
@@ -154,6 +155,7 @@
             </div>
 
             <div class="row-actions">
+              <button class="btn apply-theme-btn" type="button" data-theme="theme-{{ p.key }}">应用此主题</button>
               <a class="btn" href="{{ url_for('web.palette_preview_home', palette_key=p.key) }}">打开该色调首页</a>
             </div>
             <p class="vote-tip"><strong>投票建议：</strong>回复我“选 {{ p.key }}”。</p>
@@ -162,5 +164,21 @@
       {% endfor %}
     </section>
   </main>
+  <script>
+    (function () {
+      var source = new URLSearchParams(window.location.search).get('source') || '{{ url_for("web.index") }}';
+      document.querySelectorAll('.apply-theme-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var theme = btn.getAttribute('data-theme');
+          try { localStorage.setItem('site_theme', theme); } catch (e) {}
+          if (source && source.startsWith('/')) {
+            window.location.href = source;
+          } else {
+            window.location.href = '{{ url_for("web.index") }}';
+          }
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

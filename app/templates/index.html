@@ -25,6 +25,7 @@
         <a class="quick-pill" href="{{ url_for('web.routes_center') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-map"></use></svg></span><span>路线</span></a>
         <a class="quick-pill" href="{{ url_for('web.site_feedback', source=url_for('web.index')) }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span><span>反馈</span></a>
         <a class="quick-pill" href="{{ url_for('web.contact_page') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-mail"></use></svg></span><span>联系</span></a>
+        <button class="quick-pill quick-pill-button theme-entry-link theme-nav-pill" type="button" aria-label="切换主题面板"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-palette"></use></svg></span><span>主题</span></button>
       </nav>
 
       <div class="hero-layout">
@@ -131,13 +132,6 @@
       </div>
     </section>
 
-    <section class="feedback-banner card">
-      <div>
-        <strong>发现网站问题？</strong>
-        <span>首页入口直达反馈，处理进度会进入后台队列。</span>
-      </div>
-      <a class="btn feedback-btn" href="{{ url_for('web.site_feedback', source=url_for('web.index')) }}">我要反馈</a>
-    </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
 </body>

@@ -386,51 +386,12 @@ def index() -> str:
 
 @bp.get("/palette-preview")
 def palette_preview() -> str:
-    palettes = _palette_presets()
-    return render_template(
-        "palette_preview.html",
-        palettes=palettes,
-        meta_description="2Tired V4.2 色调候选预览页面。",
-    )
+    abort(404, description="Palette preview is unavailable")
 
 
 @bp.get("/palette-preview/<string:palette_key>")
 def palette_preview_home(palette_key: str) -> str:
-    palettes = _palette_presets()
-    palette_map = {item["key"]: item for item in palettes}
-    palette = palette_map.get((palette_key or "").strip().lower())
-    if not palette:
-        abort(404)
-    now = utcnow()
-    latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(5).all()
-    latest_routes = (
-        Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False)
-        .order_by(Route.updated_at.desc())
-        .limit(5)
-        .all()
-    )
-    route_total = Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False).count()
-    announcements = (
-        Announcement.query.filter(*_announcement_visibility_filters(now))
-        .order_by(
-            Announcement.is_pinned.desc(),
-            Announcement.sort_order.desc(),
-            db.func.coalesce(Announcement.published_at, Announcement.updated_at).desc(),
-            Announcement.updated_at.desc(),
-        )
-        .limit(5)
-        .all()
-    )
-    return render_template(
-        "palette_preview_home.html",
-        palettes=palettes,
-        palette=palette,
-        latest_activities=latest_activities,
-        latest_routes=latest_routes,
-        route_total=route_total,
-        announcements=announcements,
-        meta_description=f"2Tired V4.2 首页色调预览：{palette['name']}",
-    )
+    abort(404, description="Palette preview is unavailable")
 
 
 @bp.get("/announcements/<int:announcement_id>")

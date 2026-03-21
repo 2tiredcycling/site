@@ -1,6 +1,7 @@
 ﻿(function () {
   var STORAGE_KEY = 'site_theme';
   var DEFAULT_THEME = 'theme-1';
+  var SHOW_SWITCHER = false;
   var THEMES = [
     { value: 'theme-1', label: '森林绿' },
     { value: 'theme-2', label: '夜幕紫' },
@@ -121,8 +122,93 @@
     document.body.appendChild(box);
   }
 
+  function buildQuickThemePanel(activeTheme) {
+    if (document.querySelector('.theme-quick-panel')) {
+      return;
+    }
+    var panel = document.createElement('div');
+    panel.className = 'theme-quick-panel';
+    panel.setAttribute('aria-hidden', 'true');
+
+    var title = document.createElement('div');
+    title.className = 'theme-quick-title';
+    title.textContent = '选择主题';
+    panel.appendChild(title);
+
+    var list = document.createElement('div');
+    list.className = 'theme-quick-list';
+    THEMES.forEach(function (item) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'theme-quick-item' + (item.value === activeTheme ? ' is-active' : '');
+      btn.setAttribute('data-theme', item.value);
+      btn.textContent = item.label;
+      btn.addEventListener('click', function () {
+        var next = btn.getAttribute('data-theme');
+        applyTheme(next);
+        saveTheme(next);
+        list.querySelectorAll('.theme-quick-item').forEach(function (node) {
+          node.classList.remove('is-active');
+        });
+        btn.classList.add('is-active');
+      });
+      list.appendChild(btn);
+    });
+    panel.appendChild(list);
+    document.body.appendChild(panel);
+  }
+
+  function bindThemeEntry() {
+    var triggers = document.querySelectorAll('.theme-entry-link');
+    if (!triggers.length) {
+      return;
+    }
+    buildQuickThemePanel(safeGetTheme());
+    var panel = document.querySelector('.theme-quick-panel');
+    if (!panel) {
+      return;
+    }
+
+    function openPanel() {
+      panel.classList.add('is-open');
+      panel.setAttribute('aria-hidden', 'false');
+    }
+    function closePanel() {
+      panel.classList.remove('is-open');
+      panel.setAttribute('aria-hidden', 'true');
+    }
+
+    triggers.forEach(function (trigger) {
+      trigger.addEventListener('click', function (event) {
+        event.preventDefault();
+        if (panel.classList.contains('is-open')) {
+          closePanel();
+        } else {
+          openPanel();
+        }
+      });
+    });
+
+    document.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!panel.contains(target) && !Array.prototype.some.call(triggers, function (node) { return node.contains(target); })) {
+        closePanel();
+      }
+    });
+  }
+
   var initial = safeGetTheme();
   applyTheme(initial);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      bindThemeEntry();
+    });
+  } else {
+    bindThemeEntry();
+  }
+  if (!SHOW_SWITCHER) {
+    return;
+  }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       buildSwitcher(initial);

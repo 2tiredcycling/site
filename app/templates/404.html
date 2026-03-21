@@ -12,10 +12,27 @@
   <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
-    <section class="card form-card">
-      <h1>404</h1>
-      <p>{{ error_message or "请求的页面不存在。" }}</p>
-      <a class="link-back" href="{{ url_for('web.index') }}">返回首页</a>
+    <section class="card form-card notfound-hero">
+      <div class="notfound-code">404</div>
+      <div class="notfound-main">
+        <p class="notfound-eyebrow">PAGE NOT FOUND</p>
+        <h1>这个页面暂时找不到了</h1>
+        <p class="hint">{{ error_message or "请求的页面不存在。" }}</p>
+        <div class="row-actions notfound-actions">
+          <a class="btn btn-solid" href="{{ url_for('web.index') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-home"></use></svg></span><span>返回首页</span></a>
+          <a class="btn" href="{{ url_for('web.events_list') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span><span>查看活动</span></a>
+          <a class="btn" href="{{ url_for('web.routes_center') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-map"></use></svg></span><span>进入路线</span></a>
+          <a class="btn btn-muted" href="{{ url_for('web.site_feedback', source=request.path) }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span><span>反馈问题</span></a>
+        </div>
+      </div>
+      <aside class="notfound-hint-card">
+        <h2>你可以试试</h2>
+        <ul>
+          <li>检查链接是否输入完整。</li>
+          <li>从首页进入最新活动或路线。</li>
+          <li>若链接来自旧公告，可提交反馈帮助我们修复。</li>
+        </ul>
+      </aside>
     </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
