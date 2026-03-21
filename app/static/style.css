@@ -2164,6 +2164,165 @@ td {
   gap: 12px;
 }
 
+/* Routes center v4.2 redesign */
+.route-hub-head {
+  border: 1px solid color-mix(in srgb, var(--brand-border-strong) 44%, #ffffff 56%);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--brand-surface-soft) 80%, #ffffff 20%),
+    color-mix(in srgb, var(--brand-accent-surface) 28%, #ffffff 72%)
+  );
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.route-hub-head h1 {
+  margin: 0;
+  color: var(--brand-primary);
+}
+
+.route-hub-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-self: end;
+}
+
+.route-hub-stats > div {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 74%, #ffffff 26%);
+  border-radius: 10px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--brand-surface) 82%, #ffffff 18%);
+  display: grid;
+  gap: 3px;
+}
+
+.route-hub-stats strong {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.route-hub-stats span {
+  color: var(--brand-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.route-filter-panel {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+  background: color-mix(in srgb, var(--brand-surface-soft) 70%, #ffffff 30%);
+}
+
+.route-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.route-card-item {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+  background: #fff;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.route-card-item:hover {
+  transform: translateY(-1px);
+  border-color: var(--brand-border-strong);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--brand-primary) 14%, transparent 86%);
+}
+
+.route-card-item:focus-visible {
+  outline: 2px solid var(--brand-primary-strong);
+  outline-offset: 2px;
+}
+
+.route-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.route-card-top h3 {
+  margin: 0;
+  color: var(--brand-primary);
+}
+
+.route-stars {
+  color: color-mix(in srgb, var(--brand-primary) 78%, #000000 22%);
+  font-size: 18px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.route-meta-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.route-meta-grid > div {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 78%, #ffffff 22%);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%);
+  display: grid;
+  gap: 2px;
+}
+
+.route-meta-grid strong {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.route-meta-grid span {
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+
+.route-extra {
+  margin: 10px 0 0;
+}
+
+.route-actions-row {
+  margin-top: 10px;
+}
+
+.route-empty-card {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 960px) {
+  .route-hub-head {
+    grid-template-columns: 1fr;
+  }
+
+  .route-hub-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .route-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .route-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .route-hub-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 960px) {
   .activity-hub-head {
     grid-template-columns: 1fr;

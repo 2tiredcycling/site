@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -13,13 +13,26 @@
   <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
-    <section class="card form-card">
-      <h1>路线共享中心</h1>
+
+    <section class="route-hub-head">
+      <div>
+        <p class="hero-kicker">Route Center</p>
+        <h1>路线共享中心</h1>
+        <p class="hint">筛选、查看并下载社团公开路线，支持按里程、难度与评分快速定位。</p>
+      </div>
+      <div class="route-hub-stats">
+        <div><strong>匹配路线</strong><span>{{ pagination.total }}</span></div>
+        <div><strong>当前页</strong><span>{{ pagination.page }}/{{ pagination.pages or 1 }}</span></div>
+        <div><strong>本页显示</strong><span>{{ routes|length }}</span></div>
+      </div>
+    </section>
+
+    <section class="card form-card route-filter-panel">
       <form method="get" action="{{ url_for('web.routes_center') }}" class="single-form">
         <div class="filter-grid">
           <label>
             关键词
-            <input type="text" name="q" value="{{ filters.q }}" placeholder="名称关键词">
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="路线名称关键词">
           </label>
           <label>
             最小里程 (km)
@@ -68,71 +81,71 @@
           </label>
         </div>
         <div class="row-actions">
-          <button class="btn" type="submit">搜索</button>
-          <a class="btn btn-muted" href="{{ url_for('web.routes_center') }}">清空</a>
+          <button class="btn" type="submit"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-search"></use></svg></span><span>搜索</span></button>
+          <a class="btn btn-muted" href="{{ url_for('web.routes_center') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-clear"></use></svg></span><span>清空</span></a>
         </div>
       </form>
     </section>
 
-    <section class="card">
-      <table>
-        <thead>
-          <tr>
-            <th>路线名称</th>
-            <th>里程 (km)</th>
-            <th>难度</th>
-            <th>评分</th>
-            <th>下载统计</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for route in routes %}
-            <tr>
-              <td>{{ route.route_name }}</td>
-              <td>{{ '%.1f'|format(route.distance_km or 0) }}</td>
-              <td>
-                {% if route.difficulty == '1' %}
-                  ★☆☆☆☆
-                {% elif route.difficulty == '2' or route.difficulty == 'easy' %}
-                  ★★☆☆☆
-                {% elif route.difficulty == '3' or route.difficulty == 'medium' %}
-                  ★★★☆☆
-                {% elif route.difficulty == '4' or route.difficulty == 'hard' %}
-                  ★★★★☆
-                {% elif route.difficulty == '5' %}
-                  ★★★★★
-                {% else %}
-                  {{ route.difficulty }}
-                {% endif %}
-              </td>
-              <td>
-                {% set info = rating_map.get(route.id, {'avg_rating': 0.0, 'rating_count': 0}) %}
+    <section class="route-card-grid">
+      {% for route in routes %}
+        {% set info = rating_map.get(route.id, {'avg_rating': 0.0, 'rating_count': 0}) %}
+        <article class="card form-card route-card-item card-link" data-route-href="{{ url_for('web.route_detail', route_id=route.id) }}" tabindex="0" role="link" aria-label="查看路线 {{ route.route_name }} 详情">
+          <div class="route-card-top">
+            <h3>{{ route.route_name }}</h3>
+            <span class="route-stars">
+              {% if route.difficulty == '1' %}
+                ★☆☆☆☆
+              {% elif route.difficulty == '2' or route.difficulty == 'easy' %}
+                ★★☆☆☆
+              {% elif route.difficulty == '3' or route.difficulty == 'medium' %}
+                ★★★☆☆
+              {% elif route.difficulty == '4' or route.difficulty == 'hard' %}
+                ★★★★☆
+              {% elif route.difficulty == '5' %}
+                ★★★★★
+              {% else %}
+                {{ route.difficulty }}
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="route-meta-grid">
+            <div><strong>里程</strong><span>{{ '%.1f'|format(route.distance_km or 0) }} km</span></div>
+            <div>
+              <strong>评分</strong>
+              <span>
                 {% if info.rating_count > 0 %}
                   {{ '%.1f'|format(info.avg_rating) }} / 5
-                  <br>
-                  <small>{{ info.rating_count }} 条已审核</small>
                 {% else %}
                   暂无评分
                 {% endif %}
-              </td>
-              <td>
-                {{ route.download_count or 0 }} 次
-                <br>
-                <small>{{ to_local_time(route.last_downloaded_at).strftime('%Y-%m-%d %H:%M') if route.last_downloaded_at else '暂无' }}</small>
-              </td>
-              <td class="row-actions">
-                <a class="btn" href="{{ url_for('web.route_detail', route_id=route.id) }}">详情</a>
-                <a class="btn" href="{{ url_for('web.download', route_id=route.id) }}">下载</a>
-              </td>
-            </tr>
-          {% else %}
-            <tr>
-              <td colspan="6">暂无符合条件的路线</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+              </span>
+            </div>
+            <div>
+              <strong>下载</strong>
+              <span>{{ route.download_count or 0 }} 次</span>
+            </div>
+          </div>
+
+          <p class="hint route-extra">
+            {% if info.rating_count > 0 %}
+              {{ info.rating_count }} 条已审核反馈；
+            {% endif %}
+            最近下载：{{ to_local_time(route.last_downloaded_at).strftime('%Y-%m-%d %H:%M') if route.last_downloaded_at else '暂无' }}
+          </p>
+
+          <div class="row-actions route-actions-row">
+            <a class="btn" href="{{ url_for('web.route_detail', route_id=route.id) }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-map"></use></svg></span><span>查看详情</span></a>
+            <a class="btn btn-muted" href="{{ url_for('web.download', route_id=route.id) }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-download"></use></svg></span><span>下载 GPX</span></a>
+          </div>
+        </article>
+      {% else %}
+        <article class="card form-card route-empty-card">
+          <h3>暂无符合条件的路线</h3>
+          <p class="hint">你可以放宽筛选条件或点击“清空”后重新查看全部路线。</p>
+        </article>
+      {% endfor %}
     </section>
 
     <section class="pagination card form-card">
@@ -148,5 +161,26 @@
     </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+  <script>
+    (function () {
+      var cards = document.querySelectorAll('.route-card-item[data-route-href]');
+      cards.forEach(function (card) {
+        var href = card.getAttribute('data-route-href');
+        if (!href) return;
+        card.addEventListener('click', function (event) {
+          if (event.target.closest('a, button, input, select, textarea, form')) {
+            return;
+          }
+          window.location.href = href;
+        });
+        card.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            window.location.href = href;
+          }
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
