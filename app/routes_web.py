@@ -1,8 +1,8 @@
 ﻿from datetime import timedelta, timezone
 import csv
+import re
 from io import StringIO
 from pathlib import Path
-import re
 from xml.sax.saxutils import escape
 
 from flask import Blueprint, Response, abort, current_app, redirect, render_template, request, send_from_directory, url_for

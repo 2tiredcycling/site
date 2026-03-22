@@ -43,6 +43,15 @@
         <div class="alert">{{ error_message }}</div>
       {% endif %}
 
+      <div class="feedback-privacy-note">
+        <strong>隐私说明（简版）</strong>
+        <p>
+          提交反馈时，我们会处理你填写的反馈内容、问题类型、学号（如填写）和来源页面，用于问题排查与回复沟通。
+          信息仅用于站点运维与服务改进，默认保存不超过 180 天；如需查询、更正或删除，可发送邮件至
+          <a href="mailto:st_2tiredcc@link.cuhk.edu.cn">st_2tiredcc@link.cuhk.edu.cn</a> 联系处理。
+        </p>
+      </div>
+
       <form method="post" action="{{ url_for('web.site_feedback_submit') }}" class="single-form">
         <input type="hidden" name="source" value="{{ source or url_for('web.index') }}">
 

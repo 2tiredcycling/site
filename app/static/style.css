@@ -608,6 +608,31 @@ form {
   border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
 }
 
+.feedback-privacy-note {
+  border: 1px solid color-mix(in srgb, var(--brand-border) 74%, #ffffff 26%);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 78%, #ffffff 22%);
+}
+
+.feedback-privacy-note strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--brand-primary);
+}
+
+.feedback-privacy-note p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.feedback-privacy-note a {
+  color: var(--brand-primary-strong);
+}
+
 .feedback-readonly-select:disabled {
   background: #f3f4f6;
   color: #6b7280;
