@@ -292,22 +292,12 @@ def _activity_route_cards(activity: Activity) -> list[dict]:
             continue
         media_by_option.setdefault(option_id, []).append(media)
 
-    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
     for item in options:
         route = item.route
         if route is None or route.is_deleted or route.status != STATUS_PUBLISHED:
             continue
         distance_km = float(route.distance_km or 0)
-        ascent_m = None
-        file_path = upload_folder / (route.gpx_filename or "")
-        if file_path.exists() and file_path.is_file():
-            try:
-                _points, stats, _profile = parse_gpx_points_and_stats(file_path)
-                if stats.get("distance_km") is not None:
-                    distance_km = float(stats["distance_km"])
-                ascent_m = stats.get("ascent_m")
-            except Exception:
-                ascent_m = None
+        ascent_m = route.ascent_m
         cards.append(
             {
                 "label": item.level_label or "路线",

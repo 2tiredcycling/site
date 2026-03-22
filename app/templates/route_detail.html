@@ -45,7 +45,7 @@
           <div><strong>里程</strong><span>{{ '%.1f'|format(route.distance_km or 0) }} km</span></div>
           <div><strong>建议用时</strong><span>{{ '%.1f'|format(route.suggested_duration_hours or 0) }} h</span></div>
           <div><strong>下载次数</strong><span>{{ route.download_count or 0 }}</span></div>
-          <div><strong>累计爬升</strong><span id="auto-ascent">计算中...</span></div>
+          <div><strong>累计爬升</strong><span>{{ ('%.1f'|format(route.ascent_m) ~ ' m') if route.ascent_m is not none else '暂无海拔数据' }}</span></div>
           <div>
             <strong>用户评分</strong>
             <span>
@@ -137,7 +137,6 @@
       const fullBtn = document.getElementById('routeMapFullscreenBtn');
       const modal = document.getElementById('routeMapModal');
       const modalClose = document.getElementById('routeMapModalClose');
-      const autoAscent = document.getElementById('auto-ascent');
       const profileSvg = document.getElementById('elevation-profile');
       const profileMsg = document.getElementById('elevation-profile-msg');
       const previewEndpoint = "{{ preview_endpoint if preview_endpoint else url_for('api_v1.route_preview', route_id=route.id) }}";
@@ -381,11 +380,6 @@
       fetch(previewEndpoint)
         .then((resp) => resp.json())
         .then((data) => {
-          if (data.stats) {
-            autoAscent.textContent = data.stats.ascent_m != null ? (data.stats.ascent_m + ' m') : '暂无海拔数据';
-          } else {
-            autoAscent.textContent = '暂无';
-          }
           renderElevationProfile(data.elevation_profile);
           if (!data.points || data.points.length === 0) {
             previewBox.textContent = '无轨迹点';
@@ -409,7 +403,6 @@
         })
         .catch(() => {
           previewBox.textContent = '预览加载失败';
-          autoAscent.textContent = '计算失败';
           profileMsg.textContent = '剖面加载失败';
           map.setView([22.3193, 114.1694], 11);
         });

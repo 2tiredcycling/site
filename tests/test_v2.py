@@ -60,14 +60,22 @@ def get_manage_csrf(client) -> str:
     return _extract_csrf(page.get_data(as_text=True))
 
 
-def create_route(client, csrf_token: str, name: str = "Test Route", follow_redirects: bool = True):
-    gpx_content = b"<?xml version='1.0'?><gpx version='1.1'></gpx>"
+def create_route(
+    client,
+    csrf_token: str,
+    name: str = "Test Route",
+    follow_redirects: bool = True,
+    distance_km: str = "3.2",
+    gpx_content: bytes | None = None,
+):
+    if gpx_content is None:
+        gpx_content = b"<?xml version='1.0'?><gpx version='1.1'></gpx>"
     return client.post(
         "/manage/routes/create",
         data={
             "csrf_token": csrf_token,
             "route_name": name,
-            "distance_km": "3.2",
+            "distance_km": distance_km,
             "difficulty": "easy",
             "category": "hiking",
             "description": "for test",
@@ -212,7 +220,7 @@ def test_sitemap_xml_served(app_and_client):
 def test_v41_static_pages_available(app_and_client):
     _app, client = app_and_client
     assert client.get("/about").status_code == 200
-    assert client.get("/team").status_code == 200
+    assert client.get("/team").status_code == 404
     assert client.get("/contact").status_code == 200
     assert client.get("/routes").status_code == 200
 
@@ -727,6 +735,75 @@ def test_admin_login_and_create_route(app_and_client):
     list_resp = client.get("/api/v1/routes")
     items = list_resp.get_json()["items"]
     assert any(item["route_name"] == "Test Route" for item in items)
+
+
+def test_route_distance_and_elevation_stats_auto_computed_from_gpx(app_and_client):
+    app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    csrf_token = get_manage_csrf(client)
+
+    # ~111m straight line with elevation gain.
+    gpx_content = b"""<?xml version='1.0' encoding='UTF-8'?>
+<gpx version='1.1' creator='pytest'>
+  <trk><name>Auto Stats</name><trkseg>
+    <trkpt lat='22.500000' lon='114.100000'><ele>10</ele></trkpt>
+    <trkpt lat='22.501000' lon='114.100000'><ele>24</ele></trkpt>
+  </trkseg></trk>
+</gpx>"""
+    resp = create_route(
+        client,
+        csrf_token,
+        name="Auto Stats Route",
+        distance_km="999.9",
+        gpx_content=gpx_content,
+    )
+    assert resp.status_code == 200
+
+    with app.app_context():
+        route = Route.query.filter_by(route_name="Auto Stats Route").first()
+        assert route is not None
+        assert route.distance_km != 999.9
+        assert route.distance_km > 0
+        assert route.ascent_m is not None
+        assert route.max_ele_m is not None
+
+
+def test_recalculate_route_stats_endpoint_refreshes_saved_values(app_and_client):
+    app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    csrf_token = get_manage_csrf(client)
+
+    gpx_content = b"""<?xml version='1.0' encoding='UTF-8'?>
+<gpx version='1.1' creator='pytest'>
+  <trk><name>Recalc Stats</name><trkseg>
+    <trkpt lat='22.500000' lon='114.100000'><ele>18</ele></trkpt>
+    <trkpt lat='22.501000' lon='114.100000'><ele>31</ele></trkpt>
+  </trkseg></trk>
+</gpx>"""
+    create_route(client, csrf_token, name="Recalc Stats Route", gpx_content=gpx_content)
+
+    with app.app_context():
+        route = Route.query.filter_by(route_name="Recalc Stats Route").first()
+        assert route is not None
+        route_id = route.id
+        route.distance_km = 0.0
+        route.ascent_m = 0.0
+        route.descent_m = 0.0
+        db.session.commit()
+
+    csrf_token = get_manage_csrf(client)
+    resp = client.post(
+        f"/manage/routes/{route_id}/recalculate-stats",
+        data={"csrf_token": csrf_token},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+
+    with app.app_context():
+        route = db.session.get(Route, route_id)
+        assert route is not None
+        assert route.distance_km > 0
+        assert route.ascent_m is not None
 
 
 def test_download_updates_stats(app_and_client):

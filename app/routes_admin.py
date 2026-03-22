@@ -1230,7 +1230,7 @@ def _route_from_form(route: Route | None = None) -> dict:
     normalized_difficulty = _normalize_difficulty(raw_difficulty)
     return {
         "route_name": (request.form.get("route_name") or (route.route_name if route else "")).strip(),
-        "distance_km": parse_distance(request.form.get("distance_km") or (route.distance_km if route else "")),
+        "distance_km": route.distance_km if route else 0.0,
         "difficulty": normalized_difficulty,
         "category": "cycling",
         "description": (request.form.get("description") or (route.description if route else "")).strip(),
@@ -1241,6 +1241,27 @@ def _route_from_form(route: Route | None = None) -> dict:
         "supply_points": (request.form.get("supply_points") or (route.supply_points if route else "")).strip(),
         "risk_warning": (request.form.get("risk_warning") or (route.risk_warning if route else "")).strip(),
     }
+
+
+def _compute_route_stats(gpx_path: Path) -> dict:
+    _points, stats, _elevation_profile = parse_gpx_points_and_stats(gpx_path)
+    return {
+        "distance_km": float(stats.get("distance_km") or 0.0),
+        "ascent_m": stats.get("ascent_m"),
+        "descent_m": stats.get("descent_m"),
+        "min_ele_m": stats.get("min_ele_m"),
+        "max_ele_m": stats.get("max_ele_m"),
+    }
+
+
+def _apply_route_stats(route: Route, gpx_path: Path) -> dict:
+    stats = _compute_route_stats(gpx_path)
+    route.distance_km = stats["distance_km"]
+    route.ascent_m = stats["ascent_m"]
+    route.descent_m = stats["descent_m"]
+    route.min_ele_m = stats["min_ele_m"]
+    route.max_ele_m = stats["max_ele_m"]
+    return stats
 
 
 def _normalize_difficulty(raw: str) -> str:
@@ -1382,8 +1403,8 @@ def create_route():
     payload = _route_from_form()
     gpx_file = request.files.get("gpx_file")
 
-    if not payload["route_name"] or payload["distance_km"] is None or not gpx_file:
-        flash("参数错误：请填写路线名、距离并上传 GPX 文件", "error")
+    if not payload["route_name"] or not gpx_file:
+        flash("参数错误：请填写路线名并上传 GPX 文件", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["status"] not in ROUTE_STATUSES:
         flash("参数错误：状态无效", "error")
@@ -1404,11 +1425,19 @@ def create_route():
         return redirect(url_for("admin.routes_page"))
 
     try:
+        computed_stats = _compute_route_stats(path)
+    except Exception:
+        if path and path.exists():
+            path.unlink(missing_ok=True)
+        flash("参数错误：GPX 解析失败，无法计算路线统计信息", "error")
+        return redirect(url_for("admin.routes_page"))
+
+    try:
         route = Route(
             route_name=payload["route_name"],
             gpx_filename=filename,
             uploaded_at=utcnow(),
-            distance_km=payload["distance_km"],
+            distance_km=computed_stats["distance_km"],
             difficulty=payload["difficulty"],
             category=payload["category"],
             description=payload["description"],
@@ -1417,6 +1446,10 @@ def create_route():
             suggested_duration_hours=payload["suggested_duration_hours"],
             supply_points=payload["supply_points"],
             risk_warning=payload["risk_warning"],
+            ascent_m=computed_stats["ascent_m"],
+            descent_m=computed_stats["descent_m"],
+            min_ele_m=computed_stats["min_ele_m"],
+            max_ele_m=computed_stats["max_ele_m"],
             created_by=g.current_user.id,
             updated_by=g.current_user.id,
         )
@@ -1444,7 +1477,7 @@ def update_route(route_id: int):
         return redirect(url_for("admin.routes_page"))
 
     payload = _route_from_form(route)
-    if not payload["route_name"] or payload["distance_km"] is None or payload["status"] not in ROUTE_STATUSES:
+    if not payload["route_name"] or payload["status"] not in ROUTE_STATUSES:
         flash("参数错误：请检查必填项", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["suggested_duration_hours"] is None:
@@ -1455,6 +1488,7 @@ def update_route(route_id: int):
     gpx_file = request.files.get("gpx_file")
     old_filename = route.gpx_filename
     saved_path = None
+    stats_path = Path(current_app.config["UPLOAD_FOLDER"]) / route.gpx_filename
     if gpx_file and gpx_file.filename:
         if not allowed_file(gpx_file.filename, {".gpx"}):
             flash("参数错误：仅支持 .gpx 文件", "error")
@@ -1467,10 +1501,11 @@ def update_route(route_id: int):
             flash("参数错误：仅支持 .gpx 文件", "error")
             return redirect(url_for("admin.routes_page"))
         route.gpx_filename = new_filename
+        stats_path = saved_path
 
     try:
+        _apply_route_stats(route, stats_path)
         route.route_name = payload["route_name"]
-        route.distance_km = payload["distance_km"]
         route.difficulty = payload["difficulty"]
         route.category = payload["category"]
         route.description = payload["description"]
@@ -1498,6 +1533,41 @@ def update_route(route_id: int):
         flash("系统错误：更新路线失败", "error")
 
     return redirect(url_for("admin.routes_page"))
+
+
+@bp.post("/routes/<int:route_id>/recalculate-stats")
+@login_required
+def recalculate_route_stats(route_id: int):
+    route = Route.query.filter_by(id=route_id, is_deleted=False).first()
+    if not route:
+        flash("路线不存在", "error")
+        return redirect(url_for("admin.routes_page"))
+
+    gpx_path = Path(current_app.config["UPLOAD_FOLDER"]) / route.gpx_filename
+    if not gpx_path.exists() or not gpx_path.is_file():
+        flash("GPX 文件不存在，无法更新统计", "error")
+        return redirect(url_for("admin.route_edit_page", route_id=route_id))
+
+    before = route_snapshot(route)
+    try:
+        stats = _apply_route_stats(route, gpx_path)
+        route.updated_by = g.current_user.id
+        route.updated_at = utcnow()
+        create_route_version(route, g.current_user.id, change_note="recalculate_stats")
+        db.session.commit()
+        write_field_audit_log(g.current_user.id, "route", str(route.id), before, route_snapshot(route))
+        write_audit_log(
+            g.current_user.id,
+            "route.recalculate_stats",
+            "route",
+            str(route.id),
+            f"distance_km={stats['distance_km']}",
+        )
+        flash("已根据 GPX 自动更新里程与爬升统计", "success")
+    except Exception:
+        db.session.rollback()
+        flash("统计更新失败：GPX 解析异常", "error")
+    return redirect(url_for("admin.route_edit_page", route_id=route_id))
 
 
 @bp.post("/routes/<int:route_id>/delete")
@@ -2088,7 +2158,6 @@ def bulk_import():
     required = {
         "route_name",
         "gpx_filename",
-        "distance_km",
         "difficulty",
         "category",
         "description",
@@ -2134,13 +2203,12 @@ def bulk_import():
         category = (row.get("category") or "hiking").strip()
         description = (row.get("description") or "").strip()
         status = (row.get("status") or STATUS_OFFLINE).strip()
-        distance = parse_distance(row.get("distance_km") or "")
         suggested_duration_hours = parse_distance(row.get("suggested_duration_hours") or "0")
         supply_points = (row.get("supply_points") or "").strip()
         risk_warning = (row.get("risk_warning") or "").strip()
 
         reason = ""
-        if not route_name or not gpx_filename.lower().endswith(".gpx") or distance is None or status not in ROUTE_STATUSES:
+        if not route_name or not gpx_filename.lower().endswith(".gpx") or status not in ROUTE_STATUSES:
             reason = "invalid_fields"
         elif suggested_duration_hours is None:
             reason = "invalid_duration"
@@ -2162,10 +2230,26 @@ def bulk_import():
             )
             continue
 
+        gpx_path = upload_folder / gpx_filename
+        try:
+            computed_stats = _compute_route_stats(gpx_path)
+        except Exception:
+            skipped += 1
+            report_rows.append(
+                {
+                    "row": index,
+                    "route_name": route_name,
+                    "gpx_filename": gpx_filename,
+                    "status": "failed",
+                    "reason": "gpx_parse_error",
+                }
+            )
+            continue
+
         route = Route(
             route_name=route_name,
             gpx_filename=gpx_filename,
-            distance_km=distance,
+            distance_km=computed_stats["distance_km"],
             difficulty=difficulty,
             category=category,
             description=description,
@@ -2175,6 +2259,10 @@ def bulk_import():
             suggested_duration_hours=suggested_duration_hours,
             supply_points=supply_points,
             risk_warning=risk_warning,
+            ascent_m=computed_stats["ascent_m"],
+            descent_m=computed_stats["descent_m"],
+            min_ele_m=computed_stats["min_ele_m"],
+            max_ele_m=computed_stats["max_ele_m"],
             created_by=g.current_user.id,
             updated_by=g.current_user.id,
         )

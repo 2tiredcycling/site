@@ -61,6 +61,10 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("routes", "suggested_duration_hours", "suggested_duration_hours FLOAT DEFAULT 0 NOT NULL")
         _add_column_if_missing("routes", "supply_points", "supply_points TEXT DEFAULT '' NOT NULL")
         _add_column_if_missing("routes", "risk_warning", "risk_warning TEXT DEFAULT '' NOT NULL")
+        _add_column_if_missing("routes", "ascent_m", "ascent_m FLOAT")
+        _add_column_if_missing("routes", "descent_m", "descent_m FLOAT")
+        _add_column_if_missing("routes", "min_ele_m", "min_ele_m FLOAT")
+        _add_column_if_missing("routes", "max_ele_m", "max_ele_m FLOAT")
         _add_column_if_missing("routes", "is_deleted", "is_deleted BOOLEAN DEFAULT 0 NOT NULL")
         _add_column_if_missing("routes", "deleted_at", "deleted_at DATETIME")
         _add_column_if_missing("routes", "deleted_by", "deleted_by INTEGER")
@@ -129,6 +133,10 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("routes", "suggested_duration_hours", "suggested_duration_hours DOUBLE PRECISION DEFAULT 0 NOT NULL")
         _add_column_if_missing("routes", "supply_points", "supply_points TEXT DEFAULT '' NOT NULL")
         _add_column_if_missing("routes", "risk_warning", "risk_warning TEXT DEFAULT '' NOT NULL")
+        _add_column_if_missing("routes", "ascent_m", "ascent_m DOUBLE PRECISION")
+        _add_column_if_missing("routes", "descent_m", "descent_m DOUBLE PRECISION")
+        _add_column_if_missing("routes", "min_ele_m", "min_ele_m DOUBLE PRECISION")
+        _add_column_if_missing("routes", "max_ele_m", "max_ele_m DOUBLE PRECISION")
         _add_column_if_missing("routes", "is_deleted", "is_deleted BOOLEAN DEFAULT FALSE NOT NULL")
         _add_column_if_missing("routes", "deleted_at", "deleted_at TIMESTAMP")
         _add_column_if_missing("routes", "deleted_by", "deleted_by INTEGER")
@@ -342,6 +350,10 @@ def route_snapshot(route: Route) -> dict:
         "suggested_duration_hours": route.suggested_duration_hours,
         "supply_points": route.supply_points,
         "risk_warning": route.risk_warning,
+        "ascent_m": route.ascent_m,
+        "descent_m": route.descent_m,
+        "min_ele_m": route.min_ele_m,
+        "max_ele_m": route.max_ele_m,
         "is_deleted": route.is_deleted,
     }
 
@@ -383,6 +395,10 @@ def rollback_route_to_version(route: Route, version: RouteVersion, actor_id: int
     route.suggested_duration_hours = payload.get("suggested_duration_hours", route.suggested_duration_hours)
     route.supply_points = payload.get("supply_points", route.supply_points)
     route.risk_warning = payload.get("risk_warning", route.risk_warning)
+    route.ascent_m = payload.get("ascent_m", route.ascent_m)
+    route.descent_m = payload.get("descent_m", route.descent_m)
+    route.min_ele_m = payload.get("min_ele_m", route.min_ele_m)
+    route.max_ele_m = payload.get("max_ele_m", route.max_ele_m)
     route.is_deleted = payload.get("is_deleted", route.is_deleted)
     route.updated_by = actor_id
     route.updated_at = utcnow()

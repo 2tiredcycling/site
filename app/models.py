@@ -111,6 +111,10 @@ class Route(db.Model):
     suggested_duration_hours = db.Column(db.Float, nullable=False, default=0.0)
     supply_points = db.Column(db.Text, nullable=False, default="")
     risk_warning = db.Column(db.Text, nullable=False, default="")
+    ascent_m = db.Column(db.Float, nullable=True)
+    descent_m = db.Column(db.Float, nullable=True)
+    min_ele_m = db.Column(db.Float, nullable=True)
+    max_ele_m = db.Column(db.Float, nullable=True)
     is_deleted = db.Column(db.Boolean, nullable=False, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     deleted_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
@@ -140,6 +144,10 @@ class Route(db.Model):
             "suggested_duration_hours": self.suggested_duration_hours,
             "supply_points": self.supply_points,
             "risk_warning": self.risk_warning,
+            "ascent_m": self.ascent_m,
+            "descent_m": self.descent_m,
+            "min_ele_m": self.min_ele_m,
+            "max_ele_m": self.max_ele_m,
             "is_deleted": self.is_deleted,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "deleted_by": self.deleted_by,

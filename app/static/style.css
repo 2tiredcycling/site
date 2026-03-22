@@ -836,6 +836,45 @@ textarea {
   background: #fff;
 }
 
+.route-gpx-field .route-gpx-inline {
+  margin-top: 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-gpx-field .route-gpx-inline input[type="file"] {
+  margin-top: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  flex: 1;
+  min-width: 0;
+}
+
+.route-gpx-refresh-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  flex: 0 0 36px;
+}
+
+.route-gpx-refresh-btn .spin-icon {
+  display: inline-block;
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.route-gpx-refresh-btn:hover .spin-icon {
+  transform: rotate(180deg);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
