@@ -130,7 +130,7 @@
                 {% endif %}
               </p>
               {% if media.mime_type.startswith('image/') %}
-                <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}">
+                <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}" loading="lazy" decoding="async" fetchpriority="low">
                 <div class="media-actions">
                   <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载图片</a>
                 </div>

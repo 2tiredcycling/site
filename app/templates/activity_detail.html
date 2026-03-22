@@ -60,7 +60,7 @@
                           data-media-alt="{{ item.label }}路线活动图片"
                           data-media-gallery="{{ route_gallery_id }}"
                         >
-                          <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ item.label }}路线活动图片">
+                          <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ item.label }}路线活动图片" loading="lazy" decoding="async" fetchpriority="low">
                         </button>
                       {% elif media.mime_type.startswith('video/') %}
                         <video controls preload="metadata">
@@ -95,7 +95,7 @@
                   data-media-alt="{{ activity.title }} 活动图片"
                   data-media-gallery="unassigned"
                 >
-                  <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ activity.title }} 活动图片">
+                  <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ activity.title }} 活动图片" loading="lazy" decoding="async" fetchpriority="low">
                 </button>
                 <div class="media-actions">
                   <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-download"></use></svg></span><span>下载图片</span></a>

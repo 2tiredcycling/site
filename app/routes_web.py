@@ -682,13 +682,19 @@ def media_asset_file(asset_id: int):
     file_path = media_dir / (asset.storage_path or "")
     if not file_path.exists() or not file_path.is_file():
         abort(404, description="Media file missing")
-    return send_from_directory(
+    response = send_from_directory(
         directory=str(media_dir),
         path=asset.storage_path,
         as_attachment=False,
         download_name=asset.original_filename or asset.storage_path,
         mimetype=asset.mime_type or "application/octet-stream",
+        max_age=31536000,
     )
+    # Uploaded media file names are timestamped/unique, so long-term immutable cache is safe.
+    response.cache_control.public = True
+    response.cache_control.max_age = 31536000
+    response.cache_control.immutable = True
+    return response
 
 
 @bp.get("/health")
