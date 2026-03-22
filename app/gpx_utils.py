@@ -36,6 +36,125 @@ def _downsample_profile(profile: list[dict], max_points: int = 500) -> list[dict
     return sampled
 
 
+def _waypoint_kind(name: str, waypoint_type: str, symbol: str, comment: str, desc: str) -> str:
+    merged = " ".join([name, waypoint_type, symbol, comment, desc]).lower()
+    raw_type = _normalize_text(waypoint_type)
+    if raw_type in {"high", "medium", "low", "risk", "风险", "高风险", "中风险", "低风险"}:
+        return "risk"
+    if raw_type.startswith("risk:") or raw_type.startswith("risk-") or raw_type.startswith("risk_"):
+        return "risk"
+    risk_keywords = (
+        "risk",
+        "danger",
+        "restricted",
+        "construction",
+        "warning",
+        "危险",
+        "施工",
+        "管制",
+        "绕行",
+        "封闭",
+        "注意",
+        "下坡",
+        "急弯",
+    )
+    supply_keywords = (
+        "supply",
+        "shop",
+        "store",
+        "water",
+        "food",
+        "rest",
+        "toilet",
+        "补给",
+        "便利店",
+        "加油站",
+        "饮水",
+        "卫生间",
+        "休息",
+    )
+    if any(keyword in merged for keyword in risk_keywords):
+        return "risk"
+    if any(keyword in merged for keyword in supply_keywords):
+        return "supply"
+    return "poi"
+
+
+def _normalize_text(value: str) -> str:
+    return (value or "").strip().lower()
+
+
+def _risk_level_from_type(waypoint_type: str) -> str | None:
+    raw_type = _normalize_text(waypoint_type)
+    if not raw_type:
+        return None
+    if raw_type in {"high", "risk:high", "risk-high", "risk_high", "高", "高风险"}:
+        return "high"
+    if raw_type in {"medium", "risk:medium", "risk-medium", "risk_mid", "risk_medium", "中", "中风险"}:
+        return "medium"
+    if raw_type in {"low", "risk:low", "risk-low", "risk_low", "低", "低风险"}:
+        return "low"
+    if raw_type.endswith(":high") or raw_type.endswith("-high") or raw_type.endswith("_high"):
+        return "high"
+    if raw_type.endswith(":medium") or raw_type.endswith("-medium") or raw_type.endswith("_medium"):
+        return "medium"
+    if raw_type.endswith(":low") or raw_type.endswith("-low") or raw_type.endswith("_low"):
+        return "low"
+    return None
+
+
+def _waypoint_risk_level(waypoint_type: str, symbol: str, comment: str, desc: str, kind: str) -> str | None:
+    if kind != "risk":
+        return None
+
+    direct_level = _risk_level_from_type(waypoint_type)
+    if direct_level:
+        return direct_level
+
+    merged = " ".join([waypoint_type, symbol, comment, desc]).lower()
+    if any(keyword in merged for keyword in ("高风险", "严重", "危险", "管制", "封闭", "restricted", "danger")):
+        return "high"
+    if any(keyword in merged for keyword in ("低风险", "注意", "减速", "caution")):
+        return "low"
+    return "medium"
+
+
+def parse_gpx_waypoints(file_path: Path) -> list[dict]:
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    waypoints: list[dict] = []
+    for node in root.findall(".//{*}wpt"):
+        lat_raw = node.attrib.get("lat")
+        lon_raw = node.attrib.get("lon")
+        if lat_raw is None or lon_raw is None:
+            continue
+        try:
+            lat = float(lat_raw)
+            lon = float(lon_raw)
+        except ValueError:
+            continue
+        name = (node.findtext("{*}name") or "").strip()
+        comment = (node.findtext("{*}cmt") or "").strip()
+        desc = (node.findtext("{*}desc") or "").strip()
+        symbol = (node.findtext("{*}sym") or "").strip()
+        waypoint_type = (node.findtext("{*}type") or "").strip()
+        kind = _waypoint_kind(name, waypoint_type, symbol, comment, desc)
+        waypoints.append(
+            {
+                "lat": lat,
+                "lon": lon,
+                "name": name,
+                "comment": comment,
+                "desc": desc,
+                "symbol": symbol,
+                "type": waypoint_type,
+                "kind": kind,
+                "risk_level": _waypoint_risk_level(waypoint_type, symbol, comment, desc, kind),
+            }
+        )
+    return waypoints
+
+
 def parse_gpx_points_and_stats(file_path: Path) -> tuple[list[list[float]], dict, list[dict]]:
     tree = ET.parse(file_path)
     root = tree.getroot()

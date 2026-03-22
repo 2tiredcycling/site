@@ -526,7 +526,7 @@ def route_detail(route_id: int) -> str:
         rating_info=rating_info,
         back_url=back_url,
         back_label=back_label,
-        meta_description=f"{route.route_name} 路线详情：里程、难度、补给点与下载。",
+        meta_description=f"{route.route_name} 路线详情：里程、难度与下载。",
     )
 
 

@@ -806,6 +806,41 @@ def test_recalculate_route_stats_endpoint_refreshes_saved_values(app_and_client)
         assert route.ascent_m is not None
 
 
+def test_route_preview_returns_waypoints_from_gpx(app_and_client):
+    _app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    csrf_token = get_manage_csrf(client)
+    gpx_content = b"""<?xml version='1.0' encoding='UTF-8'?>
+<gpx version='1.1' creator='pytest'>
+  <wpt lat='22.7423' lon='114.2882'>
+    <name>\xe7\xae\xa1\xe5\x88\xb6\xe5\x8c\xba\xe5\x9f\x9f</name>
+    <cmt>\xe7\xbb\x95\xe8\xa1\x8c</cmt>
+    <desc>\xe7\xbb\x95\xe8\xa1\x8c</desc>
+    <type>risk:high</type>
+    <sym>Restricted Area</sym>
+  </wpt>
+  <wpt lat='22.7424' lon='114.2884'>
+    <name>\xe6\x8f\x90\xe9\x86\x92\xe7\x82\xb9</name>
+    <desc>\xe6\xb3\xa8\xe6\x84\x8f\xe6\xa8\xaa\xe9\xa3\x8e</desc>
+    <type>low</type>
+  </wpt>
+  <trk><trkseg>
+    <trkpt lat='22.500000' lon='114.100000'><ele>18</ele></trkpt>
+    <trkpt lat='22.501000' lon='114.100000'><ele>31</ele></trkpt>
+  </trkseg></trk>
+</gpx>"""
+    create_route(client, csrf_token, name="Waypoint Route", gpx_content=gpx_content)
+    route_id = client.get("/api/v1/routes").get_json()["items"][0]["id"]
+    resp = client.get(f"/api/v1/routes/{route_id}/preview")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert "waypoints" in payload
+    assert len(payload["waypoints"]) == 2
+    assert payload["waypoints"][0]["kind"] == "risk"
+    assert payload["waypoints"][0]["risk_level"] == "high"
+    assert payload["waypoints"][1]["risk_level"] == "low"
+
+
 def test_download_updates_stats(app_and_client):
     _app, client = app_and_client
     assert login_admin(client).status_code == 200

@@ -73,7 +73,7 @@ from app.models import (
     utcnow,
 )
 from app.querying import query_routes_from_request
-from app.gpx_utils import parse_gpx_points_and_stats
+from app.gpx_utils import parse_gpx_points_and_stats, parse_gpx_waypoints
 from app.route_ops import allowed_file, file_size_ok, parse_distance, save_gpx_file
 from app.security_monitor import WATCHLIST_PROBE_PATHS, build_non_probe_filters
 from app.security_limits import check_lock, clear_state, register_failure
@@ -1037,12 +1037,20 @@ def route_preview_manage(route_id: int):
 
     try:
         points, stats, elevation_profile = parse_gpx_points_and_stats(file_path)
+        waypoints = parse_gpx_waypoints(file_path)
     except Exception:
         return jsonify({"error": "gpx_parse_failed"}), 400
 
     if not points:
         return jsonify(
-            {"route_id": route.id, "points": [], "bounds": None, "stats": stats, "elevation_profile": elevation_profile}
+            {
+                "route_id": route.id,
+                "points": [],
+                "bounds": None,
+                "stats": stats,
+                "elevation_profile": elevation_profile,
+                "waypoints": waypoints,
+            }
         )
 
     lats = [item[0] for item in points]
@@ -1054,7 +1062,14 @@ def route_preview_manage(route_id: int):
         "max_lon": max(lons),
     }
     return jsonify(
-        {"route_id": route.id, "points": points, "bounds": bounds, "stats": stats, "elevation_profile": elevation_profile}
+        {
+            "route_id": route.id,
+            "points": points,
+            "bounds": bounds,
+            "stats": stats,
+            "elevation_profile": elevation_profile,
+            "waypoints": waypoints,
+        }
     )
 
 @bp.get("/activities")

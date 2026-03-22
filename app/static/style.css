@@ -3035,6 +3035,54 @@ td {
   overflow: hidden;
 }
 
+.route-waypoint-marker {
+  background: transparent;
+  border: 0;
+}
+
+.route-waypoint-marker span {
+  display: block;
+  width: var(--wp-size, 12px);
+  height: var(--wp-size, 12px);
+  border-radius: 999px;
+  border: var(--wp-border, 2px) solid #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.28);
+}
+
+.route-waypoint-risk span {
+  background: #f59e0b;
+}
+
+.route-waypoint-risk-high span {
+  background: #dc2626;
+}
+
+.route-waypoint-risk-medium span {
+  background: #f59e0b;
+}
+
+.route-waypoint-risk-low span {
+  background: #facc15;
+}
+
+.route-waypoint-supply span {
+  background: #059669;
+}
+
+.route-waypoint-poi span {
+  background: #2563eb;
+}
+
+.route-waypoint-popup {
+  min-width: 140px;
+  line-height: 1.45;
+}
+
+.route-waypoint-popup strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
 @media (max-width: 960px) {
   .route-detail-layout {
     grid-template-columns: 1fr;

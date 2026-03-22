@@ -57,11 +57,6 @@
             </span>
           </div>
         </div>
-        <div class="route-detail-tags">
-          <span><strong>补给点</strong><em>{{ route.supply_points or '暂无' }}</em></span>
-          <span><strong>风险提示</strong><em>{{ route.risk_warning or '暂无' }}</em></span>
-        </div>
-
         <div class="route-inline-activities">
           <div class="section-head">
             <h2>关联历史活动</h2>
@@ -143,6 +138,8 @@
       let correctedPoints = [];
       let fullMap = null;
       let fullLine = null;
+      let previewWaypointLayers = [];
+      let fullWaypointLayers = [];
       if (typeof window.L === 'undefined') {
         mapSourceStatus.textContent = '底图状态：Leaflet 加载失败';
         previewBox.textContent = '地图组件未加载，请检查本地网络。';
@@ -302,6 +299,11 @@
       map.on('baselayerchange', function (event) {
         mapSourceStatus.textContent = '当前底图：' + (event && event.name ? event.name : '已切换');
       });
+      map.on('zoomend', function () {
+        if (window.__routeWaypoints && Array.isArray(window.__routeWaypoints)) {
+          renderWaypoints(map, window.__routeWaypoints, previewWaypointLayers);
+        }
+      });
 
       function ensureFullMap() {
         if (fullMap) {
@@ -326,6 +328,70 @@
           {}
         ).addTo(fullMap);
         fullGaodeVector.addTo(fullMap);
+        fullMap.on('zoomend', function () {
+          if (window.__routeWaypoints && Array.isArray(window.__routeWaypoints)) {
+            renderWaypoints(fullMap, window.__routeWaypoints, fullWaypointLayers);
+          }
+        });
+      }
+
+      function markerClassByKind(kind, riskLevel) {
+        if (kind === 'risk') {
+          const level = (riskLevel || 'medium').toLowerCase();
+          return 'route-waypoint-marker route-waypoint-risk route-waypoint-risk-' + level;
+        }
+        if (kind === 'supply') {
+          return 'route-waypoint-marker route-waypoint-supply';
+        }
+        return 'route-waypoint-marker route-waypoint-poi';
+      }
+
+      function popupHtmlForWaypoint(item) {
+        const title = item && item.name ? item.name : '途经点';
+        const desc = item && item.desc ? item.desc : (item && item.comment ? item.comment : '');
+        const type = item && item.type ? item.type : (item && item.symbol ? item.symbol : '');
+        const riskLevelText = item && item.kind === 'risk'
+          ? (item.risk_level === 'high' ? '高' : (item.risk_level === 'low' ? '低' : '中'))
+          : '';
+        return (
+          '<div class="route-waypoint-popup">' +
+          '<strong>' + title + '</strong>' +
+          (desc ? '<div>' + desc + '</div>' : '') +
+          (riskLevelText ? '<div class="hint">风险等级：' + riskLevelText + '</div>' : '') +
+          (type ? '<div class="hint">' + type + '</div>' : '') +
+          '</div>'
+        );
+      }
+
+      function clearWaypointLayers(layerList, targetMap) {
+        layerList.forEach(function (layer) {
+          if (targetMap.hasLayer(layer)) {
+            targetMap.removeLayer(layer);
+          }
+        });
+        layerList.length = 0;
+      }
+
+      function renderWaypoints(targetMap, sourceItems, layerStore) {
+        clearWaypointLayers(layerStore, targetMap);
+        const zoom = typeof targetMap.getZoom === 'function' ? Number(targetMap.getZoom()) : 12;
+        const markerSize = Math.max(8, Math.min(13, Math.round(6 + Math.max(0, zoom - 8) * 0.8)));
+        const markerBorder = Math.max(1, Math.min(2, Math.round(markerSize * 0.16)));
+        (sourceItems || []).forEach(function (item) {
+          if (!item || item.lat == null || item.lon == null) {
+            return;
+          }
+          const corrected = wgs84ToGcj02(Number(item.lat), Number(item.lon));
+          const icon = L.divIcon({
+            className: markerClassByKind(item.kind, item.risk_level),
+            html: '<span style="--wp-size:' + markerSize + 'px;--wp-border:' + markerBorder + 'px;"></span>',
+            iconSize: [markerSize, markerSize],
+            iconAnchor: [Math.round(markerSize / 2), Math.round(markerSize / 2)],
+          });
+          const marker = L.marker(corrected, {icon: icon}).addTo(targetMap);
+          marker.bindPopup(popupHtmlForWaypoint(item));
+          layerStore.push(marker);
+        });
       }
 
       function openMapModal() {
@@ -344,6 +410,9 @@
           fullMap.fitBounds(fullLine.getBounds(), {padding: [26, 26]});
         } else {
           fullMap.setView([22.3193, 114.1694], 11);
+        }
+        if (window.__routeWaypoints && Array.isArray(window.__routeWaypoints)) {
+          renderWaypoints(fullMap, window.__routeWaypoints, fullWaypointLayers);
         }
         window.setTimeout(function () {
           fullMap.invalidateSize();
@@ -380,9 +449,13 @@
       fetch(previewEndpoint)
         .then((resp) => resp.json())
         .then((data) => {
+          window.__routeWaypoints = Array.isArray(data.waypoints) ? data.waypoints : [];
           renderElevationProfile(data.elevation_profile);
           if (!data.points || data.points.length === 0) {
-            previewBox.textContent = '无轨迹点';
+            previewBox.textContent = window.__routeWaypoints.length > 0
+              ? ('轨迹点数：0，标注点：' + window.__routeWaypoints.length)
+              : '无轨迹点';
+            renderWaypoints(map, window.__routeWaypoints, previewWaypointLayers);
             map.setView([22.3193, 114.1694], 11);
             return;
           }
@@ -391,12 +464,16 @@
           correctedPoints = data.points.map((point) => wgs84ToGcj02(point[0], point[1]));
           const line = L.polyline(correctedPoints, {color: '#2563eb', weight: 4}).addTo(map);
           map.fitBounds(line.getBounds(), {padding: [20, 20]});
-          previewBox.textContent = '轨迹点数：' + correctedPoints.length;
+          renderWaypoints(map, window.__routeWaypoints, previewWaypointLayers);
+          previewBox.textContent = window.__routeWaypoints.length > 0
+            ? ('轨迹点数：' + correctedPoints.length + '，标注点：' + window.__routeWaypoints.length)
+            : ('轨迹点数：' + correctedPoints.length);
           if (fullMap && modal && modal.classList.contains('open')) {
             if (fullLine) {
               fullMap.removeLayer(fullLine);
             }
             fullLine = L.polyline(correctedPoints, {color: '#2563eb', weight: 4}).addTo(fullMap);
+            renderWaypoints(fullMap, window.__routeWaypoints, fullWaypointLayers);
             fullMap.fitBounds(fullLine.getBounds(), {padding: [26, 26]});
             fullMap.invalidateSize();
           }
@@ -404,6 +481,10 @@
         .catch(() => {
           previewBox.textContent = '预览加载失败';
           profileMsg.textContent = '剖面加载失败';
+          clearWaypointLayers(map, previewWaypointLayers);
+          if (fullMap) {
+            clearWaypointLayers(fullMap, fullWaypointLayers);
+          }
           map.setView([22.3193, 114.1694], 11);
         });
     })();

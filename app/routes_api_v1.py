@@ -3,7 +3,7 @@
 from flask import Blueprint, current_app, jsonify, request
 
 from app.auth import can_review, current_user, validate_csrf_token
-from app.gpx_utils import parse_gpx_points_and_stats
+from app.gpx_utils import parse_gpx_points_and_stats, parse_gpx_waypoints
 from app.models import (
     FEEDBACK_APPROVED,
     FEEDBACK_PENDING,
@@ -100,12 +100,20 @@ def route_preview(route_id: int):
 
     try:
         points, stats, elevation_profile = parse_gpx_points_and_stats(file_path)
+        waypoints = parse_gpx_waypoints(file_path)
     except Exception:
         return jsonify({"error": "gpx_parse_failed"}), 400
 
     if not points:
         return jsonify(
-            {"route_id": route.id, "points": [], "bounds": None, "stats": stats, "elevation_profile": elevation_profile}
+            {
+                "route_id": route.id,
+                "points": [],
+                "bounds": None,
+                "stats": stats,
+                "elevation_profile": elevation_profile,
+                "waypoints": waypoints,
+            }
         )
 
     lats = [item[0] for item in points]
@@ -117,7 +125,14 @@ def route_preview(route_id: int):
         "max_lon": max(lons),
     }
     return jsonify(
-        {"route_id": route.id, "points": points, "bounds": bounds, "stats": stats, "elevation_profile": elevation_profile}
+        {
+            "route_id": route.id,
+            "points": points,
+            "bounds": bounds,
+            "stats": stats,
+            "elevation_profile": elevation_profile,
+            "waypoints": waypoints,
+        }
     )
 
 
