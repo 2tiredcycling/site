@@ -423,7 +423,7 @@ def contact_page() -> str:
     return render_template(
         "contact.html",
         page=page,
-        meta_description="联系 2Tired 骑行社：活动咨询、合作与反馈渠道。",
+        meta_description="联系 2Tired 骑行社：活动咨询、反馈、投诉与下架申请渠道。",
     )
 
 
