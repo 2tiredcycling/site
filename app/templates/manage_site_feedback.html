@@ -29,7 +29,7 @@
       <form method="get" action="{{ url_for('admin.site_feedback_page') }}" class="single-form">
         <div class="filter-grid">
           <label>关键词
-            <input type="text" name="q" value="{{ filters.q }}" placeholder="内容/学号/来源页">
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="内容/联系方式/来源页">
           </label>
           <label>状态
             <select name="status">
@@ -65,7 +65,7 @@
       <h2>反馈列表（{{ pagination.total }}）</h2>
       <table>
         <thead>
-          <tr><th>提交时间</th><th>类型</th><th>内容</th><th>学号</th><th>来源页面</th><th>状态</th><th>操作</th></tr>
+          <tr><th>提交时间</th><th>类型</th><th>内容</th><th>联系方式</th><th>来源页面</th><th>状态</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for item in feedback_list %}

@@ -437,7 +437,10 @@ def site_feedback() -> str:
 def site_feedback_submit():
     category = (request.form.get("category") or "bug").strip().lower()
     content = (request.form.get("content") or "").strip()
-    contact = (request.form.get("contact") or "").strip()
+    contact_local = (request.form.get("contact_local") or "").strip()
+    legacy_contact = (request.form.get("contact") or "").strip()
+    if not contact_local and legacy_contact:
+        contact_local = (legacy_contact.split("@", 1)[0] if "@" in legacy_contact else legacy_contact).strip()
     source = (request.form.get("source") or "").strip()
     source_ip = client_ip()
 
@@ -452,7 +455,7 @@ def site_feedback_submit():
             "site_feedback.html",
             source=source,
             error_message=f"提交过于频繁，请 {retry_after} 秒后再试。",
-            form_data={"category": category, "content": content, "contact": contact},
+            form_data={"category": category, "content": content, "contact_local": contact_local},
         )
 
     allowed_categories = {"bug", "suggestion", "data", "other"}
@@ -464,24 +467,26 @@ def site_feedback_submit():
             "site_feedback.html",
             source=source,
             error_message="反馈内容至少 5 个字。",
-            form_data={"category": category, "content": content, "contact": contact},
+            form_data={"category": category, "content": content, "contact_local": contact_local},
         )
     if len(content) > 2000:
         return render_template(
             "site_feedback.html",
             source=source,
             error_message="反馈内容不能超过 2000 个字。",
-            form_data={"category": category, "content": content, "contact": contact},
+            form_data={"category": category, "content": content, "contact_local": contact_local},
         )
-    if len(contact) > 128:
-        contact = contact[:128]
-    if contact and not re.fullmatch(r"\d{9}", contact):
+
+    if len(contact_local) > 64:
+        contact_local = contact_local[:64]
+    if contact_local and not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", contact_local):
         return render_template(
             "site_feedback.html",
             source=source,
-            error_message="学号格式不正确，应为 9 位数字。",
-            form_data={"category": category, "content": content, "contact": contact},
+            error_message="反馈邮箱格式不正确，请填写 @link.cuhk.edu.cn 前的邮箱前缀。",
+            form_data={"category": category, "content": content, "contact_local": contact_local},
         )
+    contact = f"{contact_local}@link.cuhk.edu.cn" if contact_local else ""
 
     entry = SiteFeedback(
         category=category,

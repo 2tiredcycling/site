@@ -21,7 +21,7 @@
       <div class="feedback-hero-points">
         <div>
           <strong>处理方式</strong>
-          <span>后台统一跟进；若填写学号，我们将通过邮件告知后续处理结果。</span>
+          <span>后台统一跟进；若填写反馈邮箱，我们将通过邮件告知后续处理结果。</span>
         </div>
         <div>
           <strong>来源记录</strong>
@@ -46,7 +46,7 @@
       <div class="feedback-privacy-note">
         <strong>隐私说明</strong>
         <p>
-          提交反馈时，我们会处理你填写的反馈内容、问题类型、学号（如填写）和来源页面，用于问题排查与回复沟通。
+          提交反馈时，我们会处理你填写的反馈内容、问题类型、反馈邮箱（如填写）和来源页面，用于问题排查与回复沟通。
           信息仅用于站点运维与服务改进，默认保存不超过 180 天；如需查询、更正或删除，可发送邮件至
           <a href="mailto:st_2tiredcc@link.cuhk.edu.cn">st_2tiredcc@link.cuhk.edu.cn</a> 联系处理。
         </p>
@@ -84,8 +84,11 @@
         </label>
 
         <label>
-          学号（可选）
-          <input type="text" name="contact" maxlength="128" pattern="\d{9}" title="学号格式应为 9 位数字" value="{{ form_data.contact if form_data else '' }}" placeholder="例如：123456789">
+          反馈邮箱（可选）
+          <div class="feedback-email-row">
+            <input type="text" name="contact_local" maxlength="64" pattern="[A-Za-z0-9._-]{1,64}" title="请填写邮箱前缀（字母/数字/._-）" value="{{ form_data.contact_local if form_data else '' }}" placeholder="例如：st_2tiredcc">
+            <input type="text" value="@link.cuhk.edu.cn" readonly disabled>
+          </div>
         </label>
 
         <div class="row-actions">
