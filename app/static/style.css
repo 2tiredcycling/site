@@ -1763,6 +1763,17 @@ td {
   color: var(--brand-primary);
 }
 
+.site-disclaimer {
+  margin: 10px 2px 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 68%, #ffffff 32%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .btn-muted {
   border-color: var(--brand-border);
 }
