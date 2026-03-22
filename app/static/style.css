@@ -2781,7 +2781,7 @@ td {
 
 .route-detail-head h1 {
   margin: 6px 0 14px;
-  font-size: 44px;
+  font-size: 38px;
   line-height: 1.08;
   letter-spacing: 0.01em;
   font-weight: 800;
@@ -2797,7 +2797,7 @@ td {
 }
 
 .route-title-difficulty {
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: 0.04em;
   color: var(--brand-primary);
@@ -2808,6 +2808,7 @@ td {
 
 .route-summary {
   margin: 0 0 10px;
+  font-size: 15px;
   line-height: 1.65;
   color: color-mix(in srgb, var(--text-color) 92%, var(--brand-primary) 8%);
 }
@@ -2831,14 +2832,14 @@ td {
 }
 
 .route-overview-grid strong {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 .route-overview-grid span {
   color: var(--brand-primary);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .route-detail-tags {
@@ -2897,7 +2898,7 @@ td {
   margin: 0 0 8px;
   padding-bottom: 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--brand-border) 75%, #ffffff 25%);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--brand-primary-strong);
@@ -2923,7 +2924,7 @@ td {
   margin: 0;
   padding-bottom: 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--brand-border) 75%, #ffffff 25%);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--brand-primary-strong);
@@ -2976,6 +2977,7 @@ td {
   color: var(--brand-primary);
   text-decoration: none;
   font-weight: 600;
+  font-size: 14px;
 }
 
 .route-linked-activities a:hover {
