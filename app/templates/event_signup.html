@@ -100,6 +100,7 @@
                 <input id="consentImage" name="consent_image" type="checkbox" value="1">
                 <span>我同意活动中拍摄的、包含本人形象的照片或视频，用于 2Tired 骑行社官方网站、微信公众号等非营利性展示与宣传；我可通过指定邮箱申请撤回后续公开展示。</span>
               </label>
+              <p class="hint event-signup-consent-hint">不同意影像公开展示不影响报名参加活动。</p>
             </div>
 
             <button id="signupSubmitBtn" type="submit" class="btn btn-solid event-signup-submit-btn">
@@ -125,8 +126,6 @@
             {% endif %}
             {% if selected_option %}
               <div class="event-signup-summary-wide"><strong>报名路线</strong><span>{{ selected_option.level_label or '路线' }} · {{ selected_option.route.route_name if selected_option.route else '待分配' }}</span></div>
-            {% elif route_cards %}
-              <div class="event-signup-summary-wide"><strong>路线选择</strong><span>请在左侧先选择一条报名路线</span></div>
             {% endif %}
           </div>
 
@@ -134,6 +133,7 @@
             <h3>报名说明</h3>
             <ul>
               <li>报名前请先扫描左侧二维码完成投保。</li>
+              <li>投保所需实名及证件信息由保险公司独立收集和处理，社团原则上不直接收集、保存相关证件号码。</li>
               <li>若显示“暂停报名”，请关注下一次活动安排。</li>
             </ul>
           </div>
@@ -142,6 +142,7 @@
             <h3>报名与联系说明</h3>
             <ul>
               <li>本页面收集的信息仅用于活动报名、签到、联系及活动组织安排。</li>
+              <li>报名信息存储于香港服务器，仅由 2Tired 骑行社学生成员用于本次活动管理。</li>
               <li>报名信息由 2Tired 骑行社学生成员用于本次活动管理，不用于其他无关用途。</li>
               <li>如需查询、更正或删除报名信息，请联系：<a href="mailto:st_2tiredcc@link.cuhk.edu.cn">st_2tiredcc@link.cuhk.edu.cn</a>。</li>
             </ul>
