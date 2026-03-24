@@ -44,6 +44,10 @@ def _url_for(endpoint: str, **values):
     return flask_url_for(target, **values)
 
 
+def _is_beta_request() -> bool:
+    return (request.blueprint or "") == "web_beta"
+
+
 def _palette_presets() -> list[dict]:
     return [
         {
@@ -651,6 +655,7 @@ def activity_list() -> str:
         today_local_date=today_local_date,
         signup_open_map=_activity_signup_open_map(pagination.items, now_value=now_value),
         registration_count_map=registration_count_map,
+        is_beta_view=_is_beta_request(),
         detail_endpoint="web.activity_detail",
         list_endpoint="web.activity_list",
         meta_description="2Tired 骑行社历史活动档案与活动详情。",
@@ -674,6 +679,7 @@ def events_list() -> str:
         today_local_date=today_local_date,
         signup_open_map=_activity_signup_open_map(pagination.items, now_value=now_value),
         registration_count_map=registration_count_map,
+        is_beta_view=_is_beta_request(),
         detail_endpoint="web.events_detail",
         list_endpoint="web.events_list",
         meta_description="2Tired 骑行社活动中心：查看最新活动与历史活动记录。",
@@ -715,6 +721,7 @@ def activity_detail(activity_id: int) -> str:
         route_cards=route_cards,
         can_signup=can_signup,
         show_signup_paused=show_signup_paused,
+        is_beta_view=_is_beta_request(),
         signup_source="activity_detail",
         route_back_params={
             "from_activity_id": activity.id,
@@ -761,6 +768,7 @@ def events_detail(event_id: int) -> str:
         route_cards=route_cards,
         can_signup=can_signup,
         show_signup_paused=show_signup_paused,
+        is_beta_view=_is_beta_request(),
         signup_source="events_detail",
         route_back_params={
             "from_activity_id": activity.id,

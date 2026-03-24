@@ -36,7 +36,7 @@
             <article class="edit-item activity-route-card" data-route-href="{{ route_detail_url }}" tabindex="0" role="link" aria-label="查看{{ item.label }}路线详情">
               <div class="row-actions">
                 <strong>{{ item.label }}路线</strong>
-                {% if can_signup %}
+                {% if is_beta_view and can_signup %}
                   <a
                     class="btn btn-muted activity-signup-btn"
                     href="{{ url_for('web.event_signup', event_id=activity.id, option_id=item.option_id, source=(signup_source or 'events')) }}"
@@ -44,7 +44,7 @@
                     <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span>
                     <span>活动报名</span>
                   </a>
-                {% elif show_signup_paused %}
+                {% elif is_beta_view and show_signup_paused %}
                   <span class="activity-signup-paused">暂停报名</span>
                 {% endif %}
               </div>
