@@ -19,15 +19,6 @@
     <a class="quick-pill {% if ep.endswith('.contact_page') %}is-active{% endif %}" href="{{ url_for('web.contact_page') }}" {% if ep.endswith('.contact_page') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-mail"></use></svg></span><span>联系</span>
     </a>
-    {% if request.blueprint == 'web_beta' %}
-      <a class="quick-pill" href="{{ raw_url_for('web.index') }}">
-        <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-home"></use></svg></span><span>正式版</span>
-      </a>
-    {% else %}
-      <a class="quick-pill" href="{{ raw_url_for('web_beta.index') }}">
-        <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span><span>体验版</span>
-      </a>
-    {% endif %}
     <button class="quick-pill quick-pill-button theme-entry-link theme-nav-pill" type="button" aria-label="切换主题面板">
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-palette"></use></svg></span><span>主题</span>
     </button>
