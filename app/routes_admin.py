@@ -248,6 +248,25 @@ def _save_activity_media(activity_id: int, uploads, activity_route_option_id: in
     return saved_count
 
 
+def _save_activity_insurance_qr(activity_id: int, upload) -> tuple[str | None, Path | None]:
+    if not upload or not (upload.filename or "").strip():
+        return None, None
+    media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
+    media_dir.mkdir(parents=True, exist_ok=True)
+    original_name = secure_filename(Path(upload.filename).name)
+    ext = Path(original_name).suffix.lower()
+    allowed_image_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    max_media_bytes = int(current_app.config.get("MAX_MEDIA_BYTES", 10 * 1024 * 1024))
+    if not original_name or ext not in allowed_image_exts:
+        return None, None
+    if not file_size_ok(upload, max_media_bytes):
+        return None, None
+    filename = f"insurance_qr_{activity_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{secrets.token_hex(4)}{ext}"
+    target_path = media_dir / filename
+    upload.save(target_path)
+    return filename, target_path
+
+
 @bp.before_app_request
 def _load_user():
     attach_current_user()
@@ -1376,6 +1395,41 @@ def _activity_route_options_from_form() -> list[dict]:
     return items
 
 
+def _activity_registration_from_form(activity: Activity | None = None) -> tuple[bool, datetime | None, int | None, str | None]:
+    _ = activity  # keep signature aligned for future extension
+    needs_registration = (request.form.get("needs_registration") or "").strip() == "1"
+    raw_deadline = request.form.get("registration_deadline")
+    deadline = _parse_activity_time(raw_deadline) if raw_deadline is not None else None
+    raw_limit = (request.form.get("registration_limit") or "").strip()
+    if not needs_registration:
+        return False, None, None, None
+    if not raw_limit:
+        return True, deadline, None, None
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError):
+        return True, deadline, None, "报名人数限制必须是整数"
+    if limit <= 0:
+        return True, deadline, None, "报名人数限制必须大于 0"
+    return True, deadline, limit, None
+
+
+def _validate_registration_deadline(
+    needs_registration: bool,
+    registration_deadline: datetime | None,
+    activity_time: datetime | None,
+) -> str | None:
+    if not needs_registration:
+        return None
+    if registration_deadline is None:
+        return "请填写报名截止时间"
+    if activity_time is None:
+        return "活动开始时间缺失，无法校验报名截止时间"
+    if registration_deadline >= activity_time:
+        return "报名截止时间必须早于活动开始时间"
+    return None
+
+
 def _sync_activity_route_options(activity: Activity, option_items: list[dict]) -> None:
     existing_options = ActivityRouteOption.query.filter_by(activity_id=activity.id).all()
     existing_by_level = {item.level_key: item for item in existing_options}
@@ -1760,6 +1814,10 @@ def delete_feedback(feedback_id: int):
 def create_activity():
     title = (request.form.get("title") or "").strip()
     option_items = _activity_route_options_from_form()
+    needs_registration, registration_deadline, registration_limit, registration_error = _activity_registration_from_form()
+    if registration_error:
+        flash(registration_error, "error")
+        return redirect(url_for("admin.activity_new_page"))
     selected_route_ids = [item["route_id"] for item in option_items]
     selected_route_ids = list(dict.fromkeys(selected_route_ids))
 
@@ -1770,6 +1828,10 @@ def create_activity():
     activity = Activity(
         title=title,
         participant_count=0,
+        needs_registration=needs_registration,
+        registration_deadline=registration_deadline,
+        registration_limit=registration_limit,
+        insurance_qr_path=None,
         weather="",
         summary="",
         created_by=g.current_user.id,
@@ -1783,12 +1845,21 @@ def create_activity():
     activity.routes = selected_routes
 
     db.session.add(activity)
-    db.session.commit()
+    db.session.flush()
     valid_route_ids = {route.id for route in selected_routes}
     option_items = [item for item in option_items if item["route_id"] in valid_route_ids]
     option_times = [item.get("activity_time") for item in option_items if item.get("activity_time")]
     activity.activity_time = min(option_times) if option_times else activity.activity_time
     activity.participant_count = int(sum(int(item.get("participant_count") or 0) for item in option_items))
+    registration_error = _validate_registration_deadline(
+        needs_registration=activity.needs_registration,
+        registration_deadline=activity.registration_deadline,
+        activity_time=activity.activity_time,
+    )
+    if registration_error:
+        db.session.rollback()
+        flash(registration_error, "error")
+        return redirect(url_for("admin.activity_new_page"))
     _sync_activity_route_options(activity, option_items)
     db.session.flush()
     option_map = {item.level_key: item for item in ActivityRouteOption.query.filter_by(activity_id=activity.id).all()}
@@ -1802,6 +1873,14 @@ def create_activity():
             request.files.getlist(f"media_files_{level_key}"),
             activity_route_option_id=option.id,
         )
+    insurance_upload = request.files.get("insurance_qr_file")
+    qr_name, _qr_path = _save_activity_insurance_qr(activity.id, insurance_upload)
+    if insurance_upload and (insurance_upload.filename or "").strip() and not qr_name:
+        db.session.rollback()
+        flash("投保二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 且不超过大小限制", "error")
+        return redirect(url_for("admin.activity_new_page"))
+    if qr_name:
+        activity.insurance_qr_path = qr_name
     db.session.commit()
     write_audit_log(g.current_user.id, "activity.create", "activity", str(activity.id), activity.title)
     if uploaded_count > 0:
@@ -1825,10 +1904,17 @@ def update_activity(activity_id: int):
         return redirect(url_for("admin.activities_page"))
 
     option_items = _activity_route_options_from_form()
+    needs_registration, registration_deadline, registration_limit, registration_error = _activity_registration_from_form(activity)
+    if registration_error:
+        flash(registration_error, "error")
+        return redirect(url_for("admin.activity_edit_page", activity_id=activity.id))
     selected_route_ids = [item["route_id"] for item in option_items]
     selected_route_ids = list(dict.fromkeys(selected_route_ids))
 
     activity.title = title
+    activity.needs_registration = needs_registration
+    activity.registration_deadline = registration_deadline
+    activity.registration_limit = registration_limit
     activity.weather = ""
     activity.summary = ""
 
@@ -1844,6 +1930,15 @@ def update_activity(activity_id: int):
     option_times = [item.get("activity_time") for item in option_items if item.get("activity_time")]
     activity.activity_time = min(option_times) if option_times else activity.activity_time
     activity.participant_count = int(sum(int(item.get("participant_count") or 0) for item in option_items))
+    registration_error = _validate_registration_deadline(
+        needs_registration=activity.needs_registration,
+        registration_deadline=activity.registration_deadline,
+        activity_time=activity.activity_time,
+    )
+    if registration_error:
+        db.session.rollback()
+        flash(registration_error, "error")
+        return redirect(url_for("admin.activity_edit_page", activity_id=activity.id))
     _sync_activity_route_options(activity, option_items)
     db.session.flush()
     option_map = {item.level_key: item for item in ActivityRouteOption.query.filter_by(activity_id=activity.id).all()}
@@ -1857,7 +1952,25 @@ def update_activity(activity_id: int):
             request.files.getlist(f"media_files_{level_key}"),
             activity_route_option_id=option.id,
         )
+    clear_insurance_qr = (request.form.get("clear_insurance_qr") or "").strip() == "1"
+    old_qr_path = (activity.insurance_qr_path or "").strip()
+    qr_cleanup_paths: list[Path] = []
+    if clear_insurance_qr and old_qr_path:
+        qr_cleanup_paths.append(Path(current_app.config["MEDIA_UPLOAD_FOLDER"]) / old_qr_path)
+        activity.insurance_qr_path = None
+    insurance_upload = request.files.get("insurance_qr_file")
+    qr_name, _qr_path = _save_activity_insurance_qr(activity.id, insurance_upload)
+    if insurance_upload and (insurance_upload.filename or "").strip() and not qr_name:
+        db.session.rollback()
+        flash("投保二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 且不超过大小限制", "error")
+        return redirect(url_for("admin.activity_edit_page", activity_id=activity.id))
+    if qr_name:
+        if old_qr_path:
+            qr_cleanup_paths.append(Path(current_app.config["MEDIA_UPLOAD_FOLDER"]) / old_qr_path)
+        activity.insurance_qr_path = qr_name
     db.session.commit()
+    if qr_cleanup_paths:
+        _cleanup_paths(qr_cleanup_paths)
     write_audit_log(g.current_user.id, "activity.update", "activity", str(activity.id), activity.title)
     if uploaded_count > 0:
         flash(f"活动更新成功，新增媒体文件 {uploaded_count} 个", "success")
@@ -1878,6 +1991,8 @@ def delete_activity(activity_id: int):
     media_assets = MediaAsset.query.filter_by(activity_id=activity.id).all()
     media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
     media_paths = [media_dir / item.storage_path for item in media_assets if item.storage_path]
+    if activity.insurance_qr_path:
+        media_paths.append(media_dir / activity.insurance_qr_path)
     for item in media_assets:
         db.session.delete(item)
     db.session.delete(activity)

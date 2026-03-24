@@ -165,6 +165,10 @@ class Activity(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(128), nullable=False, unique=True)
     activity_time = db.Column(db.DateTime, nullable=False, default=utcnow)
+    needs_registration = db.Column(db.Boolean, nullable=False, default=False)
+    registration_deadline = db.Column(db.DateTime, nullable=True)
+    registration_limit = db.Column(db.Integer, nullable=True)
+    insurance_qr_path = db.Column(db.Text, nullable=True)
     participant_count = db.Column(db.Integer, nullable=False, default=0)
     weather = db.Column(db.String(64), nullable=False, default="")
     summary = db.Column(db.Text, nullable=False, default="")
@@ -186,6 +190,10 @@ class Activity(db.Model):
             "id": self.id,
             "title": self.title,
             "activity_time": self.activity_time.isoformat() if self.activity_time else None,
+            "needs_registration": bool(self.needs_registration),
+            "registration_deadline": self.registration_deadline.isoformat() if self.registration_deadline else None,
+            "registration_limit": self.registration_limit,
+            "insurance_qr_path": self.insurance_qr_path,
             "participant_count": self.participant_count,
             "weather": self.weather,
             "summary": self.summary,

@@ -31,6 +31,59 @@
       <form method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_activity', activity_id=activity.id) if activity else url_for('admin.create_activity') }}" class="single-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>活动名<input type="text" name="title" value="{{ activity.title if activity else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
+        <section class="activity-registration-settings">
+          <label class="checkbox-inline">
+            <input type="checkbox" name="needs_registration" value="1" {% if activity and activity.needs_registration %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+            <span>需要报名</span>
+          </label>
+          <label>
+            报名截止时间
+            <input
+              type="datetime-local"
+              name="registration_deadline"
+              value="{{ to_local_time(activity.registration_deadline).strftime('%Y-%m-%dT%H:%M') if activity and activity.registration_deadline else '' }}"
+              data-registration-deadline
+              {% if not can_edit %}disabled{% endif %}
+            >
+            <span class="hint">需早于活动开始时间（取三条路线中最早时间）。</span>
+          </label>
+          <label>
+            报名人数限制
+            <input
+              type="number"
+              name="registration_limit"
+              min="1"
+              step="1"
+              value="{{ activity.registration_limit if activity and activity.registration_limit else '' }}"
+              data-registration-limit
+              placeholder="不填表示不限人数"
+              {% if not can_edit %}disabled{% endif %}
+            >
+            <span class="hint">仅在“需要报名”开启时生效。</span>
+          </label>
+          <label>
+            投保二维码（仅 1 张）
+            <input
+              type="file"
+              name="insurance_qr_file"
+              accept="image/*"
+              data-insurance-qr
+              {% if not can_edit %}disabled{% endif %}
+            >
+            <span class="hint">报名页会展示该二维码，供成员扫码投保。</span>
+          </label>
+          {% if activity and activity.insurance_qr_path %}
+            <div class="insurance-qr-preview">
+              <img src="{{ url_for('web.activity_insurance_qr', event_id=activity.id) }}" alt="投保二维码预览" loading="lazy">
+              {% if can_edit %}
+                <label class="checkbox-inline">
+                  <input type="checkbox" name="clear_insurance_qr" value="1">
+                  <span>删除当前二维码</span>
+                </label>
+              {% endif %}
+            </div>
+          {% endif %}
+        </section>
 
         <section class="activity-level-rows">
           <article class="activity-level-row">
@@ -224,6 +277,26 @@
         routeSelect.addEventListener("change", sync);
         sync();
       });
+
+      const needsRegistration = document.querySelector("input[name='needs_registration']");
+      const registrationDeadline = document.querySelector("[data-registration-deadline]");
+      const registrationLimit = document.querySelector("[data-registration-limit]");
+      const insuranceQrInput = document.querySelector("[data-insurance-qr]");
+      if (needsRegistration && registrationDeadline && registrationLimit && insuranceQrInput && !needsRegistration.disabled) {
+        const syncRegistration = () => {
+          const enabled = needsRegistration.checked;
+          registrationDeadline.disabled = !enabled;
+          registrationLimit.disabled = !enabled;
+          insuranceQrInput.disabled = !enabled;
+          if (!enabled) {
+            registrationDeadline.value = "";
+            registrationLimit.value = "";
+            insuranceQrInput.value = "";
+          }
+        };
+        needsRegistration.addEventListener("change", syncRegistration);
+        syncRegistration();
+      }
     })();
   </script>
 </body>

@@ -59,15 +59,16 @@
         </div>
         <div class="route-inline-activities">
           <div class="section-head">
-            <h2>关联历史活动</h2>
+            <h2>关联活动</h2>
           </div>
-          {% if route.activities %}
-            {% set linked_activities = route.activities | sort(attribute='id', reverse=true) %}
+          {% if linked_activity_items %}
             <ul class="route-linked-activities route-linked-activities-compact">
-              {% for activity in linked_activities[:5] %}
+              {% for activity in linked_activity_items %}
                 <li>
                   <a href="{{ url_for('web.events_detail', event_id=activity.id) }}">{{ activity.title }}</a>
-                  <span>{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-' }}</span>
+                  <div class="route-linked-meta">
+                    <span>{{ activity.display_date }}</span>
+                  </div>
                 </li>
               {% endfor %}
             </ul>

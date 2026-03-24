@@ -35,6 +35,7 @@
         </label>
         <div class="activity-filter-tabs" role="tablist" aria-label="活动筛选">
           <button class="activity-tab is-active" type="button" data-filter="all" role="tab" aria-selected="true">全部</button>
+          <button class="activity-tab" type="button" data-filter="ongoing" role="tab" aria-selected="false">进行中</button>
           <button class="activity-tab" type="button" data-filter="upcoming" role="tab" aria-selected="false">即将开始</button>
           <button class="activity-tab" type="button" data-filter="past" role="tab" aria-selected="false">历史活动</button>
         </div>
@@ -47,16 +48,33 @@
       <ol class="activity-timeline-list">
         {% for activity in activities %}
           {% set activity_date = to_local_time(event_display_date_map.get(activity.id)).strftime('%Y-%m-%d') if is_events_view and event_display_date_map and event_display_date_map.get(activity.id) else (to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-') %}
+          {% set is_upcoming = activity_date != '-' and today_local_date and activity_date > today_local_date %}
+          {% set allow_signup = is_events_view and signup_open_map and signup_open_map.get(activity.id) %}
+          {% set signup_paused = is_events_view and is_upcoming and activity.needs_registration and not allow_signup %}
           <li class="activity-timeline-item" data-date="{{ activity_date }}" data-title="{{ activity.title|lower }}" data-routes="{{ (activity.routes | map(attribute='route_name') | join(' '))|lower if activity.routes else '' }}">
             <div class="activity-time-rail">
               <span class="activity-time-dot"></span>
               <strong>{{ activity_date }}</strong>
-              <em>{{ activity.participant_count }} 人</em>
+              {% if is_events_view and is_upcoming and activity.needs_registration %}
+                {% set reg_count = (registration_count_map.get(activity.id) if registration_count_map else 0) or 0 %}
+                {% if activity.registration_limit %}
+                  <em>{{ reg_count }}/{{ activity.registration_limit }}人</em>
+                {% else %}
+                  <em>{{ reg_count }}/∞人</em>
+                {% endif %}
+              {% else %}
+                <em>{{ activity.participant_count }} 人</em>
+              {% endif %}
             </div>
-            {% if is_events_view %}
-              <a class="activity-timeline-link" href="{{ url_for('web.events_detail', event_id=activity.id) }}">
-            {% endif %}
-            <article class="activity-timeline-card{{ ' card-link' if is_events_view else '' }}">
+            <article
+              class="activity-timeline-card{{ ' card-link' if is_events_view else '' }}"
+              {% if is_events_view %}
+                data-detail-href="{{ url_for('web.events_detail', event_id=activity.id) }}"
+                tabindex="0"
+                role="link"
+                aria-label="查看活动详情：{{ activity.title }}"
+              {% endif %}
+            >
               <header>
                 <h3>
                   {% if is_events_view %}
@@ -72,17 +90,29 @@
                   <span class="activity-open-hint">查看详情</span>
                 </div>
               </header>
-              {% if activity.routes %}
-                <div class="activity-route-tags">
-                  {% for route in activity.routes %}
-                    <span>{{ route.route_name }}</span>
-                  {% endfor %}
+              {% if activity.routes or allow_signup or signup_paused %}
+                <div class="activity-route-row">
+                  {% if activity.routes %}
+                    <div class="activity-route-tags">
+                      {% for route in activity.routes %}
+                        <span>{{ route.route_name }}</span>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                  {% if allow_signup %}
+                    <a
+                      class="btn btn-muted activity-signup-btn"
+                      href="{{ url_for('web.event_signup', event_id=activity.id, source='events') }}"
+                    >
+                      <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span>
+                      <span>活动报名</span>
+                    </a>
+                  {% elif signup_paused %}
+                    <span class="activity-signup-paused">暂停报名</span>
+                  {% endif %}
                 </div>
               {% endif %}
             </article>
-            {% if is_events_view %}
-              </a>
-            {% endif %}
           </li>
         {% else %}
           <li class="activity-empty">暂无活动</li>
@@ -118,15 +148,19 @@
         today.setHours(0, 0, 0, 0);
         var activityDate = new Date(d + 'T00:00:00');
         if (isNaN(activityDate.getTime())) return 'unknown';
-        return activityDate >= today ? 'upcoming' : 'past';
+        if (activityDate.getTime() === today.getTime()) return 'ongoing';
+        return activityDate > today ? 'upcoming' : 'past';
       }
 
       function paintBadge(item) {
         var badge = item.querySelector('[data-status-badge]');
         if (!badge) return;
         var status = getItemStatus(item);
-        badge.classList.remove('is-upcoming', 'is-past', 'is-unknown');
-        if (status === 'upcoming') {
+        badge.classList.remove('is-ongoing', 'is-upcoming', 'is-past', 'is-unknown');
+        if (status === 'ongoing') {
+          badge.textContent = '正在进行';
+          badge.classList.add('is-ongoing');
+        } else if (status === 'upcoming') {
           badge.textContent = '即将开始';
           badge.classList.add('is-upcoming');
         } else if (status === 'past') {
@@ -163,6 +197,28 @@
             btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
           });
           filterItems();
+        });
+      });
+
+      Array.prototype.slice.call(document.querySelectorAll('[data-detail-href]')).forEach(function (card) {
+        card.addEventListener('click', function (event) {
+          if (event.target.closest('a,button,input,select,textarea,label')) {
+            return;
+          }
+          var href = card.getAttribute('data-detail-href');
+          if (href) {
+            window.location.href = href;
+          }
+        });
+        card.addEventListener('keydown', function (event) {
+          if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+          }
+          event.preventDefault();
+          var href = card.getAttribute('data-detail-href');
+          if (href) {
+            window.location.href = href;
+          }
         });
       });
 

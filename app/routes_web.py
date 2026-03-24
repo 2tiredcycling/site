@@ -14,8 +14,11 @@ from app.models import (
     Activity,
     ActivityRouteOption,
     Announcement,
+    EventRegistration,
     Route,
     RouteFeedback,
+    REGISTRATION_CONFIRMED,
+    REGISTRATION_PENDING,
     SITE_FEEDBACK_PENDING,
     STATUS_PUBLISHED,
     MediaAsset,
@@ -236,6 +239,68 @@ def _event_display_date_map(activities: list[Activity]) -> dict[int, object]:
     return {item.id: _event_display_date(item) for item in activities}
 
 
+def _activity_registration_count_map(activity_ids: list[int]) -> dict[int, int]:
+    if not activity_ids:
+        return {}
+    rows = (
+        db.session.query(
+            EventRegistration.activity_id,
+            db.func.count(EventRegistration.id).label("count"),
+        )
+        .filter(
+            EventRegistration.activity_id.in_(activity_ids),
+            EventRegistration.status.in_([REGISTRATION_PENDING, REGISTRATION_CONFIRMED]),
+        )
+        .group_by(EventRegistration.activity_id)
+        .all()
+    )
+    result = {activity_id: 0 for activity_id in activity_ids}
+    for activity_id, count_value in rows:
+        result[int(activity_id)] = int(count_value or 0)
+    return result
+
+
+def _activity_signup_open(activity: Activity, now_value=None, registration_count: int | None = None) -> bool:
+    if not bool(activity.needs_registration):
+        return False
+    now_local = _to_local_time(now_value or utcnow())
+    display_time = _event_display_date(activity)
+    display_local = _to_local_time(display_time) if display_time else None
+    if display_local is None or display_local <= now_local:
+        return False
+    if activity.registration_deadline is not None:
+        deadline_local = _to_local_time(activity.registration_deadline)
+        if deadline_local >= display_local:
+            return False
+        if deadline_local <= now_local:
+            return False
+    limit = int(activity.registration_limit or 0)
+    if limit > 0:
+        used = int(registration_count or 0) if registration_count is not None else int(
+            (
+                db.session.query(db.func.count(EventRegistration.id))
+                .filter(
+                    EventRegistration.activity_id == activity.id,
+                    EventRegistration.status.in_([REGISTRATION_PENDING, REGISTRATION_CONFIRMED]),
+                )
+                .scalar()
+                or 0
+            )
+        )
+        if int(used) >= limit:
+            return False
+    return True
+
+
+def _activity_signup_open_map(activities: list[Activity], now_value=None) -> dict[int, bool]:
+    activity_ids = [item.id for item in activities]
+    count_map = _activity_registration_count_map(activity_ids)
+    return {
+        item.id: _activity_signup_open(item, now_value=now_value, registration_count=count_map.get(item.id, 0))
+        for item in activities
+    }
+
+
 def _activity_detail_or_404(activity_id: int) -> Activity:
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
@@ -301,6 +366,7 @@ def _activity_route_cards(activity: Activity) -> list[dict]:
         cards.append(
             {
                 "label": item.level_label or "路线",
+                "option_id": item.id,
                 "route": route,
                 "media_assets": media_by_option.get(item.id, []),
                 "activity_time": item.activity_time or activity.activity_time,
@@ -509,6 +575,18 @@ def route_detail(route_id: int) -> str:
     route = _published_route_or_404(route_id)
     rating_map = _rating_summary_map([route.id])
     rating_info = rating_map.get(route.id, {"avg_rating": 0.0, "rating_count": 0})
+    linked_activity_items: list[dict] = []
+    for activity in route.activities:
+        display_time = _event_display_date(activity)
+        display_local = _to_local_time(display_time) if display_time else None
+        linked_activity_items.append(
+            {
+                "id": activity.id,
+                "title": activity.title,
+                "display_date": display_local.strftime("%Y-%m-%d") if display_local else "-",
+            }
+        )
+    linked_activity_items.sort(key=lambda item: (item["display_date"], item["id"]), reverse=True)
     from_activity_id = request.args.get("from_activity_id", type=int)
     from_detail = (request.args.get("from_detail") or "").strip()
     source = (request.args.get("source") or "").strip()
@@ -529,6 +607,7 @@ def route_detail(route_id: int) -> str:
         "route_detail.html",
         route=route,
         rating_info=rating_info,
+        linked_activity_items=linked_activity_items[:5],
         back_url=back_url,
         back_label=back_label,
         meta_description=f"{route.route_name} 路线详情：里程、难度与下载。",
@@ -555,10 +634,16 @@ def activity_list() -> str:
     page = request.args.get("page", default=1, type=int)
     per_page = request.args.get("per_page", default=10, type=int)
     pagination = _activity_pagination(page, per_page)
+    now_value = utcnow()
+    today_local_date = _to_local_time(utcnow()).date().isoformat()
+    registration_count_map = _activity_registration_count_map([item.id for item in pagination.items])
     return render_template(
         "activities.html",
         activities=pagination.items,
         pagination=pagination,
+        today_local_date=today_local_date,
+        signup_open_map=_activity_signup_open_map(pagination.items, now_value=now_value),
+        registration_count_map=registration_count_map,
         detail_endpoint="web.activity_detail",
         list_endpoint="web.activity_list",
         meta_description="2Tired 骑行社历史活动档案与活动详情。",
@@ -571,11 +656,17 @@ def events_list() -> str:
     page = request.args.get("page", default=1, type=int)
     per_page = request.args.get("per_page", default=10, type=int)
     pagination = _activity_pagination(page, per_page)
+    now_value = utcnow()
+    today_local_date = _to_local_time(now_value).date().isoformat()
+    registration_count_map = _activity_registration_count_map([item.id for item in pagination.items])
     return render_template(
         "activities.html",
         activities=pagination.items,
         event_display_date_map=_event_display_date_map(pagination.items),
         pagination=pagination,
+        today_local_date=today_local_date,
+        signup_open_map=_activity_signup_open_map(pagination.items, now_value=now_value),
+        registration_count_map=registration_count_map,
         detail_endpoint="web.events_detail",
         list_endpoint="web.events_list",
         meta_description="2Tired 骑行社活动中心：查看最新活动与历史活动记录。",
@@ -586,6 +677,14 @@ def events_list() -> str:
 @bp.get("/activities/<int:activity_id>")
 def activity_detail(activity_id: int) -> str:
     activity = _activity_detail_or_404(activity_id)
+    now_value = utcnow()
+    can_signup = _activity_signup_open(activity, now_value=now_value)
+    display_time = _event_display_date(activity)
+    display_local = _to_local_time(display_time) if display_time else None
+    now_local = _to_local_time(now_value)
+    show_signup_paused = bool(
+        activity.needs_registration and display_local and display_local > now_local and not can_signup
+    )
     media_assets = (
         MediaAsset.query.filter_by(activity_id=activity.id, activity_route_option_id=None)
         .order_by(MediaAsset.created_at.desc())
@@ -607,6 +706,9 @@ def activity_detail(activity_id: int) -> str:
         activity=activity,
         media_assets=media_assets,
         route_cards=route_cards,
+        can_signup=can_signup,
+        show_signup_paused=show_signup_paused,
+        signup_source="activity_detail",
         route_back_params={
             "from_activity_id": activity.id,
             "from_detail": "web.activity_detail",
@@ -621,6 +723,14 @@ def activity_detail(activity_id: int) -> str:
 @bp.get("/events/<int:event_id>")
 def events_detail(event_id: int) -> str:
     activity = _activity_detail_or_404(event_id)
+    now_value = utcnow()
+    can_signup = _activity_signup_open(activity, now_value=now_value)
+    display_time = _event_display_date(activity)
+    display_local = _to_local_time(display_time) if display_time else None
+    now_local = _to_local_time(now_value)
+    show_signup_paused = bool(
+        activity.needs_registration and display_local and display_local > now_local and not can_signup
+    )
     media_assets = (
         MediaAsset.query.filter_by(activity_id=activity.id, activity_route_option_id=None)
         .order_by(MediaAsset.created_at.desc())
@@ -642,6 +752,9 @@ def events_detail(event_id: int) -> str:
         activity=activity,
         media_assets=media_assets,
         route_cards=route_cards,
+        can_signup=can_signup,
+        show_signup_paused=show_signup_paused,
+        signup_source="events_detail",
         route_back_params={
             "from_activity_id": activity.id,
             "from_detail": "web.events_detail",
@@ -651,6 +764,64 @@ def events_detail(event_id: int) -> str:
         back_label=back_label,
         meta_description=f"{activity.title} 活动详情：时间、人数、路线关联与活动总结。",
     )
+
+
+@bp.get("/events/<int:event_id>/signup")
+def event_signup(event_id: int) -> str:
+    activity = _activity_detail_or_404(event_id)
+    display_time = _event_display_date(activity)
+    signup_open = _activity_signup_open(activity)
+    option_id = request.args.get("option_id", type=int)
+    selected_option = None
+    if option_id:
+        selected_option = ActivityRouteOption.query.filter_by(id=option_id, activity_id=activity.id).first()
+    source = (request.args.get("source") or "").strip()
+    if source == "home":
+        back_url = url_for("web.index")
+        back_label = "返回首页"
+    elif source == "events_detail":
+        back_url = url_for("web.events_detail", event_id=activity.id)
+        back_label = "返回活动详情"
+    elif source == "activity_detail":
+        back_url = url_for("web.activity_detail", activity_id=activity.id)
+        back_label = "返回活动详情"
+    elif source == "activities":
+        back_url = url_for("web.activity_list")
+        back_label = "返回活动列表"
+    else:
+        back_url = url_for("web.events_list")
+        back_label = "返回活动中心"
+    return render_template(
+        "event_signup.html",
+        activity=activity,
+        display_time=display_time,
+        signup_open=signup_open,
+        insurance_qr_url=(url_for("web.activity_insurance_qr", event_id=activity.id) if activity.insurance_qr_path else None),
+        selected_option=selected_option,
+        back_url=back_url,
+        back_label=back_label,
+        meta_description=f"{activity.title} 活动报名页（建设中）。",
+    )
+
+
+@bp.get("/events/<int:event_id>/insurance-qr")
+def activity_insurance_qr(event_id: int):
+    activity = _activity_detail_or_404(event_id)
+    qr_path = (activity.insurance_qr_path or "").strip()
+    if not qr_path:
+        abort(404, description="Insurance QR not found")
+    media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
+    file_path = media_dir / qr_path
+    if not file_path.exists() or not file_path.is_file():
+        abort(404, description="Insurance QR missing")
+    response = send_from_directory(
+        directory=str(media_dir),
+        path=qr_path,
+        as_attachment=False,
+    )
+    response.cache_control.public = True
+    response.cache_control.max_age = 86400
+    return response
 
 
 @bp.get("/download/<int:route_id>")

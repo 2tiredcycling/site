@@ -119,6 +119,10 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("event_registrations", "updated_at", "updated_at DATETIME")
         _add_column_if_missing("activity_route_options", "activity_time", "activity_time DATETIME")
         _add_column_if_missing("activity_route_options", "participant_count", "participant_count INTEGER DEFAULT 0 NOT NULL")
+        _add_column_if_missing("activities", "needs_registration", "needs_registration BOOLEAN DEFAULT 0 NOT NULL")
+        _add_column_if_missing("activities", "registration_deadline", "registration_deadline DATETIME")
+        _add_column_if_missing("activities", "registration_limit", "registration_limit INTEGER")
+        _add_column_if_missing("activities", "insurance_qr_path", "insurance_qr_path TEXT")
         _add_column_if_missing("media_assets", "activity_route_option_id", "activity_route_option_id INTEGER")
     else:
         _add_column_if_missing("routes", "updated_at", "updated_at TIMESTAMP")
@@ -191,6 +195,10 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("event_registrations", "updated_at", "updated_at TIMESTAMP")
         _add_column_if_missing("activity_route_options", "activity_time", "activity_time TIMESTAMP")
         _add_column_if_missing("activity_route_options", "participant_count", "participant_count INTEGER DEFAULT 0 NOT NULL")
+        _add_column_if_missing("activities", "needs_registration", "needs_registration BOOLEAN DEFAULT FALSE NOT NULL")
+        _add_column_if_missing("activities", "registration_deadline", "registration_deadline TIMESTAMP")
+        _add_column_if_missing("activities", "registration_limit", "registration_limit INTEGER")
+        _add_column_if_missing("activities", "insurance_qr_path", "insurance_qr_path TEXT")
         _add_column_if_missing("media_assets", "activity_route_option_id", "activity_route_option_id INTEGER")
 
     with db.engine.begin() as conn:
@@ -273,6 +281,7 @@ def ensure_schema_compat() -> None:
         conn.execute(text("UPDATE event_registrations SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
         conn.execute(text("UPDATE event_registrations SET updated_at = created_at WHERE updated_at IS NULL"))
         conn.execute(text("UPDATE activity_route_options SET participant_count = 0 WHERE participant_count IS NULL"))
+        conn.execute(text(f"UPDATE activities SET needs_registration = {false_literal} WHERE needs_registration IS NULL"))
 
 
 def ensure_default_admin(username: str, password: str) -> None:
