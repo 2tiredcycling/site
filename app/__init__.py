@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, Response, redirect, request, url_for
+from flask import Flask, Response, redirect, request, url_for as flask_url_for
 from dotenv import load_dotenv
 
 from app.auth import client_ip
@@ -40,9 +40,11 @@ def create_app() -> Flask:
 
     db.init_app(app)
     app.register_blueprint(web_bp)
+    app.register_blueprint(web_bp, url_prefix="/beta", name="web_beta")
     app.register_blueprint(api_v1_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(legacy_bp)
+    _setup_template_url_router(app)
     _setup_logging(app)
     _setup_access_log_pipeline(app)
 
@@ -122,11 +124,28 @@ def create_app() -> Flask:
             app.logger.warning("persist access log failed path=%s", path, exc_info=True)
         return response
 
+    @app.after_request
+    def add_beta_headers(response):
+        if (request.path or "").startswith("/beta"):
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
     @app.get("/favicon.ico")
     def favicon_ico():
-        return redirect(url_for("static", filename="favicon.svg"), code=302)
+        return redirect(flask_url_for("static", filename="favicon.svg"), code=302)
 
     return app
+
+
+def _setup_template_url_router(app: Flask) -> None:
+    def site_url_for(endpoint: str, **values):
+        target = endpoint
+        if endpoint.startswith("web.") and (request.blueprint or "") == "web_beta":
+            target = endpoint.replace("web.", "web_beta.", 1)
+        return flask_url_for(target, **values)
+
+    app.jinja_env.globals["url_for"] = site_url_for
+    app.jinja_env.globals["raw_url_for"] = flask_url_for
 
 
 def _setup_logging(app: Flask) -> None:

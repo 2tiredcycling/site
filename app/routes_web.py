@@ -5,7 +5,7 @@ from io import StringIO
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from flask import Blueprint, Response, abort, current_app, redirect, render_template, request, send_from_directory, url_for
+from flask import Blueprint, Response, abort, current_app, redirect, render_template, request, send_from_directory, url_for as flask_url_for
 
 from app.auth import client_ip
 from app.models import (
@@ -35,6 +35,13 @@ bp = Blueprint("web", __name__)
 SH_TZ = timezone(timedelta(hours=8))
 SITE_FEEDBACK_LIMIT_PER_MINUTE = 5
 SITE_FEEDBACK_WINDOW_SECONDS = 60
+
+
+def _url_for(endpoint: str, **values):
+    target = endpoint
+    if endpoint.startswith("web.") and (request.blueprint or "") == "web_beta":
+        target = endpoint.replace("web.", "web_beta.", 1)
+    return flask_url_for(target, **values)
 
 
 def _palette_presets() -> list[dict]:
@@ -567,7 +574,7 @@ def site_feedback_submit():
     )
     db.session.add(entry)
     db.session.commit()
-    return redirect(url_for("web.index", feedback="ok"))
+    return redirect(_url_for("web.index", feedback="ok"))
 
 
 @bp.get("/routes/<int:route_id>")
@@ -595,13 +602,13 @@ def route_detail(route_id: int) -> str:
     if from_activity_id and from_detail in {"web.activity_detail", "web.events_detail"}:
         route_back_params = {"source": source} if source else {}
         if from_detail == "web.events_detail":
-            back_url = url_for("web.events_detail", event_id=from_activity_id, **route_back_params)
+            back_url = _url_for("web.events_detail", event_id=from_activity_id, **route_back_params)
             back_label = "返回活动详情"
         else:
-            back_url = url_for("web.activity_detail", activity_id=from_activity_id, **route_back_params)
+            back_url = _url_for("web.activity_detail", activity_id=from_activity_id, **route_back_params)
             back_label = "返回活动详情"
     elif source == "home":
-        back_url = url_for("web.index")
+        back_url = _url_for("web.index")
         back_label = "返回首页"
     return render_template(
         "route_detail.html",
@@ -693,13 +700,13 @@ def activity_detail(activity_id: int) -> str:
     route_cards = _activity_route_cards(activity)
     source = (request.args.get("source") or "").strip()
     if source == "manage":
-        back_url = url_for("admin.activities_page")
+        back_url = _url_for("admin.activities_page")
         back_label = "返回活动管理"
     elif source == "home":
-        back_url = url_for("web.index")
+        back_url = _url_for("web.index")
         back_label = "返回首页"
     else:
-        back_url = url_for("web.activity_list")
+        back_url = _url_for("web.activity_list")
         back_label = "返回活动列表"
     return render_template(
         "activity_detail.html",
@@ -739,13 +746,13 @@ def events_detail(event_id: int) -> str:
     route_cards = _activity_route_cards(activity)
     source = (request.args.get("source") or "").strip()
     if source == "manage":
-        back_url = url_for("admin.activities_page")
+        back_url = _url_for("admin.activities_page")
         back_label = "返回活动管理"
     elif source == "home":
-        back_url = url_for("web.index")
+        back_url = _url_for("web.index")
         back_label = "返回首页"
     else:
-        back_url = url_for("web.events_list")
+        back_url = _url_for("web.events_list")
         back_label = "返回活动中心"
     return render_template(
         "activity_detail.html",
@@ -777,26 +784,26 @@ def event_signup(event_id: int) -> str:
         selected_option = ActivityRouteOption.query.filter_by(id=option_id, activity_id=activity.id).first()
     source = (request.args.get("source") or "").strip()
     if source == "home":
-        back_url = url_for("web.index")
+        back_url = _url_for("web.index")
         back_label = "返回首页"
     elif source == "events_detail":
-        back_url = url_for("web.events_detail", event_id=activity.id)
+        back_url = _url_for("web.events_detail", event_id=activity.id)
         back_label = "返回活动详情"
     elif source == "activity_detail":
-        back_url = url_for("web.activity_detail", activity_id=activity.id)
+        back_url = _url_for("web.activity_detail", activity_id=activity.id)
         back_label = "返回活动详情"
     elif source == "activities":
-        back_url = url_for("web.activity_list")
+        back_url = _url_for("web.activity_list")
         back_label = "返回活动列表"
     else:
-        back_url = url_for("web.events_list")
+        back_url = _url_for("web.events_list")
         back_label = "返回活动中心"
     return render_template(
         "event_signup.html",
         activity=activity,
         display_time=display_time,
         signup_open=signup_open,
-        insurance_qr_url=(url_for("web.activity_insurance_qr", event_id=activity.id) if activity.insurance_qr_path else None),
+        insurance_qr_url=(_url_for("web.activity_insurance_qr", event_id=activity.id) if activity.insurance_qr_path else None),
         selected_option=selected_option,
         back_url=back_url,
         back_label=back_label,
@@ -874,7 +881,7 @@ def robots_txt() -> Response:
         "User-agent: *\n"
         "Disallow: /manage/\n"
         "Allow: /\n"
-        f"Sitemap: {url_for('web.sitemap_xml', _external=True)}\n"
+        f"Sitemap: {_url_for('web.sitemap_xml', _external=True)}\n"
     )
     return Response(body, mimetype="text/plain")
 
@@ -882,12 +889,12 @@ def robots_txt() -> Response:
 @bp.get("/sitemap.xml")
 def sitemap_xml() -> Response:
     static_urls = [
-        url_for("web.index", _external=True),
-        url_for("web.routes_center", _external=True),
-        url_for("web.about_page", _external=True),
-        url_for("web.contact_page", _external=True),
-        url_for("web.events_list", _external=True),
-        url_for("web.site_feedback", _external=True),
+        _url_for("web.index", _external=True),
+        _url_for("web.routes_center", _external=True),
+        _url_for("web.about_page", _external=True),
+        _url_for("web.contact_page", _external=True),
+        _url_for("web.events_list", _external=True),
+        _url_for("web.site_feedback", _external=True),
     ]
 
     routes = (
@@ -911,7 +918,7 @@ def sitemap_xml() -> Response:
 
     for route in routes:
         lines.append("  <url>")
-        lines.append(f"    <loc>{escape(url_for('web.route_detail', route_id=route.id, _external=True))}</loc>")
+        lines.append(f"    <loc>{escape(_url_for('web.route_detail', route_id=route.id, _external=True))}</loc>")
         lastmod = _format_lastmod(route.updated_at or route.created_at)
         if lastmod:
             lines.append(f"    <lastmod>{lastmod}</lastmod>")
@@ -919,7 +926,7 @@ def sitemap_xml() -> Response:
 
     for activity in activities:
         lines.append("  <url>")
-        lines.append(f"    <loc>{escape(url_for('web.events_detail', event_id=activity.id, _external=True))}</loc>")
+        lines.append(f"    <loc>{escape(_url_for('web.events_detail', event_id=activity.id, _external=True))}</loc>")
         lastmod = _format_lastmod(activity.updated_at or activity.created_at)
         if lastmod:
             lines.append(f"    <lastmod>{lastmod}</lastmod>")
@@ -928,7 +935,7 @@ def sitemap_xml() -> Response:
     for announcement in announcements:
         lines.append("  <url>")
         lines.append(
-            f"    <loc>{escape(url_for('web.announcement_detail', announcement_id=announcement.id, _external=True))}</loc>"
+            f"    <loc>{escape(_url_for('web.announcement_detail', announcement_id=announcement.id, _external=True))}</loc>"
         )
         lastmod = _format_lastmod(announcement.updated_at or announcement.created_at)
         if lastmod:
@@ -1006,4 +1013,4 @@ def handle_404(error):
 
 @bp.app_errorhandler(403)
 def handle_403(_error):
-    return redirect(url_for("admin.login"))
+    return redirect(_url_for("admin.login"))

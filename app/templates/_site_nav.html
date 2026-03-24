@@ -1,23 +1,33 @@
 <section class="card form-card site-nav-shell">
+  {% set ep = request.endpoint or '' %}
   <nav class="site-nav">
-    <a class="quick-pill {% if request.endpoint == 'web.index' %}is-active{% endif %}" href="{{ url_for('web.index') }}" {% if request.endpoint == 'web.index' %}aria-current="page"{% endif %}>
+    <a class="quick-pill {% if ep.endswith('.index') %}is-active{% endif %}" href="{{ url_for('web.index') }}" {% if ep.endswith('.index') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-home"></use></svg></span><span>首页</span>
     </a>
-    <a class="quick-pill {% if request.endpoint == 'web.about_page' %}is-active{% endif %}" href="{{ url_for('web.about_page') }}" {% if request.endpoint == 'web.about_page' %}aria-current="page"{% endif %}>
+    <a class="quick-pill {% if ep.endswith('.about_page') %}is-active{% endif %}" href="{{ url_for('web.about_page') }}" {% if ep.endswith('.about_page') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-book"></use></svg></span><span>社团介绍</span>
     </a>
-    <a class="quick-pill {% if request.endpoint in ['web.events_list', 'web.events_detail', 'web.activity_list', 'web.activity_detail'] %}is-active{% endif %}" href="{{ url_for('web.events_list') }}" {% if request.endpoint in ['web.events_list', 'web.events_detail', 'web.activity_list', 'web.activity_detail'] %}aria-current="page"{% endif %}>
+    <a class="quick-pill {% if ep.endswith('.events_list') or ep.endswith('.events_detail') or ep.endswith('.activity_list') or ep.endswith('.activity_detail') or ep.endswith('.event_signup') %}is-active{% endif %}" href="{{ url_for('web.events_list') }}" {% if ep.endswith('.events_list') or ep.endswith('.events_detail') or ep.endswith('.activity_list') or ep.endswith('.activity_detail') or ep.endswith('.event_signup') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span><span>活动</span>
     </a>
-    <a class="quick-pill {% if request.endpoint in ['web.routes_center', 'web.route_detail'] %}is-active{% endif %}" href="{{ url_for('web.routes_center') }}" {% if request.endpoint in ['web.routes_center', 'web.route_detail'] %}aria-current="page"{% endif %}>
+    <a class="quick-pill {% if ep.endswith('.routes_center') or ep.endswith('.route_detail') %}is-active{% endif %}" href="{{ url_for('web.routes_center') }}" {% if ep.endswith('.routes_center') or ep.endswith('.route_detail') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-map"></use></svg></span><span>路线</span>
     </a>
-    <a class="quick-pill {% if request.endpoint == 'web.site_feedback' %}is-active{% endif %}" href="{{ url_for('web.site_feedback', source=request.path) }}" {% if request.endpoint == 'web.site_feedback' %}aria-current="page"{% endif %}>
+    <a class="quick-pill {% if ep.endswith('.site_feedback') %}is-active{% endif %}" href="{{ url_for('web.site_feedback', source=request.path) }}" {% if ep.endswith('.site_feedback') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span><span>反馈</span>
     </a>
-    <a class="quick-pill {% if request.endpoint == 'web.contact_page' %}is-active{% endif %}" href="{{ url_for('web.contact_page') }}" {% if request.endpoint == 'web.contact_page' %}aria-current="page"{% endif %}>
+    <a class="quick-pill {% if ep.endswith('.contact_page') %}is-active{% endif %}" href="{{ url_for('web.contact_page') }}" {% if ep.endswith('.contact_page') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-mail"></use></svg></span><span>联系</span>
     </a>
+    {% if request.blueprint == 'web_beta' %}
+      <a class="quick-pill" href="{{ raw_url_for('web.index') }}">
+        <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-home"></use></svg></span><span>正式版</span>
+      </a>
+    {% else %}
+      <a class="quick-pill" href="{{ raw_url_for('web_beta.index') }}">
+        <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span><span>体验版</span>
+      </a>
+    {% endif %}
     <button class="quick-pill quick-pill-button theme-entry-link theme-nav-pill" type="button" aria-label="切换主题面板">
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-palette"></use></svg></span><span>主题</span>
     </button>
