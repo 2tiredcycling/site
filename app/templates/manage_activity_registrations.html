@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>报名信息 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>报名信息：{{ activity.title }}</h1>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.activities_page') }}">返回活动维护</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.activity_edit_page', activity_id=activity.id) }}">编辑活动</a>
+        <a class="btn" href="{{ url_for('admin.export_activity_registrations_excel', activity_id=activity.id) }}">下载 Excel</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <h2>报名列表</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>姓名</th>
+            <th>报名路线</th>
+            <th>影像授权</th>
+            <th>状态</th>
+            <th>提交时间</th>
+            <th>来源 IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in registrations %}
+            <tr>
+              <td>{{ item.id }}</td>
+              <td>{{ item.name }}</td>
+              <td>{{ item.route_display }}</td>
+              <td>{{ item.image_consent_display }}</td>
+              <td>{{ item.status }}</td>
+              <td>{{ to_local_time(item.created_at).strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</td>
+              <td>{{ item.source_ip or '-' }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7">暂无报名记录</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.activity_registrations_page', activity_id=activity.id, page=pagination.prev_num) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.activity_registrations_page', activity_id=activity.id, page=pagination.next_num) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

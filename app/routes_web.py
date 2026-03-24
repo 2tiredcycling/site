@@ -250,6 +250,48 @@ def _event_display_date_map(activities: list[Activity]) -> dict[int, object]:
     return {item.id: _event_display_date(item) for item in activities}
 
 
+def _event_signup_back_target(activity: Activity, source: str) -> tuple[str, str]:
+    if source == "home":
+        return _url_for("web.index"), "返回首页"
+    if source == "events_detail":
+        return _url_for("web.events_detail", event_id=activity.id), "返回活动详情"
+    if source == "activity_detail":
+        return _url_for("web.activity_detail", activity_id=activity.id), "返回活动详情"
+    if source == "activities":
+        return _url_for("web.activity_list"), "返回活动列表"
+    return _url_for("web.events_list"), "返回活动中心"
+
+
+def _render_event_signup(
+    activity: Activity,
+    source: str,
+    selected_option: ActivityRouteOption | None = None,
+    error_message: str = "",
+    success_message: str = "",
+    submitted_name: str = "",
+) -> str:
+    display_time = _event_display_date(activity)
+    signup_open = _activity_signup_open(activity)
+    route_cards = _activity_route_cards(activity)
+    back_url, back_label = _event_signup_back_target(activity, source)
+    return render_template(
+        "event_signup.html",
+        activity=activity,
+        display_time=display_time,
+        signup_open=signup_open,
+        insurance_qr_url=(_url_for("web.activity_insurance_qr", event_id=activity.id) if activity.insurance_qr_path else None),
+        selected_option=selected_option,
+        route_cards=route_cards,
+        back_url=back_url,
+        back_label=back_label,
+        source=source,
+        error_message=error_message,
+        success_message=success_message,
+        submitted_name=submitted_name,
+        meta_description=f"{activity.title} 活动报名页（建设中）。",
+    )
+
+
 def _activity_registration_count_map(activity_ids: list[int]) -> dict[int, int]:
     if not activity_ids:
         return {}
@@ -784,38 +826,129 @@ def events_detail(event_id: int) -> str:
 @bp.get("/events/<int:event_id>/signup")
 def event_signup(event_id: int) -> str:
     activity = _activity_detail_or_404(event_id)
-    display_time = _event_display_date(activity)
-    signup_open = _activity_signup_open(activity)
     option_id = request.args.get("option_id", type=int)
     selected_option = None
     if option_id:
         selected_option = ActivityRouteOption.query.filter_by(id=option_id, activity_id=activity.id).first()
     source = (request.args.get("source") or "").strip()
-    if source == "home":
-        back_url = _url_for("web.index")
-        back_label = "返回首页"
-    elif source == "events_detail":
-        back_url = _url_for("web.events_detail", event_id=activity.id)
-        back_label = "返回活动详情"
-    elif source == "activity_detail":
-        back_url = _url_for("web.activity_detail", activity_id=activity.id)
-        back_label = "返回活动详情"
-    elif source == "activities":
-        back_url = _url_for("web.activity_list")
-        back_label = "返回活动列表"
-    else:
-        back_url = _url_for("web.events_list")
-        back_label = "返回活动中心"
-    return render_template(
-        "event_signup.html",
+    success = (request.args.get("success") or "").strip() == "1"
+    success_message = "报名成功，已记录你的报名信息。"
+    return _render_event_signup(
         activity=activity,
-        display_time=display_time,
-        signup_open=signup_open,
-        insurance_qr_url=(_url_for("web.activity_insurance_qr", event_id=activity.id) if activity.insurance_qr_path else None),
+        source=source,
         selected_option=selected_option,
-        back_url=back_url,
-        back_label=back_label,
-        meta_description=f"{activity.title} 活动报名页（建设中）。",
+        success_message=(success_message if success else ""),
+    )
+
+
+@bp.post("/events/<int:event_id>/signup")
+def event_signup_submit(event_id: int):
+    activity = _activity_detail_or_404(event_id)
+    source = (request.form.get("source") or "").strip()
+    name = (request.form.get("name") or "").strip()
+    option_id = request.form.get("option_id", type=int)
+    required_consent = (request.form.get("consent_required") or "").strip() == "1"
+    image_consent = (request.form.get("consent_image") or "").strip() == "1"
+    source_ip = (client_ip() or "")[:64]
+
+    selected_option = None
+    if option_id:
+        selected_option = ActivityRouteOption.query.filter_by(id=option_id, activity_id=activity.id).first()
+
+    route_cards = _activity_route_cards(activity)
+    requires_route_choice = bool(route_cards) and selected_option is None
+    if len(name) < 1:
+        return _render_event_signup(
+            activity=activity,
+            source=source,
+            selected_option=selected_option,
+            error_message="请先填写姓名。",
+            submitted_name=name,
+        )
+    if len(name) > 64:
+        return _render_event_signup(
+            activity=activity,
+            source=source,
+            selected_option=selected_option,
+            error_message="姓名长度不能超过 64 个字符。",
+            submitted_name=name[:64],
+        )
+    if requires_route_choice:
+        return _render_event_signup(
+            activity=activity,
+            source=source,
+            selected_option=None,
+            error_message="请选择报名路线后再提交。",
+            submitted_name=name,
+        )
+    if not required_consent:
+        return _render_event_signup(
+            activity=activity,
+            source=source,
+            selected_option=selected_option,
+            error_message="请先勾选并同意活动须知与风险告知。",
+            submitted_name=name,
+        )
+    if not _activity_signup_open(activity):
+        return _render_event_signup(
+            activity=activity,
+            source=source,
+            selected_option=selected_option,
+            error_message="当前活动未开放报名，请关注下一次活动安排。",
+            submitted_name=name,
+        )
+
+    duplicate_exists = (
+        db.session.query(EventRegistration.id)
+        .filter(
+            EventRegistration.activity_id == activity.id,
+            db.func.lower(EventRegistration.name) == name.lower(),
+            EventRegistration.source_ip == source_ip,
+        )
+        .first()
+        is not None
+    )
+    if duplicate_exists:
+        return _render_event_signup(
+            activity=activity,
+            source=source,
+            selected_option=selected_option,
+            error_message="该姓名已完成报名，请勿重复提交。如需修改请联系管理员。",
+            submitted_name=name,
+        )
+
+    note_parts = []
+    if selected_option and selected_option.route:
+        note_parts.append(f"route_option_id={selected_option.id}")
+        note_parts.append(f"route_label={selected_option.level_label or '路线'}")
+        note_parts.append(f"route_name={selected_option.route.route_name}")
+    note_parts.append(f"image_consent={'1' if image_consent else '0'}")
+    notes = "; ".join(note_parts)
+
+    registration = EventRegistration(
+        activity_id=activity.id,
+        name=name,
+        status=REGISTRATION_PENDING,
+        source_ip=source_ip,
+        user_agent=(request.user_agent.string or "")[:255],
+        notes=notes[:1000],
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    db.session.add(registration)
+    activity.participant_count = int(activity.participant_count or 0) + 1
+    if selected_option:
+        selected_option.participant_count = int(selected_option.participant_count or 0) + 1
+    db.session.commit()
+
+    return redirect(
+        _url_for(
+            "web.event_signup",
+            event_id=activity.id,
+            source=source,
+            **({"option_id": selected_option.id} if selected_option else {}),
+            success=1,
+        )
     )
 
 

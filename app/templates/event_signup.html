@@ -28,39 +28,86 @@
           <p class="hero-kicker">Activity Signup</p>
           <h1>活动报名</h1>
           <p class="event-signup-subtitle">{{ activity.title }}</p>
-          <p class="hint">
-            {% if signup_open %}
-              当前为简版报名页，V4.3 会接入完整报名与审核流程。
-            {% else %}
-              当前活动未开放报名（可能未开启报名、已截止或名额已满）。
-            {% endif %}
-          </p>
+          {% if not signup_open %}
+            <p class="hint">当前活动未开放报名（可能未开启报名、已截止或名额已满）。</p>
+          {% endif %}
         </div>
       </section>
+
+      {% if success_message %}
+        <div class="alert alert-ok">{{ success_message }}</div>
+      {% endif %}
+      {% if error_message %}
+        <div class="alert">{{ error_message }}</div>
+      {% endif %}
 
       <section class="event-signup-layout">
         <section class="event-signup-panel event-signup-form-panel">
           <h2>报名信息</h2>
-          <form class="event-signup-form" action="#" method="post" onsubmit="return false;">
-            <label>
-              姓名
-              <input type="text" placeholder="请输入姓名" autocomplete="name">
-            </label>
-            <button type="submit" class="btn btn-solid event-signup-submit-btn" disabled>
+          <form class="event-signup-form" action="{{ url_for('web.event_signup_submit', event_id=activity.id) }}" method="post">
+            <input type="hidden" name="source" value="{{ source or '' }}">
+            <div class="event-signup-top-grid">
+              <div class="event-signup-left-fields">
+                <label>
+                  姓名
+                  <input id="signupNameInput" name="name" type="text" placeholder="请输入姓名" autocomplete="name" required value="{{ submitted_name or '' }}">
+                </label>
+
+                {% if selected_option %}
+                  <label>
+                    报名路线
+                    <input type="text" value="{{ selected_option.level_label or '路线' }} · {{ selected_option.route.route_name if selected_option.route else '待分配' }}" readonly>
+                  </label>
+                  <input type="hidden" name="option_id" value="{{ selected_option.id }}">
+                {% elif route_cards %}
+                  <label>
+                    报名路线（必选）
+                    <select id="signupRouteSelect" name="option_id" required>
+                      <option value="">请选择路线</option>
+                      {% for item in route_cards %}
+                        <option value="{{ item.option_id }}">{{ item.label }} · {{ item.route.route_name }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                {% endif %}
+                {% if insurance_qr_url %}
+                  <p class="hint event-signup-insurance-hint">请先扫码完成投保，再提交报名信息。</p>
+                {% endif %}
+              </div>
+
+              <div class="event-signup-insurance">
+                <h3>投保二维码</h3>
+                {% if insurance_qr_url %}
+                  <img src="{{ insurance_qr_url }}" alt="活动投保二维码" loading="lazy">
+                {% else %}
+                  <p class="hint">管理员暂未上传投保二维码，请稍后再试。</p>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="event-signup-doc-links">
+              <button type="button" class="event-doc-btn" data-doc-target="notice">《活动须知》</button>
+              <button type="button" class="event-doc-btn" data-doc-target="risk">《风险告知与参加确认》</button>
+              <button type="button" class="event-doc-btn" data-doc-target="image">《影像使用说明》</button>
+            </div>
+
+            <div class="event-signup-consents">
+              <label class="event-consent-item">
+                <input id="consentRequired" name="consent_required" type="checkbox" value="1" required>
+                <span>我已阅读并同意《活动须知》与《风险告知与参加确认》，并确认自身身体状况适合参加本次活动。</span>
+              </label>
+              <label class="event-consent-item">
+                <input id="consentImage" name="consent_image" type="checkbox" value="1">
+                <span>我同意活动中拍摄的、包含本人形象的照片或视频，用于 2Tired 骑行社官方网站、微信公众号等非营利性展示与宣传；我可通过指定邮箱申请撤回后续公开展示。</span>
+              </label>
+            </div>
+
+            <button id="signupSubmitBtn" type="submit" class="btn btn-solid event-signup-submit-btn">
               <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span>
               <span>{{ '提交报名' if signup_open else '暂停报名' }}</span>
             </button>
+            <p id="signupInlineHint" class="event-signup-inline-hint"></p>
           </form>
-
-          <div class="event-signup-insurance">
-            <h3>投保二维码</h3>
-            {% if insurance_qr_url %}
-              <img src="{{ insurance_qr_url }}" alt="活动投保二维码" loading="lazy">
-              <p class="hint">请先扫码完成投保，再提交报名信息。</p>
-            {% else %}
-              <p class="hint">管理员暂未上传投保二维码，请稍后再试。</p>
-            {% endif %}
-          </div>
         </section>
 
         <aside class="event-signup-panel event-signup-info-panel">
@@ -78,6 +125,8 @@
             {% endif %}
             {% if selected_option %}
               <div class="event-signup-summary-wide"><strong>报名路线</strong><span>{{ selected_option.level_label or '路线' }} · {{ selected_option.route.route_name if selected_option.route else '待分配' }}</span></div>
+            {% elif route_cards %}
+              <div class="event-signup-summary-wide"><strong>路线选择</strong><span>请在左侧先选择一条报名路线</span></div>
             {% endif %}
           </div>
 
@@ -85,15 +134,139 @@
             <h3>报名说明</h3>
             <ul>
               <li>报名前请先扫描左侧二维码完成投保。</li>
-              <li>当前版本先采集姓名，完整资料会在后续版本补充。</li>
               <li>若显示“暂停报名”，请关注下一次活动安排。</li>
+            </ul>
+          </div>
+
+          <div class="event-signup-notes">
+            <h3>报名与联系说明</h3>
+            <ul>
+              <li>本页面收集的信息仅用于活动报名、签到、联系及活动组织安排。</li>
+              <li>报名信息由 2Tired 骑行社学生成员用于本次活动管理，不用于其他无关用途。</li>
+              <li>如需查询、更正或删除报名信息，请联系：<a href="mailto:st_2tiredcc@link.cuhk.edu.cn">st_2tiredcc@link.cuhk.edu.cn</a>。</li>
             </ul>
           </div>
         </aside>
       </section>
+
+      <section class="event-doc-store" aria-hidden="true">
+        <article id="doc-content-notice">
+          <h2>活动须知</h2>
+          <p>本次活动由 2Tired 骑行社组织，为非营利性、自愿参加的骑行活动。</p>
+          <p>参与者应根据自身骑行经验、体能状况和路线难度，审慎判断是否适合参加本次活动。</p>
+          <p>参与者应自行准备并检查车辆及骑行装备，确保车辆、刹车、轮胎、照明等处于适合骑行的状态。</p>
+          <p>参与者应遵守道路交通规则、活动安排及现场安全提醒，不得实施明显危及自身或他人安全的行为。</p>
+          <p>头盔原则上应佩戴；对于公路、长距离、夜骑、连续下坡等活动，组织方可要求参与者佩戴头盔方可参加。</p>
+          <p>组织方有权基于天气、交通、路况、人员状态或其他安全因素，对路线、集合安排、活动时长等作出调整；必要时可中止、取消或提前结束活动。</p>
+          <p>对明显不适合继续参加活动、存在安全隐患或严重影响活动秩序的情形，活动负责人有权基于安全考虑劝退、限制继续参与或终止其参加资格。</p>
+          <p>参与者应妥善保管个人物品，并对自身车辆及装备的使用、维护和保管负责。</p>
+        </article>
+        <article id="doc-content-risk">
+          <h2>风险告知与参加确认</h2>
+          <p>参与者理解并知悉，骑行活动具有一定风险，包括但不限于交通状况变化、路面状况变化、天气变化、体力不支、设备故障以及其他可能导致人身伤害或财产损失的情形。</p>
+          <p>组织方将基于一般活动管理需要，进行路线安排、活动提醒、现场协调及必要的应急协助，但无法保证完全消除骑行活动中的全部风险。</p>
+          <p>参与者应自行确认自身身体状况适合参加本次活动；如存在可能影响骑行安全的身体状况，应自行审慎评估是否参加，必要时应先咨询医生或放弃报名。</p>
+          <p>参与者确认，其将根据自身身体状况、骑行能力和装备状况，自行承担与自身行为、身体条件及装备状态相关的风险后果。</p>
+          <p>如参与者违反活动规则、道路交通规则或现场安全提醒，因此产生的人身伤害、财产损失或其他不利后果，由参与者依法承担相应责任。</p>
+          <p>参与者完成报名并实际到场参加活动，即表示其已阅读、理解并同意遵守《活动须知》与本《风险告知与参加确认》的内容。</p>
+        </article>
+        <article id="doc-content-image">
+          <h2>影像使用说明</h2>
+          <p>活动过程中，组织方或工作人员可能拍摄活动合照、现场照片或视频，用于记录活动情况。</p>
+          <p>如参与者勾选同意影像使用授权，组织方可将包含其形象的照片或视频用于 2Tired 骑行社官方网站、微信公众号等非营利性展示与宣传。</p>
+          <p>组织方不会因上述非营利性展示与宣传向参与者支付报酬。</p>
+          <p>参与者可通过指定邮箱申请撤回对其个人影像的后续公开展示授权，组织方将在合理期限内处理；但撤回不影响撤回前已经合法发布的内容。</p>
+          <p>如参与者未勾选同意影像使用授权，组织方将尽合理努力避免将其可识别形象用于后续公开展示。</p>
+        </article>
+      </section>
     </section>
   </main>
 
+  <div id="eventDocModal" class="event-doc-modal" aria-hidden="true">
+    <div class="event-doc-dialog" role="dialog" aria-modal="true" aria-labelledby="eventDocTitle">
+      <div class="event-doc-head">
+        <h3 id="eventDocTitle">说明文档</h3>
+        <button type="button" class="event-doc-close" id="eventDocClose" aria-label="关闭">关闭</button>
+      </div>
+      <div id="eventDocBody" class="event-doc-body"></div>
+    </div>
+  </div>
+
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+  <script>
+    (function () {
+      const signupOpen = {{ 'true' if signup_open else 'false' }};
+      const nameInput = document.getElementById('signupNameInput');
+      const requiredConsent = document.getElementById('consentRequired');
+      const submitBtn = document.getElementById('signupSubmitBtn');
+      const routeSelect = document.getElementById('signupRouteSelect');
+      const inlineHint = document.getElementById('signupInlineHint');
+      if (!nameInput || !requiredConsent || !submitBtn) return;
+
+      const sync = function () {
+        const hasName = Boolean((nameInput.value || '').trim());
+        const hasRoute = routeSelect ? Boolean((routeSelect.value || '').trim()) : true;
+        const canSubmit = Boolean(signupOpen && hasName && hasRoute && requiredConsent.checked);
+        const missing = [];
+        if (!hasName) missing.push('姓名');
+        if (!hasRoute) missing.push('报名路线');
+        if (!requiredConsent.checked) missing.push('已阅读并同意活动须知');
+        submitBtn.disabled = !canSubmit;
+        if (inlineHint) {
+          if (!signupOpen) {
+            inlineHint.textContent = '当前活动未开放报名。';
+          } else if (!canSubmit && missing.length) {
+            inlineHint.textContent = '请先完善：' + missing.join('、');
+          } else {
+            inlineHint.textContent = '信息已完整，可提交报名。';
+          }
+        }
+      };
+      nameInput.addEventListener('input', sync);
+      requiredConsent.addEventListener('change', sync);
+      if (routeSelect) {
+        routeSelect.addEventListener('change', sync);
+      }
+      sync();
+
+      const modal = document.getElementById('eventDocModal');
+      const modalBody = document.getElementById('eventDocBody');
+      const modalTitle = document.getElementById('eventDocTitle');
+      const modalClose = document.getElementById('eventDocClose');
+      const docButtons = Array.from(document.querySelectorAll('.event-doc-btn'));
+
+      if (modal && modalBody && modalTitle && modalClose && docButtons.length) {
+        const openDoc = function (key) {
+          const source = document.getElementById('doc-content-' + key);
+          if (!source) return;
+          const sourceTitle = source.querySelector('h2');
+          modalTitle.textContent = sourceTitle ? sourceTitle.textContent : '说明文档';
+          modalBody.innerHTML = source.innerHTML;
+          modal.classList.add('open');
+          modal.setAttribute('aria-hidden', 'false');
+        };
+        const closeDoc = function () {
+          modal.classList.remove('open');
+          modal.setAttribute('aria-hidden', 'true');
+          modalBody.innerHTML = '';
+        };
+        docButtons.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const key = btn.getAttribute('data-doc-target');
+            if (key) openDoc(key);
+          });
+        });
+        modalClose.addEventListener('click', closeDoc);
+        modal.addEventListener('click', function (event) {
+          if (event.target === modal) closeDoc();
+        });
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && modal.classList.contains('open')) {
+            closeDoc();
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -43,6 +43,7 @@
               <td class="row-actions">
                 <a class="btn btn-muted" href="{{ url_for('web.activity_detail', activity_id=activity.id, source='manage') }}">查看</a>
                 <a class="btn" href="{{ url_for('admin.activity_edit_page', activity_id=activity.id) }}">编辑</a>
+                <a class="btn btn-muted" href="{{ url_for('admin.activity_registrations_page', activity_id=activity.id) }}">报名信息</a>
               </td>
             </tr>
           {% else %}

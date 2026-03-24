@@ -1,7 +1,7 @@
 import csv
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from io import StringIO
+from io import BytesIO, StringIO
 import mimetypes
 from pathlib import Path
 import re
@@ -18,6 +18,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     send_from_directory,
     session,
     url_for,
@@ -62,6 +63,7 @@ from app.models import (
     AccessLog,
     AuditLog,
     Announcement,
+    EventRegistration,
     ImportReport,
     MediaAsset,
     Route,
@@ -111,6 +113,34 @@ ACTIVITY_ROUTE_LEVELS = (
     ("intermediate", "中级"),
     ("advanced", "高级"),
 )
+
+
+def _parse_registration_notes(raw_notes: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for item in (raw_notes or "").split(";"):
+        chunk = item.strip()
+        if not chunk or "=" not in chunk:
+            continue
+        key, value = chunk.split("=", 1)
+        result[key.strip()] = value.strip()
+    return result
+
+
+def _excel_safe_sheet_name(raw: str, used: set[str]) -> str:
+    base = (raw or "未指定路线").strip()
+    base = re.sub(r'[:\\/?*\[\]]', "_", base)
+    if not base:
+        base = "未指定路线"
+    base = base[:31]
+    candidate = base
+    index = 2
+    while candidate in used:
+        suffix = f"_{index}"
+        keep = max(1, 31 - len(suffix))
+        candidate = f"{base[:keep]}{suffix}"
+        index += 1
+    used.add(candidate)
+    return candidate
 
 
 def _display_app_version() -> str:
@@ -1161,6 +1191,125 @@ def activity_edit_page(activity_id: int):
         route_option_map=route_option_map,
         legacy_selected_ids=[route.id for route in activity.routes],
         can_edit=can_edit(g.current_user),
+    )
+
+
+@bp.get("/activities/<int:activity_id>/registrations")
+@login_required
+def activity_registrations_page(activity_id: int):
+    activity = Activity.query.filter_by(id=activity_id).first()
+    if not activity:
+        flash("活动不存在", "error")
+        return redirect(url_for("admin.activities_page"))
+    page = max(1, request.args.get("page", default=1, type=int))
+    pagination = EventRegistration.query.filter_by(activity_id=activity.id).order_by(
+        EventRegistration.created_at.desc()
+    ).paginate(page=page, per_page=50, error_out=False)
+    registration_rows = []
+    for item in pagination.items:
+        note_map = _parse_registration_notes(item.notes or "")
+        route_label = note_map.get("route_label", "")
+        route_name = note_map.get("route_name", "")
+        route_display = "-"
+        if route_label and route_name:
+            route_display = f"{route_label} · {route_name}"
+        elif route_name:
+            route_display = route_name
+        elif route_label:
+            route_display = route_label
+        image_consent_display = "同意" if note_map.get("image_consent") == "1" else "未同意"
+        registration_rows.append(
+            {
+                "id": item.id,
+                "name": item.name,
+                "route_display": route_display,
+                "status": item.status,
+                "created_at": item.created_at,
+                "source_ip": item.source_ip,
+                "image_consent_display": image_consent_display,
+            }
+        )
+
+    return render_template(
+        "manage_activity_registrations.html",
+        activity=activity,
+        registrations=registration_rows,
+        pagination=pagination,
+    )
+
+
+@bp.get("/activities/<int:activity_id>/registrations/export.xlsx")
+@login_required
+def export_activity_registrations_excel(activity_id: int):
+    activity = Activity.query.filter_by(id=activity_id).first()
+    if not activity:
+        flash("活动不存在", "error")
+        return redirect(url_for("admin.activities_page"))
+    try:
+        from openpyxl import Workbook
+    except Exception:
+        flash("导出失败：缺少 openpyxl 依赖，请先安装后重试。", "error")
+        return redirect(url_for("admin.activity_registrations_page", activity_id=activity_id))
+
+    rows = (
+        EventRegistration.query.filter_by(activity_id=activity.id)
+        .order_by(EventRegistration.created_at.asc(), EventRegistration.id.asc())
+        .all()
+    )
+
+    export_rows: list[dict] = []
+    by_route: dict[str, list[dict]] = defaultdict(list)
+    for item in rows:
+        note_map = _parse_registration_notes(item.notes or "")
+        route_label = note_map.get("route_label", "")
+        route_name = note_map.get("route_name", "")
+        route_display = "未指定路线"
+        if route_label and route_name:
+            route_display = f"{route_label} · {route_name}"
+        elif route_name:
+            route_display = route_name
+        elif route_label:
+            route_display = route_label
+        image_consent_display = "同意" if note_map.get("image_consent") == "1" else "未同意"
+        row = {
+            "route": route_display,
+            "name": item.name,
+            "image_consent": image_consent_display,
+        }
+        export_rows.append(row)
+        by_route[route_display].append(row)
+
+    wb = Workbook()
+    ws_all = wb.active
+    ws_all.title = "总表"
+    headers = ["路线", "姓名", "是否同意影像"]
+    ws_all.append(headers)
+    for row in export_rows:
+        ws_all.append([row["route"], row["name"], row["image_consent"]])
+    ws_all.column_dimensions["A"].width = 28
+    ws_all.column_dimensions["B"].width = 18
+    ws_all.column_dimensions["C"].width = 16
+
+    used_sheet_names = {"总表"}
+    for route_key, route_rows in by_route.items():
+        title = _excel_safe_sheet_name(route_key, used_sheet_names)
+        ws = wb.create_sheet(title=title)
+        ws.append(headers)
+        for row in route_rows:
+            ws.append([row["route"], row["name"], row["image_consent"]])
+        ws.column_dimensions["A"].width = 28
+        ws.column_dimensions["B"].width = 18
+        ws.column_dimensions["C"].width = 16
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename = f"activity_{activity.id}_registrations.xlsx"
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
     )
 
 
