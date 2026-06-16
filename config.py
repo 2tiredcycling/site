@@ -41,8 +41,16 @@ def _resolve_media_upload_folder() -> str:
     return str((BASE_DIR / path).resolve())
 
 
+def _resolve_app_version() -> str:
+    version_path = BASE_DIR / "VERSION"
+    try:
+        return version_path.read_text(encoding="utf-8-sig").strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
 class BaseConfig:
-    APP_VERSION = (os.getenv("APP_VERSION", "v3.3.2") or "").strip()
+    APP_VERSION = _resolve_app_version()
     APP_DEPLOYED_AT = os.getenv("APP_DEPLOYED_AT", "")
     SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change-me-admin")
