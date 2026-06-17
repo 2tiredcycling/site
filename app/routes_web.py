@@ -5,7 +5,7 @@ from io import StringIO
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from flask import Blueprint, Response, abort, current_app, redirect, render_template, request, send_from_directory, url_for as flask_url_for
+from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, send_from_directory, url_for as flask_url_for
 
 from app.auth import client_ip
 from app.models import (
@@ -843,6 +843,27 @@ def event_signup(event_id: int) -> str:
         selected_option=selected_option,
         success_message=(success_message if success else ""),
     )
+
+
+@bp.get("/events/<int:event_id>/signup/check-student")
+def event_signup_check_student(event_id: int):
+    _activity_detail_or_404(event_id)
+    student_id = (request.args.get("student_id") or "").strip()
+    if not student_id:
+        return jsonify({"exists": False})
+
+    registration = (
+        EventRegistration.query
+        .filter(
+            EventRegistration.activity_id == event_id,
+            db.func.lower(EventRegistration.student_id) == student_id.lower(),
+            EventRegistration.status.in_([REGISTRATION_PENDING, REGISTRATION_CONFIRMED]),
+        )
+        .first()
+    )
+    if not registration:
+        return jsonify({"exists": False})
+    return jsonify({"exists": True, "registration_id": registration.id})
 
 
 @bp.post("/events/<int:event_id>/signup")

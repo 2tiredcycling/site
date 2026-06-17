@@ -201,7 +201,27 @@
       const submitBtn = document.getElementById('signupSubmitBtn');
       const routeSelect = document.getElementById('signupRouteSelect');
       const inlineHint = document.getElementById('signupInlineHint');
-      if (!nameInput || !studentIdInput || !requiredConsent || !submitBtn) return;
+      const signupForm = document.querySelector('.event-signup-form');
+      const duplicateCheckUrl = "{{ url_for('web.event_signup_check_student', event_id=activity.id) }}";
+      if (!nameInput || !studentIdInput || !requiredConsent || !submitBtn || !signupForm) return;
+
+      const clearDuplicateConfirmation = function () {
+        signupForm.dataset.confirmedStudentId = '';
+        const existing = signupForm.querySelector('input[name="update_registration_id"]');
+        if (existing) existing.remove();
+      };
+
+      const setDuplicateConfirmation = function (registrationId, studentId) {
+        let field = signupForm.querySelector('input[name="update_registration_id"]');
+        if (!field) {
+          field = document.createElement('input');
+          field.type = 'hidden';
+          field.name = 'update_registration_id';
+          signupForm.appendChild(field);
+        }
+        field.value = String(registrationId);
+        signupForm.dataset.confirmedStudentId = studentId;
+      };
 
       const sync = function () {
         const hasName = Boolean((nameInput.value || '').trim());
@@ -225,12 +245,52 @@
         }
       };
       nameInput.addEventListener('input', sync);
-      studentIdInput.addEventListener('input', sync);
+      studentIdInput.addEventListener('input', function () {
+        clearDuplicateConfirmation();
+        sync();
+      });
       requiredConsent.addEventListener('change', sync);
       if (routeSelect) {
         routeSelect.addEventListener('change', sync);
       }
       sync();
+
+      signupForm.addEventListener('submit', async function (event) {
+        const studentId = (studentIdInput.value || '').trim();
+        if (!studentId || signupForm.dataset.confirmedStudentId === studentId) {
+          return;
+        }
+
+        event.preventDefault();
+        submitBtn.disabled = true;
+        if (inlineHint) inlineHint.textContent = '正在检查报名记录...';
+
+        try {
+          const response = await fetch(duplicateCheckUrl + '?student_id=' + encodeURIComponent(studentId), {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (!response.ok) {
+            throw new Error('duplicate check failed');
+          }
+          const result = await response.json();
+          if (result.exists && result.registration_id) {
+            const confirmed = window.confirm('该学号已报名本活动。是否修改原报名信息？');
+            if (!confirmed) {
+              clearDuplicateConfirmation();
+              if (inlineHint) inlineHint.textContent = '已取消修改，报名信息未提交。';
+              sync();
+              return;
+            }
+            setDuplicateConfirmation(result.registration_id, studentId);
+          } else {
+            clearDuplicateConfirmation();
+          }
+          HTMLFormElement.prototype.submit.call(signupForm);
+        } catch (error) {
+          if (inlineHint) inlineHint.textContent = '暂时无法检查重复报名，请稍后再试。';
+          sync();
+        }
+      });
 
       const modal = document.getElementById('eventDocModal');
       const modalBody = document.getElementById('eventDocBody');
