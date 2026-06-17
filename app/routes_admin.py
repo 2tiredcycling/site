@@ -279,78 +279,193 @@ def _save_activity_media(activity_id: int, uploads, activity_route_option_id: in
     return saved_count
 
 
-def _extract_wechat_qr_png(upload) -> tuple[bytes | None, str]:
+def _read_wechat_qr_upload(upload):
     try:
         import cv2
         import numpy as np
     except Exception:
-        return None, "missing_dependency"
+        return None, None, "missing_dependency"
 
     current_pos = upload.stream.tell()
     upload.stream.seek(0)
     raw_bytes = upload.stream.read()
     upload.stream.seek(current_pos)
     if not raw_bytes:
-        return None, "empty_file"
+        return None, None, "empty_file"
 
     image_data = np.frombuffer(raw_bytes, dtype=np.uint8)
     image = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
     if image is None:
-        return None, "decode_failed"
+        return None, None, "decode_failed"
+    return cv2, image, ""
 
-    def detect_qr_points(candidate_image):
+
+def _extract_wechat_qr_preview_pair(upload) -> tuple[dict | None, str]:
+    cv2, image, error_code = _read_wechat_qr_upload(upload)
+    if error_code:
+        return None, error_code
+
+    def decode_qr_text(candidate_image) -> tuple[str, object | None]:
         detector = cv2.QRCodeDetector()
         try:
-            _decoded_text, points, _straight_qr = detector.detectAndDecode(candidate_image)
+            decoded_text, points, _straight_qr = detector.detectAndDecode(candidate_image)
         except Exception:
-            points = None
+            return "", None
+        return (decoded_text or "").strip(), points
+
+    def detect_qr_points(candidate_image):
+        decoded_text, points = decode_qr_text(candidate_image)
         if points is None:
-            detected, points = detector.detect(candidate_image)
+            detector = cv2.QRCodeDetector()
+            try:
+                detected, points = detector.detect(candidate_image)
+            except Exception:
+                detected = False
+                points = None
             if not detected:
                 points = None
-        if points is None:
-            return None
+        return decoded_text, points
+
+    def crop_qr(candidate_image, points):
+        import numpy as np
+
         points = np.asarray(points, dtype=np.float32).reshape(-1, 2)
         if points.shape[0] < 4:
-            return None
-        return points[:4]
+            return None, "no_qr"
+        points = points[:4]
+        sums = points.sum(axis=1)
+        diffs = np.diff(points, axis=1).reshape(-1)
+        ordered = np.array(
+            [
+                points[np.argmin(sums)],
+                points[np.argmin(diffs)],
+                points[np.argmax(sums)],
+                points[np.argmax(diffs)],
+            ],
+            dtype=np.float32,
+        )
+        width_top = np.linalg.norm(ordered[1] - ordered[0])
+        width_bottom = np.linalg.norm(ordered[2] - ordered[3])
+        height_right = np.linalg.norm(ordered[2] - ordered[1])
+        height_left = np.linalg.norm(ordered[3] - ordered[0])
+        side = int(max(width_top, width_bottom, height_right, height_left))
+        if side < 40:
+            return None, "no_qr"
+
+        target = np.array(
+            [[0, 0], [side - 1, 0], [side - 1, side - 1], [0, side - 1]],
+            dtype=np.float32,
+        )
+        matrix = cv2.getPerspectiveTransform(ordered, target)
+        qr_image = cv2.warpPerspective(candidate_image, matrix, (side, side))
+        border = max(12, int(side * 0.06))
+        qr_image = cv2.copyMakeBorder(
+            qr_image,
+            border,
+            border,
+            border,
+            border,
+            cv2.BORDER_CONSTANT,
+            value=[255, 255, 255],
+        )
+        encoded, output = cv2.imencode(".png", qr_image)
+        if not encoded:
+            return None, "encode_failed"
+        return output.tobytes(), qr_image, ""
+
+    def decode_from_options(*images) -> str:
+        for item in images:
+            if item is None:
+                continue
+            decoded_text, _points = decode_qr_text(item)
+            if decoded_text:
+                return decoded_text
+            decoded_text, _points = decode_qr_text(cv2.bitwise_not(item))
+            if decoded_text:
+                return decoded_text
+        return ""
+
+    def normalize_detected_qr(candidate_image):
+        import numpy as np
+
+        if candidate_image is None:
+            return None, "no_qr"
+        if len(candidate_image.shape) == 3:
+            gray = cv2.cvtColor(candidate_image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = candidate_image
+        _threshold, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        edge = max(1, int(binary.shape[0] * 0.12))
+        edge_samples = np.concatenate(
+            [
+                binary[:edge, :].reshape(-1),
+                binary[-edge:, :].reshape(-1),
+                binary[:, :edge].reshape(-1),
+                binary[:, -edge:].reshape(-1),
+            ]
+        )
+        if float(np.mean(edge_samples)) < 127:
+            binary = cv2.bitwise_not(binary)
+
+        scale = max(1, 360 // max(1, int(binary.shape[0])))
+        if scale > 1:
+            binary = cv2.resize(binary, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+        border = max(24, int(binary.shape[0] * 0.10))
+        binary = cv2.copyMakeBorder(
+            binary,
+            border,
+            border,
+            border,
+            border,
+            cv2.BORDER_CONSTANT,
+            value=255,
+        )
+        encoded, output = cv2.imencode(".png", binary)
+        if not encoded:
+            return None, "encode_failed"
+        return output.tobytes(), ""
 
     selected_image = image
-    points = detect_qr_points(image)
+    decoded_text, points = detect_qr_points(image)
     if points is None:
-        inverted_image = cv2.bitwise_not(image)
-        points = detect_qr_points(inverted_image)
-        if points is not None:
-            selected_image = inverted_image
+        selected_image = cv2.bitwise_not(image)
+        decoded_text, points = detect_qr_points(selected_image)
     if points is None:
         return None, "no_qr"
 
-    sums = points.sum(axis=1)
-    diffs = np.diff(points, axis=1).reshape(-1)
-    ordered = np.array(
-        [
-            points[np.argmin(sums)],
-            points[np.argmin(diffs)],
-            points[np.argmax(sums)],
-            points[np.argmax(diffs)],
-        ],
-        dtype=np.float32,
-    )
-    width_top = np.linalg.norm(ordered[1] - ordered[0])
-    width_bottom = np.linalg.norm(ordered[2] - ordered[3])
-    height_right = np.linalg.norm(ordered[2] - ordered[1])
-    height_left = np.linalg.norm(ordered[3] - ordered[0])
-    side = int(max(width_top, width_bottom, height_right, height_left))
-    if side < 40:
-        return None, "no_qr"
+    detected_png, detected_image, error_code = crop_qr(selected_image, points)
+    if error_code:
+        return None, error_code
 
-    target = np.array(
-        [[0, 0], [side - 1, 0], [side - 1, side - 1], [0, side - 1]],
-        dtype=np.float32,
-    )
-    matrix = cv2.getPerspectiveTransform(ordered, target)
-    qr_image = cv2.warpPerspective(selected_image, matrix, (side, side))
-    border = max(12, int(side * 0.06))
+    if not decoded_text:
+        decoded_text = decode_from_options(image, selected_image, detected_image)
+    if not decoded_text:
+        generated_png, error_code = normalize_detected_qr(detected_image)
+        if error_code:
+            return None, error_code
+        return {"detected_png": detected_png, "generated_png": generated_png}, "decode_text_failed"
+
+    generated_png, error_code = _generate_wechat_qr_png(decoded_text, cv2)
+    if error_code:
+        return None, error_code
+    return {"detected_png": detected_png, "generated_png": generated_png}, ""
+
+
+def _generate_wechat_qr_png(decoded_text: str, cv2) -> tuple[bytes | None, str]:
+    try:
+        import numpy as np
+    except Exception:
+        return None, "missing_dependency"
+    try:
+        qr_image = cv2.QRCodeEncoder_create().encode(decoded_text)
+    except Exception:
+        return None, "encode_failed"
+    qr_image = qr_image.astype(np.uint8)
+    scale = max(1, 360 // max(1, int(qr_image.shape[0])))
+    if scale > 1:
+        qr_image = cv2.resize(qr_image, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+    border = max(16, int(qr_image.shape[0] * 0.08))
     qr_image = cv2.copyMakeBorder(
         qr_image,
         border,
@@ -358,12 +473,19 @@ def _extract_wechat_qr_png(upload) -> tuple[bytes | None, str]:
         border,
         border,
         cv2.BORDER_CONSTANT,
-        value=[255, 255, 255],
+        value=255,
     )
     encoded, output = cv2.imencode(".png", qr_image)
     if not encoded:
         return None, "encode_failed"
     return output.tobytes(), ""
+
+
+def _extract_wechat_qr_png(upload) -> tuple[bytes | None, str]:
+    preview_pair, error_code = _extract_wechat_qr_preview_pair(upload)
+    if error_code:
+        return None, error_code
+    return preview_pair["generated_png"], ""
 
 
 def _save_activity_wechat_qr(activity_id: int, upload) -> tuple[str | None, Path | None, str]:
@@ -395,6 +517,7 @@ def _wechat_qr_upload_error_message(error_code: str) -> str:
         "missing_dependency": "微信群二维码上传失败：当前环境缺少 OpenCV 依赖，请先安装 requirements.txt",
         "decode_failed": "微信群二维码上传失败：无法读取该图片",
         "no_qr": "微信群二维码上传失败：未能在图片中识别出二维码，请上传清晰、无遮挡的二维码照片",
+        "decode_text_failed": "已裁切出疑似二维码，但未能解码内容，暂时无法生成标准黑白二维码",
         "encode_failed": "微信群二维码上传失败：二维码图片处理失败",
         "empty_file": "微信群二维码上传失败：上传文件为空",
     }
@@ -462,19 +585,39 @@ def preview_activity_wechat_qr():
     upload = request.files.get("wechat_qr_file") or request.files.get("insurance_qr_file")
     if not upload or not (upload.filename or "").strip():
         return jsonify({"ok": False, "message": "请先选择一张包含二维码的图片。"}), 400
-    qr_png, error_code = _extract_wechat_qr_png(upload)
-    if not qr_png:
+    preview_pair, error_code = _extract_wechat_qr_preview_pair(upload)
+    if not preview_pair:
         return jsonify(
             {
                 "ok": False,
                 "message": _wechat_qr_upload_error_message(error_code),
             }
         ), 400
+    detected_url = "data:image/png;base64," + base64.b64encode(preview_pair["detected_png"]).decode("ascii")
+    generated_png = preview_pair.get("generated_png")
+    if not generated_png:
+        return jsonify(
+            {
+                "ok": True,
+                "partial": True,
+                "detected_image_data_url": detected_url,
+                "generated_image_data_url": "",
+                "image_data_url": detected_url,
+                "message": _wechat_qr_upload_error_message(error_code),
+            }
+        )
+    message = (
+        "未能解码二维码内容，已根据识别结果二值化并生成黑白兜底图，提交活动后将保存右侧结果。"
+        if error_code == "decode_text_failed"
+        else "已识别二维码内容并生成标准黑白二维码，提交活动后将保存右侧标准黑白结果。"
+    )
     return jsonify(
         {
             "ok": True,
-            "image_data_url": "data:image/png;base64," + base64.b64encode(qr_png).decode("ascii"),
-            "message": "已识别并裁切二维码，提交活动后将保存该结果。",
+            "detected_image_data_url": detected_url,
+            "generated_image_data_url": "data:image/png;base64," + base64.b64encode(generated_png).decode("ascii"),
+            "image_data_url": "data:image/png;base64," + base64.b64encode(generated_png).decode("ascii"),
+            "message": message,
         }
     )
 

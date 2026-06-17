@@ -3034,7 +3034,26 @@ td {
   color: #9a3412;
 }
 
-.wechat-qr-detect-preview img {
+.wechat-qr-preview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.wechat-qr-preview-grid figure {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  margin: 0;
+}
+
+.wechat-qr-preview-grid figcaption {
+  font-size: 12px;
+  color: var(--brand-primary);
+  font-weight: 650;
+}
+
+.wechat-qr-preview-grid img {
   width: 180px;
   max-width: 100%;
   border-radius: 12px;

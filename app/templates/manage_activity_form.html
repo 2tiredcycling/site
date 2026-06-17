@@ -70,11 +70,20 @@
               data-wechat-qr
               {% if not can_edit %}disabled{% endif %}
             >
-            <span class="hint">可上传包含二维码的照片，系统会自动识别并裁切为最终群聊二维码。</span>
+            <span class="hint">可上传包含二维码的照片，系统会自动识别内容并生成标准黑白群聊二维码。</span>
           </label>
           <div class="wechat-qr-detect-preview" data-wechat-qr-preview hidden>
             <p class="hint" data-wechat-qr-status></p>
-            <img data-wechat-qr-preview-image alt="识别后的微信群二维码预览">
+            <div class="wechat-qr-preview-grid">
+              <figure>
+                <img data-wechat-qr-detected-image alt="识别裁切出的二维码预览">
+                <figcaption>识别结果</figcaption>
+              </figure>
+              <figure>
+                <img data-wechat-qr-generated-image alt="重新生成的标准黑白二维码预览">
+                <figcaption>标准黑白结果</figcaption>
+              </figure>
+            </div>
           </div>
           {% if activity and activity.insurance_qr_path %}
             <div class="insurance-qr-preview">
@@ -288,34 +297,41 @@
       const wechatQrInput = document.querySelector("[data-wechat-qr]");
       const wechatQrPreview = document.querySelector("[data-wechat-qr-preview]");
       const wechatQrStatus = document.querySelector("[data-wechat-qr-status]");
-      const wechatQrPreviewImage = document.querySelector("[data-wechat-qr-preview-image]");
+      const wechatQrDetectedImage = document.querySelector("[data-wechat-qr-detected-image]");
+      const wechatQrGeneratedImage = document.querySelector("[data-wechat-qr-generated-image]");
       const csrfToken = document.querySelector("input[name='csrf_token']")?.value || "";
 
-      const setWechatQrPreview = (state, message, imageDataUrl) => {
-        if (!wechatQrPreview || !wechatQrStatus || !wechatQrPreviewImage) {
+      const setWechatQrPreview = (state, message, detectedImageDataUrl, generatedImageDataUrl) => {
+        if (!wechatQrPreview || !wechatQrStatus || !wechatQrDetectedImage || !wechatQrGeneratedImage) {
           return;
         }
         wechatQrPreview.hidden = false;
         wechatQrPreview.dataset.state = state || "";
         wechatQrStatus.textContent = message || "";
-        if (imageDataUrl) {
-          wechatQrPreviewImage.src = imageDataUrl;
-          wechatQrPreviewImage.hidden = false;
+        if (detectedImageDataUrl || generatedImageDataUrl) {
+          wechatQrDetectedImage.src = detectedImageDataUrl || "";
+          wechatQrGeneratedImage.src = generatedImageDataUrl || "";
+          wechatQrDetectedImage.hidden = !detectedImageDataUrl;
+          wechatQrGeneratedImage.hidden = !generatedImageDataUrl;
         } else {
-          wechatQrPreviewImage.removeAttribute("src");
-          wechatQrPreviewImage.hidden = true;
+          wechatQrDetectedImage.removeAttribute("src");
+          wechatQrGeneratedImage.removeAttribute("src");
+          wechatQrDetectedImage.hidden = true;
+          wechatQrGeneratedImage.hidden = true;
         }
       };
 
       const clearWechatQrPreview = () => {
-        if (!wechatQrPreview || !wechatQrStatus || !wechatQrPreviewImage) {
+        if (!wechatQrPreview || !wechatQrStatus || !wechatQrDetectedImage || !wechatQrGeneratedImage) {
           return;
         }
         wechatQrPreview.hidden = true;
         wechatQrPreview.dataset.state = "";
         wechatQrStatus.textContent = "";
-        wechatQrPreviewImage.removeAttribute("src");
-        wechatQrPreviewImage.hidden = true;
+        wechatQrDetectedImage.removeAttribute("src");
+        wechatQrGeneratedImage.removeAttribute("src");
+        wechatQrDetectedImage.hidden = true;
+        wechatQrGeneratedImage.hidden = true;
       };
 
       if (wechatQrInput && !wechatQrInput.disabled) {
@@ -325,7 +341,7 @@
             clearWechatQrPreview();
             return;
           }
-          setWechatQrPreview("loading", "正在识别二维码...", "");
+          setWechatQrPreview("loading", "正在识别二维码...", "", "");
           const formData = new FormData();
           formData.append("csrf_token", csrfToken);
           formData.append("wechat_qr_file", file);
@@ -337,12 +353,17 @@
             });
             const result = await response.json();
             if (!response.ok || !result.ok) {
-              setWechatQrPreview("error", result.message || "二维码识别失败，请换一张更清晰的图片。", "");
+              setWechatQrPreview("error", result.message || "二维码识别失败，请换一张更清晰的图片。", "", "");
               return;
             }
-            setWechatQrPreview("ok", result.message || "二维码识别成功。", result.image_data_url);
+            setWechatQrPreview(
+              "ok",
+              result.message || "二维码识别成功。",
+              result.detected_image_data_url || "",
+              result.generated_image_data_url || result.image_data_url || ""
+            );
           } catch (error) {
-            setWechatQrPreview("error", "二维码识别请求失败，请稍后重试。", "");
+            setWechatQrPreview("error", "二维码识别请求失败，请稍后重试。", "", "");
           }
         });
       }
