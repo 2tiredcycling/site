@@ -278,7 +278,7 @@ def _save_activity_media(activity_id: int, uploads, activity_route_option_id: in
     return saved_count
 
 
-def _save_activity_insurance_qr(activity_id: int, upload) -> tuple[str | None, Path | None]:
+def _save_activity_wechat_qr(activity_id: int, upload) -> tuple[str | None, Path | None]:
     if not upload or not (upload.filename or "").strip():
         return None, None
     media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
@@ -291,7 +291,7 @@ def _save_activity_insurance_qr(activity_id: int, upload) -> tuple[str | None, P
         return None, None
     if not file_size_ok(upload, max_media_bytes):
         return None, None
-    filename = f"insurance_qr_{activity_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{secrets.token_hex(4)}{ext}"
+    filename = f"wechat_group_qr_{activity_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{secrets.token_hex(4)}{ext}"
     target_path = media_dir / filename
     upload.save(target_path)
     return filename, target_path
@@ -2022,11 +2022,11 @@ def create_activity():
             request.files.getlist(f"media_files_{level_key}"),
             activity_route_option_id=option.id,
         )
-    insurance_upload = request.files.get("insurance_qr_file")
-    qr_name, _qr_path = _save_activity_insurance_qr(activity.id, insurance_upload)
-    if insurance_upload and (insurance_upload.filename or "").strip() and not qr_name:
+    wechat_upload = request.files.get("wechat_qr_file") or request.files.get("insurance_qr_file")
+    qr_name, _qr_path = _save_activity_wechat_qr(activity.id, wechat_upload)
+    if wechat_upload and (wechat_upload.filename or "").strip() and not qr_name:
         db.session.rollback()
-        flash("投保二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 且不超过大小限制", "error")
+        flash("微信群二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 且不超过大小限制", "error")
         return redirect(url_for("admin.activity_new_page"))
     if qr_name:
         activity.insurance_qr_path = qr_name
@@ -2101,17 +2101,17 @@ def update_activity(activity_id: int):
             request.files.getlist(f"media_files_{level_key}"),
             activity_route_option_id=option.id,
         )
-    clear_insurance_qr = (request.form.get("clear_insurance_qr") or "").strip() == "1"
+    clear_wechat_qr = (request.form.get("clear_wechat_qr") or request.form.get("clear_insurance_qr") or "").strip() == "1"
     old_qr_path = (activity.insurance_qr_path or "").strip()
     qr_cleanup_paths: list[Path] = []
-    if clear_insurance_qr and old_qr_path:
+    if clear_wechat_qr and old_qr_path:
         qr_cleanup_paths.append(Path(current_app.config["MEDIA_UPLOAD_FOLDER"]) / old_qr_path)
         activity.insurance_qr_path = None
-    insurance_upload = request.files.get("insurance_qr_file")
-    qr_name, _qr_path = _save_activity_insurance_qr(activity.id, insurance_upload)
-    if insurance_upload and (insurance_upload.filename or "").strip() and not qr_name:
+    wechat_upload = request.files.get("wechat_qr_file") or request.files.get("insurance_qr_file")
+    qr_name, _qr_path = _save_activity_wechat_qr(activity.id, wechat_upload)
+    if wechat_upload and (wechat_upload.filename or "").strip() and not qr_name:
         db.session.rollback()
-        flash("投保二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 且不超过大小限制", "error")
+        flash("微信群二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 且不超过大小限制", "error")
         return redirect(url_for("admin.activity_edit_page", activity_id=activity.id))
     if qr_name:
         if old_qr_path:

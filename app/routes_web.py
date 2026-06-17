@@ -1035,16 +1035,15 @@ def event_signup_submit(event_id: int):
     )
 
 
-@bp.get("/events/<int:event_id>/insurance-qr")
-def activity_insurance_qr(event_id: int):
+def _activity_qr_response(event_id: int):
     activity = _activity_detail_or_404(event_id)
     qr_path = (activity.insurance_qr_path or "").strip()
     if not qr_path:
-        abort(404, description="Insurance QR not found")
+        abort(404, description="Activity QR not found")
     media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
     file_path = media_dir / qr_path
     if not file_path.exists() or not file_path.is_file():
-        abort(404, description="Insurance QR missing")
+        abort(404, description="Activity QR missing")
     response = send_from_directory(
         directory=str(media_dir),
         path=qr_path,
@@ -1053,6 +1052,16 @@ def activity_insurance_qr(event_id: int):
     response.cache_control.public = True
     response.cache_control.max_age = 86400
     return response
+
+
+@bp.get("/events/<int:event_id>/wechat-qr")
+def activity_wechat_qr(event_id: int):
+    return _activity_qr_response(event_id)
+
+
+@bp.get("/events/<int:event_id>/insurance-qr")
+def activity_insurance_qr(event_id: int):
+    return _activity_qr_response(event_id)
 
 
 @bp.get("/download/<int:route_id>")

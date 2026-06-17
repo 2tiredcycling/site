@@ -62,22 +62,22 @@
             <span class="hint">仅在“需要报名”开启时生效。</span>
           </label>
           <label>
-            投保二维码（仅 1 张）
+            微信群二维码（仅 1 张）
             <input
               type="file"
-              name="insurance_qr_file"
+              name="wechat_qr_file"
               accept="image/*"
-              data-insurance-qr
+              data-wechat-qr
               {% if not can_edit %}disabled{% endif %}
             >
-            <span class="hint">报名页会展示该二维码，供成员扫码投保。</span>
+            <span class="hint">用于活动报名后引导成员加入对应微信群。</span>
           </label>
           {% if activity and activity.insurance_qr_path %}
             <div class="insurance-qr-preview">
-              <img src="{{ url_for('web.activity_insurance_qr', event_id=activity.id) }}" alt="投保二维码预览" loading="lazy">
+              <img src="{{ url_for('web.activity_wechat_qr', event_id=activity.id) }}" alt="微信群二维码预览" loading="lazy">
               {% if can_edit %}
                 <label class="checkbox-inline">
-                  <input type="checkbox" name="clear_insurance_qr" value="1">
+                  <input type="checkbox" name="clear_wechat_qr" value="1">
                   <span>删除当前二维码</span>
                 </label>
               {% endif %}
@@ -281,17 +281,17 @@
       const needsRegistration = document.querySelector("input[name='needs_registration']");
       const registrationDeadline = document.querySelector("[data-registration-deadline]");
       const registrationLimit = document.querySelector("[data-registration-limit]");
-      const insuranceQrInput = document.querySelector("[data-insurance-qr]");
-      if (needsRegistration && registrationDeadline && registrationLimit && insuranceQrInput && !needsRegistration.disabled) {
+      const wechatQrInput = document.querySelector("[data-wechat-qr]");
+      if (needsRegistration && registrationDeadline && registrationLimit && wechatQrInput && !needsRegistration.disabled) {
         const syncRegistration = () => {
           const enabled = needsRegistration.checked;
           registrationDeadline.disabled = !enabled;
           registrationLimit.disabled = !enabled;
-          insuranceQrInput.disabled = !enabled;
+          wechatQrInput.disabled = !enabled;
           if (!enabled) {
             registrationDeadline.value = "";
             registrationLimit.value = "";
-            insuranceQrInput.value = "";
+            wechatQrInput.value = "";
           }
         };
         needsRegistration.addEventListener("change", syncRegistration);
