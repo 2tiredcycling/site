@@ -1222,6 +1222,7 @@ def activity_registrations_page(activity_id: int):
             {
                 "id": item.id,
                 "name": item.name,
+                "student_id": item.student_id,
                 "route_display": route_display,
                 "status": item.status,
                 "created_at": item.created_at,

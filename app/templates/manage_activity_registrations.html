@@ -34,9 +34,9 @@
           <tr>
             <th>ID</th>
             <th>姓名</th>
+            <th>学号</th>
             <th>报名路线</th>
             <th>影像授权</th>
-            <th>状态</th>
             <th>提交时间</th>
             <th>来源 IP</th>
           </tr>
@@ -46,9 +46,9 @@
             <tr>
               <td>{{ item.id }}</td>
               <td>{{ item.name }}</td>
+              <td>{{ item.student_id or '-' }}</td>
               <td>{{ item.route_display }}</td>
               <td>{{ item.image_consent_display }}</td>
-              <td>{{ item.status }}</td>
               <td>{{ to_local_time(item.created_at).strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</td>
               <td>{{ item.source_ip or '-' }}</td>
             </tr>
