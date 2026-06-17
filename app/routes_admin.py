@@ -1,3 +1,4 @@
+import base64
 import csv
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -278,9 +279,96 @@ def _save_activity_media(activity_id: int, uploads, activity_route_option_id: in
     return saved_count
 
 
-def _save_activity_wechat_qr(activity_id: int, upload) -> tuple[str | None, Path | None]:
+def _extract_wechat_qr_png(upload) -> tuple[bytes | None, str]:
+    try:
+        import cv2
+        import numpy as np
+    except Exception:
+        return None, "missing_dependency"
+
+    current_pos = upload.stream.tell()
+    upload.stream.seek(0)
+    raw_bytes = upload.stream.read()
+    upload.stream.seek(current_pos)
+    if not raw_bytes:
+        return None, "empty_file"
+
+    image_data = np.frombuffer(raw_bytes, dtype=np.uint8)
+    image = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+    if image is None:
+        return None, "decode_failed"
+
+    def detect_qr_points(candidate_image):
+        detector = cv2.QRCodeDetector()
+        try:
+            _decoded_text, points, _straight_qr = detector.detectAndDecode(candidate_image)
+        except Exception:
+            points = None
+        if points is None:
+            detected, points = detector.detect(candidate_image)
+            if not detected:
+                points = None
+        if points is None:
+            return None
+        points = np.asarray(points, dtype=np.float32).reshape(-1, 2)
+        if points.shape[0] < 4:
+            return None
+        return points[:4]
+
+    selected_image = image
+    points = detect_qr_points(image)
+    if points is None:
+        inverted_image = cv2.bitwise_not(image)
+        points = detect_qr_points(inverted_image)
+        if points is not None:
+            selected_image = inverted_image
+    if points is None:
+        return None, "no_qr"
+
+    sums = points.sum(axis=1)
+    diffs = np.diff(points, axis=1).reshape(-1)
+    ordered = np.array(
+        [
+            points[np.argmin(sums)],
+            points[np.argmin(diffs)],
+            points[np.argmax(sums)],
+            points[np.argmax(diffs)],
+        ],
+        dtype=np.float32,
+    )
+    width_top = np.linalg.norm(ordered[1] - ordered[0])
+    width_bottom = np.linalg.norm(ordered[2] - ordered[3])
+    height_right = np.linalg.norm(ordered[2] - ordered[1])
+    height_left = np.linalg.norm(ordered[3] - ordered[0])
+    side = int(max(width_top, width_bottom, height_right, height_left))
+    if side < 40:
+        return None, "no_qr"
+
+    target = np.array(
+        [[0, 0], [side - 1, 0], [side - 1, side - 1], [0, side - 1]],
+        dtype=np.float32,
+    )
+    matrix = cv2.getPerspectiveTransform(ordered, target)
+    qr_image = cv2.warpPerspective(selected_image, matrix, (side, side))
+    border = max(12, int(side * 0.06))
+    qr_image = cv2.copyMakeBorder(
+        qr_image,
+        border,
+        border,
+        border,
+        border,
+        cv2.BORDER_CONSTANT,
+        value=[255, 255, 255],
+    )
+    encoded, output = cv2.imencode(".png", qr_image)
+    if not encoded:
+        return None, "encode_failed"
+    return output.tobytes(), ""
+
+
+def _save_activity_wechat_qr(activity_id: int, upload) -> tuple[str | None, Path | None, str]:
     if not upload or not (upload.filename or "").strip():
-        return None, None
+        return None, None, ""
     media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
     media_dir.mkdir(parents=True, exist_ok=True)
     original_name = secure_filename(Path(upload.filename).name)
@@ -288,13 +376,29 @@ def _save_activity_wechat_qr(activity_id: int, upload) -> tuple[str | None, Path
     allowed_image_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
     max_media_bytes = int(current_app.config.get("MAX_MEDIA_BYTES", 10 * 1024 * 1024))
     if not original_name or ext not in allowed_image_exts:
-        return None, None
+        return None, None, "invalid_type"
     if not file_size_ok(upload, max_media_bytes):
-        return None, None
-    filename = f"wechat_group_qr_{activity_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{secrets.token_hex(4)}{ext}"
+        return None, None, "too_large"
+    qr_png, error_code = _extract_wechat_qr_png(upload)
+    if not qr_png:
+        return None, None, error_code or "qr_extract_failed"
+    filename = f"wechat_group_qr_{activity_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{secrets.token_hex(4)}.png"
     target_path = media_dir / filename
-    upload.save(target_path)
-    return filename, target_path
+    target_path.write_bytes(qr_png)
+    return filename, target_path, ""
+
+
+def _wechat_qr_upload_error_message(error_code: str) -> str:
+    messages = {
+        "invalid_type": "微信群二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 图片",
+        "too_large": "微信群二维码上传失败：图片超过大小限制",
+        "missing_dependency": "微信群二维码上传失败：当前环境缺少 OpenCV 依赖，请先安装 requirements.txt",
+        "decode_failed": "微信群二维码上传失败：无法读取该图片",
+        "no_qr": "微信群二维码上传失败：未能在图片中识别出二维码，请上传清晰、无遮挡的二维码照片",
+        "encode_failed": "微信群二维码上传失败：二维码图片处理失败",
+        "empty_file": "微信群二维码上传失败：上传文件为空",
+    }
+    return messages.get(error_code or "", "微信群二维码上传失败：请上传清晰的二维码图片")
 
 
 @bp.before_app_request
@@ -350,6 +454,29 @@ def _inject_csrf_token():
         "to_local_time": _to_local_time,
         "app_version": _display_app_version(),
     }
+
+
+@bp.post("/activities/wechat-qr/preview")
+@login_required
+def preview_activity_wechat_qr():
+    upload = request.files.get("wechat_qr_file") or request.files.get("insurance_qr_file")
+    if not upload or not (upload.filename or "").strip():
+        return jsonify({"ok": False, "message": "请先选择一张包含二维码的图片。"}), 400
+    qr_png, error_code = _extract_wechat_qr_png(upload)
+    if not qr_png:
+        return jsonify(
+            {
+                "ok": False,
+                "message": _wechat_qr_upload_error_message(error_code),
+            }
+        ), 400
+    return jsonify(
+        {
+            "ok": True,
+            "image_data_url": "data:image/png;base64," + base64.b64encode(qr_png).decode("ascii"),
+            "message": "已识别并裁切二维码，提交活动后将保存该结果。",
+        }
+    )
 
 
 @bp.get("/login")
@@ -2024,10 +2151,10 @@ def create_activity():
             activity_route_option_id=option.id,
         )
     wechat_upload = request.files.get("wechat_qr_file") or request.files.get("insurance_qr_file")
-    qr_name, _qr_path = _save_activity_wechat_qr(activity.id, wechat_upload)
+    qr_name, _qr_path, qr_error = _save_activity_wechat_qr(activity.id, wechat_upload)
     if wechat_upload and (wechat_upload.filename or "").strip() and not qr_name:
         db.session.rollback()
-        flash("微信群二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 且不超过大小限制", "error")
+        flash(_wechat_qr_upload_error_message(qr_error), "error")
         return redirect(url_for("admin.activity_new_page"))
     if qr_name:
         activity.insurance_qr_path = qr_name
@@ -2109,10 +2236,10 @@ def update_activity(activity_id: int):
         qr_cleanup_paths.append(Path(current_app.config["MEDIA_UPLOAD_FOLDER"]) / old_qr_path)
         activity.insurance_qr_path = None
     wechat_upload = request.files.get("wechat_qr_file") or request.files.get("insurance_qr_file")
-    qr_name, _qr_path = _save_activity_wechat_qr(activity.id, wechat_upload)
+    qr_name, _qr_path, qr_error = _save_activity_wechat_qr(activity.id, wechat_upload)
     if wechat_upload and (wechat_upload.filename or "").strip() and not qr_name:
         db.session.rollback()
-        flash("微信群二维码上传失败：仅支持 jpg/jpeg/png/webp/gif 且不超过大小限制", "error")
+        flash(_wechat_qr_upload_error_message(qr_error), "error")
         return redirect(url_for("admin.activity_edit_page", activity_id=activity.id))
     if qr_name:
         if old_qr_path:

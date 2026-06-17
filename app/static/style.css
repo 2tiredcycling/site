@@ -3008,6 +3008,41 @@ td {
   justify-items: start;
 }
 
+.wechat-qr-detect-preview {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  border: 1px dashed color-mix(in srgb, var(--brand-border-strong) 56%, #ffffff 44%);
+  border-radius: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%);
+}
+
+.wechat-qr-detect-preview[hidden] {
+  display: none;
+}
+
+.wechat-qr-detect-preview .hint {
+  margin: 0;
+}
+
+.wechat-qr-detect-preview[data-state="ok"] .hint {
+  color: #166534;
+}
+
+.wechat-qr-detect-preview[data-state="error"] .hint {
+  color: #9a3412;
+}
+
+.wechat-qr-detect-preview img {
+  width: 180px;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+  background: #fff;
+  padding: 8px;
+}
+
 .insurance-qr-preview img {
   width: 180px;
   max-width: 100%;

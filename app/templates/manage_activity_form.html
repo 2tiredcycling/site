@@ -70,8 +70,12 @@
               data-wechat-qr
               {% if not can_edit %}disabled{% endif %}
             >
-            <span class="hint">用于活动报名后引导成员加入对应微信群。</span>
+            <span class="hint">可上传包含二维码的照片，系统会自动识别并裁切为最终群聊二维码。</span>
           </label>
+          <div class="wechat-qr-detect-preview" data-wechat-qr-preview hidden>
+            <p class="hint" data-wechat-qr-status></p>
+            <img data-wechat-qr-preview-image alt="识别后的微信群二维码预览">
+          </div>
           {% if activity and activity.insurance_qr_path %}
             <div class="insurance-qr-preview">
               <img src="{{ url_for('web.activity_wechat_qr', event_id=activity.id) }}" alt="微信群二维码预览" loading="lazy">
@@ -282,6 +286,67 @@
       const registrationDeadline = document.querySelector("[data-registration-deadline]");
       const registrationLimit = document.querySelector("[data-registration-limit]");
       const wechatQrInput = document.querySelector("[data-wechat-qr]");
+      const wechatQrPreview = document.querySelector("[data-wechat-qr-preview]");
+      const wechatQrStatus = document.querySelector("[data-wechat-qr-status]");
+      const wechatQrPreviewImage = document.querySelector("[data-wechat-qr-preview-image]");
+      const csrfToken = document.querySelector("input[name='csrf_token']")?.value || "";
+
+      const setWechatQrPreview = (state, message, imageDataUrl) => {
+        if (!wechatQrPreview || !wechatQrStatus || !wechatQrPreviewImage) {
+          return;
+        }
+        wechatQrPreview.hidden = false;
+        wechatQrPreview.dataset.state = state || "";
+        wechatQrStatus.textContent = message || "";
+        if (imageDataUrl) {
+          wechatQrPreviewImage.src = imageDataUrl;
+          wechatQrPreviewImage.hidden = false;
+        } else {
+          wechatQrPreviewImage.removeAttribute("src");
+          wechatQrPreviewImage.hidden = true;
+        }
+      };
+
+      const clearWechatQrPreview = () => {
+        if (!wechatQrPreview || !wechatQrStatus || !wechatQrPreviewImage) {
+          return;
+        }
+        wechatQrPreview.hidden = true;
+        wechatQrPreview.dataset.state = "";
+        wechatQrStatus.textContent = "";
+        wechatQrPreviewImage.removeAttribute("src");
+        wechatQrPreviewImage.hidden = true;
+      };
+
+      if (wechatQrInput && !wechatQrInput.disabled) {
+        wechatQrInput.addEventListener("change", async () => {
+          const file = wechatQrInput.files && wechatQrInput.files[0];
+          if (!file) {
+            clearWechatQrPreview();
+            return;
+          }
+          setWechatQrPreview("loading", "正在识别二维码...", "");
+          const formData = new FormData();
+          formData.append("csrf_token", csrfToken);
+          formData.append("wechat_qr_file", file);
+          try {
+            const response = await fetch("{{ url_for('admin.preview_activity_wechat_qr') }}", {
+              method: "POST",
+              body: formData,
+              headers: { "Accept": "application/json" }
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+              setWechatQrPreview("error", result.message || "二维码识别失败，请换一张更清晰的图片。", "");
+              return;
+            }
+            setWechatQrPreview("ok", result.message || "二维码识别成功。", result.image_data_url);
+          } catch (error) {
+            setWechatQrPreview("error", "二维码识别请求失败，请稍后重试。", "");
+          }
+        });
+      }
+
       if (needsRegistration && registrationDeadline && registrationLimit && wechatQrInput && !needsRegistration.disabled) {
         const syncRegistration = () => {
           const enabled = needsRegistration.checked;
@@ -292,6 +357,7 @@
             registrationDeadline.value = "";
             registrationLimit.value = "";
             wechatQrInput.value = "";
+            clearWechatQrPreview();
           }
         };
         needsRegistration.addEventListener("change", syncRegistration);
