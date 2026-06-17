@@ -25,6 +25,10 @@
       <section class="event-signup-success-hero">
         <p class="hero-kicker">Signup Complete</p>
         <h1>{{ '报名信息已更新' if updated else '报名成功' }}</h1>
+        <div class="event-signup-success-time">
+          <strong>集合时间</strong>
+          <span>{{ to_local_time(display_time).strftime('%Y-%m-%d %H:%M') if display_time else '待定' }}</span>
+        </div>
         <p>请加入本次活动群聊，后续集合安排、路线提醒和临时通知都会在群内同步。</p>
       </section>
 
@@ -45,7 +49,7 @@
           <h2>报名摘要</h2>
           <div class="event-signup-summary">
             <div><strong>活动名称</strong><span>{{ activity.title }}</span></div>
-            <div><strong>活动日期</strong><span>{{ to_local_time(display_time).strftime('%Y-%m-%d') if display_time else '待定' }}</span></div>
+            <div><strong>集合时间</strong><span>{{ to_local_time(display_time).strftime('%Y-%m-%d %H:%M') if display_time else '待定' }}</span></div>
             {% if selected_option %}
               <div class="event-signup-summary-wide"><strong>报名路线</strong><span>{{ selected_option.level_label or '路线' }} · {{ selected_option.route.route_name if selected_option.route else '待分配' }}</span></div>
             {% endif %}

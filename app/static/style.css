@@ -2640,6 +2640,28 @@ td {
   line-height: 1.08;
 }
 
+.event-signup-success-time {
+  display: inline-grid;
+  gap: 4px;
+  margin: 2px 0 12px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--brand-border-strong) 60%, #ffffff 40%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-surface) 86%, #ffffff 14%);
+}
+
+.event-signup-success-time strong {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.event-signup-success-time span {
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--brand-primary-strong);
+  font-weight: 750;
+}
+
 .event-signup-success-hero p {
   margin: 0;
   max-width: 720px;
