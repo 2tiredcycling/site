@@ -46,11 +46,22 @@
           <h2>报名信息</h2>
           <form class="event-signup-form" action="{{ url_for('web.event_signup_submit', event_id=activity.id) }}" method="post">
             <input type="hidden" name="source" value="{{ source or '' }}">
+            {% if duplicate_registration_id %}
+              <input type="hidden" name="update_registration_id" value="{{ duplicate_registration_id }}">
+              <div class="alert alert-ok">
+                检测到该学号已报名本活动。确认后将修改原报名信息，不会新增重复报名。
+              </div>
+            {% endif %}
             <div class="event-signup-top-grid">
               <div class="event-signup-left-fields">
                 <label>
                   姓名
                   <input id="signupNameInput" name="name" type="text" placeholder="请输入姓名" autocomplete="name" required value="{{ submitted_name or '' }}">
+                </label>
+
+                <label>
+                  学号
+                  <input id="signupStudentIdInput" name="student_id" type="text" placeholder="请输入学号" autocomplete="off" required value="{{ submitted_student_id or '' }}">
                 </label>
 
                 {% if selected_option %}
@@ -69,18 +80,6 @@
                       {% endfor %}
                     </select>
                   </label>
-                {% endif %}
-                {% if insurance_qr_url %}
-                  <p class="hint event-signup-insurance-hint">请先扫码完成投保，再提交报名信息。</p>
-                {% endif %}
-              </div>
-
-              <div class="event-signup-insurance">
-                <h3>投保二维码</h3>
-                {% if insurance_qr_url %}
-                  <img src="{{ insurance_qr_url }}" alt="活动投保二维码" loading="lazy">
-                {% else %}
-                  <p class="hint">管理员暂未上传投保二维码，请稍后再试。</p>
                 {% endif %}
               </div>
             </div>
@@ -105,7 +104,7 @@
 
             <button id="signupSubmitBtn" type="submit" class="btn btn-solid event-signup-submit-btn">
               <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span>
-              <span>{{ '提交报名' if signup_open else '暂停报名' }}</span>
+              <span>{{ '确认修改报名信息' if duplicate_registration_id else ('提交报名' if signup_open else '暂停报名') }}</span>
             </button>
             <p id="signupInlineHint" class="event-signup-inline-hint"></p>
           </form>
@@ -132,8 +131,7 @@
           <div class="event-signup-notes">
             <h3>报名说明</h3>
             <ul>
-              <li>报名前请先扫描左侧二维码完成投保。</li>
-              <li>投保所需实名及证件信息由保险公司独立收集和处理，社团原则上不直接收集、保存相关证件号码。</li>
+              <li>请按页面要求填写报名信息，并确认所选路线符合自身骑行经验与体能状况。</li>
               <li>若显示“暂停报名”，请关注下一次活动安排。</li>
             </ul>
           </div>
@@ -198,18 +196,21 @@
     (function () {
       const signupOpen = {{ 'true' if signup_open else 'false' }};
       const nameInput = document.getElementById('signupNameInput');
+      const studentIdInput = document.getElementById('signupStudentIdInput');
       const requiredConsent = document.getElementById('consentRequired');
       const submitBtn = document.getElementById('signupSubmitBtn');
       const routeSelect = document.getElementById('signupRouteSelect');
       const inlineHint = document.getElementById('signupInlineHint');
-      if (!nameInput || !requiredConsent || !submitBtn) return;
+      if (!nameInput || !studentIdInput || !requiredConsent || !submitBtn) return;
 
       const sync = function () {
         const hasName = Boolean((nameInput.value || '').trim());
+        const hasStudentId = Boolean((studentIdInput.value || '').trim());
         const hasRoute = routeSelect ? Boolean((routeSelect.value || '').trim()) : true;
-        const canSubmit = Boolean(signupOpen && hasName && hasRoute && requiredConsent.checked);
+        const canSubmit = Boolean(signupOpen && hasName && hasStudentId && hasRoute && requiredConsent.checked);
         const missing = [];
         if (!hasName) missing.push('姓名');
+        if (!hasStudentId) missing.push('学号');
         if (!hasRoute) missing.push('报名路线');
         if (!requiredConsent.checked) missing.push('已阅读并同意活动须知');
         submitBtn.disabled = !canSubmit;
@@ -224,6 +225,7 @@
         }
       };
       nameInput.addEventListener('input', sync);
+      studentIdInput.addEventListener('input', sync);
       requiredConsent.addEventListener('change', sync);
       if (routeSelect) {
         routeSelect.addEventListener('change', sync);

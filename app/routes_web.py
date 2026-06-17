@@ -269,6 +269,8 @@ def _render_event_signup(
     error_message: str = "",
     success_message: str = "",
     submitted_name: str = "",
+    submitted_student_id: str = "",
+    duplicate_registration_id: int | None = None,
 ) -> str:
     display_time = _event_display_date(activity)
     signup_open = _activity_signup_open(activity)
@@ -279,7 +281,6 @@ def _render_event_signup(
         activity=activity,
         display_time=display_time,
         signup_open=signup_open,
-        insurance_qr_url=(_url_for("web.activity_insurance_qr", event_id=activity.id) if activity.insurance_qr_path else None),
         selected_option=selected_option,
         route_cards=route_cards,
         back_url=back_url,
@@ -288,6 +289,8 @@ def _render_event_signup(
         error_message=error_message,
         success_message=success_message,
         submitted_name=submitted_name,
+        submitted_student_id=submitted_student_id,
+        duplicate_registration_id=duplicate_registration_id,
         meta_description=f"{activity.title} 活动报名页（建设中）。",
     )
 
@@ -832,7 +835,8 @@ def event_signup(event_id: int) -> str:
         selected_option = ActivityRouteOption.query.filter_by(id=option_id, activity_id=activity.id).first()
     source = (request.args.get("source") or "").strip()
     success = (request.args.get("success") or "").strip() == "1"
-    success_message = "报名成功，已记录你的报名信息。"
+    updated = (request.args.get("updated") or "").strip() == "1"
+    success_message = "报名信息已更新。" if updated else "报名成功，已记录你的报名信息。"
     return _render_event_signup(
         activity=activity,
         source=source,
@@ -846,9 +850,11 @@ def event_signup_submit(event_id: int):
     activity = _activity_detail_or_404(event_id)
     source = (request.form.get("source") or "").strip()
     name = (request.form.get("name") or "").strip()
+    student_id = (request.form.get("student_id") or "").strip()
     option_id = request.form.get("option_id", type=int)
     required_consent = (request.form.get("consent_required") or "").strip() == "1"
     image_consent = (request.form.get("consent_image") or "").strip() == "1"
+    update_registration_id = request.form.get("update_registration_id", type=int)
     source_ip = (client_ip() or "")[:64]
 
     selected_option = None
@@ -864,6 +870,7 @@ def event_signup_submit(event_id: int):
             selected_option=selected_option,
             error_message="请先填写姓名。",
             submitted_name=name,
+            submitted_student_id=student_id,
         )
     if len(name) > 64:
         return _render_event_signup(
@@ -872,6 +879,25 @@ def event_signup_submit(event_id: int):
             selected_option=selected_option,
             error_message="姓名长度不能超过 64 个字符。",
             submitted_name=name[:64],
+            submitted_student_id=student_id,
+        )
+    if len(student_id) < 1:
+        return _render_event_signup(
+            activity=activity,
+            source=source,
+            selected_option=selected_option,
+            error_message="请先填写学号。",
+            submitted_name=name,
+            submitted_student_id=student_id,
+        )
+    if len(student_id) > 32:
+        return _render_event_signup(
+            activity=activity,
+            source=source,
+            selected_option=selected_option,
+            error_message="学号长度不能超过 32 个字符。",
+            submitted_name=name,
+            submitted_student_id=student_id[:32],
         )
     if requires_route_choice:
         return _render_event_signup(
@@ -880,6 +906,7 @@ def event_signup_submit(event_id: int):
             selected_option=None,
             error_message="请选择报名路线后再提交。",
             submitted_name=name,
+            submitted_student_id=student_id,
         )
     if not required_consent:
         return _render_event_signup(
@@ -888,6 +915,7 @@ def event_signup_submit(event_id: int):
             selected_option=selected_option,
             error_message="请先勾选并同意活动须知与风险告知。",
             submitted_name=name,
+            submitted_student_id=student_id,
         )
     if not _activity_signup_open(activity):
         return _render_event_signup(
@@ -896,25 +924,27 @@ def event_signup_submit(event_id: int):
             selected_option=selected_option,
             error_message="当前活动未开放报名，请关注下一次活动安排。",
             submitted_name=name,
+            submitted_student_id=student_id,
         )
 
-    duplicate_exists = (
-        db.session.query(EventRegistration.id)
+    existing_registration = (
+        EventRegistration.query
         .filter(
             EventRegistration.activity_id == activity.id,
-            db.func.lower(EventRegistration.name) == name.lower(),
-            EventRegistration.source_ip == source_ip,
+            db.func.lower(EventRegistration.student_id) == student_id.lower(),
+            EventRegistration.status.in_([REGISTRATION_PENDING, REGISTRATION_CONFIRMED]),
         )
         .first()
-        is not None
     )
-    if duplicate_exists:
+    if existing_registration and update_registration_id != existing_registration.id:
         return _render_event_signup(
             activity=activity,
             source=source,
             selected_option=selected_option,
-            error_message="该姓名已完成报名，请勿重复提交。如需修改请联系管理员。",
+            error_message="该学号已提交过本活动报名。请确认是否修改原报名信息。",
             submitted_name=name,
+            submitted_student_id=student_id,
+            duplicate_registration_id=existing_registration.id,
         )
 
     note_parts = []
@@ -925,20 +955,51 @@ def event_signup_submit(event_id: int):
     note_parts.append(f"image_consent={'1' if image_consent else '0'}")
     notes = "; ".join(note_parts)
 
-    registration = EventRegistration(
-        activity_id=activity.id,
-        name=name,
-        status=REGISTRATION_PENDING,
-        source_ip=source_ip,
-        user_agent=(request.user_agent.string or "")[:255],
-        notes=notes[:1000],
-        created_at=utcnow(),
-        updated_at=utcnow(),
-    )
-    db.session.add(registration)
-    activity.participant_count = int(activity.participant_count or 0) + 1
-    if selected_option:
-        selected_option.participant_count = int(selected_option.participant_count or 0) + 1
+    if existing_registration and update_registration_id == existing_registration.id:
+        previous_note_map = dict(
+            item.split("=", 1)
+            for item in (existing_registration.notes or "").split("; ")
+            if "=" in item
+        )
+        previous_option_id = None
+        try:
+            previous_option_id = int(previous_note_map.get("route_option_id") or 0) or None
+        except ValueError:
+            previous_option_id = None
+
+        existing_registration.name = name
+        existing_registration.student_id = student_id
+        existing_registration.source_ip = source_ip
+        existing_registration.user_agent = (request.user_agent.string or "")[:255]
+        existing_registration.notes = notes[:1000]
+        existing_registration.updated_at = utcnow()
+
+        if previous_option_id != (selected_option.id if selected_option else None):
+            if previous_option_id:
+                previous_option = ActivityRouteOption.query.filter_by(
+                    id=previous_option_id,
+                    activity_id=activity.id,
+                ).first()
+                if previous_option:
+                    previous_option.participant_count = max(0, int(previous_option.participant_count or 0) - 1)
+            if selected_option:
+                selected_option.participant_count = int(selected_option.participant_count or 0) + 1
+    else:
+        registration = EventRegistration(
+            activity_id=activity.id,
+            name=name,
+            student_id=student_id,
+            status=REGISTRATION_PENDING,
+            source_ip=source_ip,
+            user_agent=(request.user_agent.string or "")[:255],
+            notes=notes[:1000],
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        db.session.add(registration)
+        activity.participant_count = int(activity.participant_count or 0) + 1
+        if selected_option:
+            selected_option.participant_count = int(selected_option.participant_count or 0) + 1
     db.session.commit()
 
     return redirect(
@@ -947,6 +1008,7 @@ def event_signup_submit(event_id: int):
             event_id=activity.id,
             source=source,
             **({"option_id": selected_option.id} if selected_option else {}),
+            **({"updated": 1} if existing_registration and update_registration_id == existing_registration.id else {}),
             success=1,
         )
     )

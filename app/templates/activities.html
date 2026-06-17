@@ -49,8 +49,8 @@
         {% for activity in activities %}
           {% set activity_date = to_local_time(event_display_date_map.get(activity.id)).strftime('%Y-%m-%d') if is_events_view and event_display_date_map and event_display_date_map.get(activity.id) else (to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity.activity_time else '-') %}
           {% set is_upcoming = activity_date != '-' and today_local_date and activity_date > today_local_date %}
-          {% set allow_signup = is_beta_view and is_events_view and signup_open_map and signup_open_map.get(activity.id) %}
-          {% set signup_paused = is_beta_view and is_events_view and is_upcoming and activity.needs_registration and not allow_signup %}
+          {% set allow_signup = is_events_view and signup_open_map and signup_open_map.get(activity.id) %}
+          {% set signup_paused = is_events_view and is_upcoming and activity.needs_registration and not allow_signup %}
           <li class="activity-timeline-item" data-date="{{ activity_date }}" data-title="{{ activity.title|lower }}" data-routes="{{ (activity.routes | map(attribute='route_name') | join(' '))|lower if activity.routes else '' }}">
             <div class="activity-time-rail">
               <span class="activity-time-dot"></span>
