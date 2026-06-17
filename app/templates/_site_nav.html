@@ -7,7 +7,7 @@
     <a class="quick-pill {% if ep.endswith('.about_page') %}is-active{% endif %}" href="{{ url_for('web.about_page') }}" {% if ep.endswith('.about_page') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-book"></use></svg></span><span>社团介绍</span>
     </a>
-    <a class="quick-pill {% if ep.endswith('.events_list') or ep.endswith('.events_detail') or ep.endswith('.activity_list') or ep.endswith('.activity_detail') or ep.endswith('.event_signup') %}is-active{% endif %}" href="{{ url_for('web.events_list') }}" {% if ep.endswith('.events_list') or ep.endswith('.events_detail') or ep.endswith('.activity_list') or ep.endswith('.activity_detail') or ep.endswith('.event_signup') %}aria-current="page"{% endif %}>
+    <a class="quick-pill {% if ep.endswith('.events_list') or ep.endswith('.events_detail') or ep.endswith('.activity_list') or ep.endswith('.activity_detail') or ep.endswith('.event_signup') or ep.endswith('.event_signup_success') %}is-active{% endif %}" href="{{ url_for('web.events_list') }}" {% if ep.endswith('.events_list') or ep.endswith('.events_detail') or ep.endswith('.activity_list') or ep.endswith('.activity_detail') or ep.endswith('.event_signup') or ep.endswith('.event_signup_success') %}aria-current="page"{% endif %}>
       <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span><span>活动</span>
     </a>
     <a class="quick-pill {% if ep.endswith('.routes_center') or ep.endswith('.route_detail') %}is-active{% endif %}" href="{{ url_for('web.routes_center') }}" {% if ep.endswith('.routes_center') or ep.endswith('.route_detail') %}aria-current="page"{% endif %}>

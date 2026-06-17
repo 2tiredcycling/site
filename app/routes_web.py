@@ -845,6 +845,36 @@ def event_signup(event_id: int) -> str:
     )
 
 
+@bp.get("/events/<int:event_id>/signup/success")
+def event_signup_success(event_id: int) -> str:
+    activity = _activity_detail_or_404(event_id)
+    source = (request.args.get("source") or "").strip()
+    option_id = request.args.get("option_id", type=int)
+    updated = (request.args.get("updated") or "").strip() == "1"
+    selected_option = None
+    if option_id:
+        selected_option = ActivityRouteOption.query.filter_by(id=option_id, activity_id=activity.id).first()
+    display_time = _event_display_date(activity)
+    back_url, back_label = _event_signup_back_target(activity, source)
+    has_group_qr = False
+    qr_path = (activity.insurance_qr_path or "").strip()
+    if qr_path:
+        file_path = Path(current_app.config["MEDIA_UPLOAD_FOLDER"]) / qr_path
+        has_group_qr = file_path.exists() and file_path.is_file()
+    return render_template(
+        "event_signup_success.html",
+        activity=activity,
+        display_time=display_time,
+        selected_option=selected_option,
+        source=source,
+        updated=updated,
+        back_url=back_url,
+        back_label=back_label,
+        has_group_qr=has_group_qr,
+        meta_description=f"{activity.title} 报名成功，请加入活动群聊。",
+    )
+
+
 @bp.get("/events/<int:event_id>/signup/check-student")
 def event_signup_check_student(event_id: int):
     _activity_detail_or_404(event_id)
@@ -1025,12 +1055,11 @@ def event_signup_submit(event_id: int):
 
     return redirect(
         _url_for(
-            "web.event_signup",
+            "web.event_signup_success",
             event_id=activity.id,
             source=source,
             **({"option_id": selected_option.id} if selected_option else {}),
             **({"updated": 1} if existing_registration and update_registration_id == existing_registration.id else {}),
-            success=1,
         )
     )
 

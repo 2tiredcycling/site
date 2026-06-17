@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ activity.title }} | 报名成功 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '2Tired 骑行社活动报名成功页。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+
+    <section class="card form-card event-signup-card event-signup-success-card">
+      <div class="event-signup-head">
+        <a class="btn btn-muted" href="{{ back_url or url_for('web.events_list') }}">
+          <span class="home-icon-badge"><svg class="home-icon-svg home-icon-back"><use href="#i-back"></use></svg></span>
+          <span>{{ back_label or '返回活动中心' }}</span>
+        </a>
+      </div>
+
+      <section class="event-signup-success-hero">
+        <p class="hero-kicker">Signup Complete</p>
+        <h1>{{ '报名信息已更新' if updated else '报名成功' }}</h1>
+        <p>请加入本次活动群聊，后续集合安排、路线提醒和临时通知都会在群内同步。</p>
+      </section>
+
+      <section class="event-signup-success-layout">
+        <section class="event-signup-panel event-signup-success-main">
+          <h2>活动群聊</h2>
+          {% if has_group_qr %}
+            <div class="event-signup-group-qr">
+              <img src="{{ url_for('web.activity_wechat_qr', event_id=activity.id) }}" alt="活动微信群二维码" loading="eager">
+            </div>
+            <p class="hint event-signup-success-hint">扫码加入活动群后，请留意群内通知并按时到达集合点。</p>
+          {% else %}
+            <div class="alert">本次活动暂未上传微信群二维码，请稍后返回查看或联系活动负责人。</div>
+          {% endif %}
+        </section>
+
+        <aside class="event-signup-panel event-signup-success-side">
+          <h2>报名摘要</h2>
+          <div class="event-signup-summary">
+            <div><strong>活动名称</strong><span>{{ activity.title }}</span></div>
+            <div><strong>活动日期</strong><span>{{ to_local_time(display_time).strftime('%Y-%m-%d') if display_time else '待定' }}</span></div>
+            {% if selected_option %}
+              <div class="event-signup-summary-wide"><strong>报名路线</strong><span>{{ selected_option.level_label or '路线' }} · {{ selected_option.route.route_name if selected_option.route else '待分配' }}</span></div>
+            {% endif %}
+          </div>
+        </aside>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
