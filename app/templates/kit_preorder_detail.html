@@ -134,7 +134,9 @@
           <div class="event-signup-notes">
             <h3>查询与取消</h3>
             <p>提交后可通过姓名和学号查询。原则上如需取消，请在截止日期前完成。</p>
-            <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">查询/取消预报名</a>
+            {% if batch.status != 'upcoming' %}
+              <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">{{ '查询预报名' if batch.status == 'ended' else '查询/取消预报名' }}</a>
+            {% endif %}
           </div>
         </aside>
       </section>

@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -370,6 +370,159 @@ def test_manage_kit_preorder_create_and_registrations_page(app_and_client):
     text = registrations_resp.get_data(as_text=True)
     assert "Bob" in text
     assert "654321" in text
+
+
+def test_ended_kit_preorder_only_allows_lookup(app_and_client):
+    app, client = app_and_client
+    deadline = datetime.now(timezone.utc) + timedelta(days=7)
+    with app.app_context():
+        batch = MerchPreorderBatch(
+            title="Ended Kit Batch",
+            status=MERCH_BATCH_ENDED,
+            deadline_at=deadline,
+            is_visible=True,
+        )
+        db.session.add(batch)
+        db.session.flush()
+        registration = MerchPreorderRegistration(
+            batch_id=batch.id,
+            name="Ended User",
+            student_id="20260001",
+            phone="13800000002",
+            gender="男",
+            size="L",
+            quantity=1,
+            status=MERCH_ORDER_PENDING,
+        )
+        db.session.add(registration)
+        db.session.commit()
+        batch_id = batch.id
+
+    lookup = client.get(f"/kit/{batch_id}/lookup?name=Ended+User&student_id=20260001")
+    body = lookup.get_data(as_text=True)
+    assert lookup.status_code == 200
+    assert "查询预报名" in body
+    assert "取消预报名" not in body
+
+    cancel_resp = client.post(
+        f"/kit/{batch_id}/cancel",
+        data={"name": "Ended User", "student_id": "20260001"},
+        follow_redirects=False,
+    )
+    assert cancel_resp.status_code == 302
+    with app.app_context():
+        row = MerchPreorderRegistration.query.filter_by(batch_id=batch_id).first()
+        assert row is not None
+        assert row.status == MERCH_ORDER_PENDING
+
+
+def test_global_kit_preorder_lookup_lists_all_visible_records(app_and_client):
+    app, client = app_and_client
+    deadline = datetime.now(timezone.utc) + timedelta(days=7)
+    with app.app_context():
+        active_batch = MerchPreorderBatch(
+            title="Global Active Batch",
+            status=MERCH_BATCH_ACTIVE,
+            deadline_at=deadline,
+            is_visible=True,
+        )
+        ended_batch = MerchPreorderBatch(
+            title="Global Ended Batch",
+            status=MERCH_BATCH_ENDED,
+            deadline_at=deadline,
+            is_visible=True,
+        )
+        hidden_batch = MerchPreorderBatch(
+            title="Global Hidden Batch",
+            status=MERCH_BATCH_ACTIVE,
+            deadline_at=deadline,
+            is_visible=False,
+        )
+        db.session.add_all([active_batch, ended_batch, hidden_batch])
+        db.session.flush()
+        db.session.add_all(
+            [
+                MerchPreorderRegistration(
+                    batch_id=active_batch.id,
+                    name="Global User",
+                    student_id="20260002",
+                    phone="13800000003",
+                    gender="女",
+                    size="M",
+                    quantity=1,
+                    status=MERCH_ORDER_PENDING,
+                ),
+                MerchPreorderRegistration(
+                    batch_id=ended_batch.id,
+                    name="Global User",
+                    student_id="20260002",
+                    phone="13800000003",
+                    gender="女",
+                    size="L",
+                    quantity=2,
+                    status=MERCH_ORDER_PENDING,
+                ),
+                MerchPreorderRegistration(
+                    batch_id=hidden_batch.id,
+                    name="Global User",
+                    student_id="20260002",
+                    phone="13800000003",
+                    gender="女",
+                    size="XL",
+                    quantity=1,
+                    status=MERCH_ORDER_PENDING,
+                ),
+            ]
+        )
+        db.session.commit()
+        active_batch_id = active_batch.id
+
+    lookup = client.get("/kit/lookup?name=Global+User&student_id=20260002")
+    body = lookup.get_data(as_text=True)
+    assert lookup.status_code == 200
+    assert "Global Active Batch" in body
+    assert "Global Ended Batch" in body
+    assert "Global Hidden Batch" not in body
+    assert body.count("取消预报名") == 1
+
+    cancel_resp = client.post(
+        f"/kit/{active_batch_id}/cancel",
+        data={"name": "Global User", "student_id": "20260002", "source": "global"},
+        follow_redirects=False,
+    )
+    assert cancel_resp.status_code == 302
+    assert "/kit/lookup" in cancel_resp.headers.get("Location", "")
+    with app.app_context():
+        active_row = MerchPreorderRegistration.query.filter_by(batch_id=active_batch_id).first()
+        assert active_row is not None
+        assert active_row.status == MERCH_ORDER_CANCELLED
+
+
+def test_upcoming_kit_preorder_hides_lookup_entry(app_and_client):
+    app, client = app_and_client
+    deadline = datetime.now(timezone.utc) + timedelta(days=7)
+    with app.app_context():
+        batch = MerchPreorderBatch(
+            title="Upcoming Kit Batch",
+            status=MERCH_BATCH_UPCOMING,
+            deadline_at=deadline,
+            is_visible=True,
+        )
+        db.session.add(batch)
+        db.session.commit()
+        batch_id = batch.id
+
+    list_resp = client.get("/kit")
+    assert list_resp.status_code == 200
+    body = list_resp.get_data(as_text=True)
+    assert "Upcoming Kit Batch" in body
+    assert f"/kit/{batch_id}/lookup" not in body
+
+    detail_resp = client.get(f"/kit/{batch_id}")
+    assert detail_resp.status_code == 200
+    detail_body = detail_resp.get_data(as_text=True)
+    assert "查询/取消预报名" not in detail_body
+    assert "查询预报名" not in detail_body
 
 
 def test_manage_announcements_crud(app_and_client):

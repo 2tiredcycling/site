@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>查询/取消预报名 | {{ batch.title }} | 2Tired 骑行社</title>
+  <title>{{ '查询预报名' if batch.status == 'ended' else '查询/取消预报名' }} | {{ batch.title }} | 2Tired 骑行社</title>
   <meta name="description" content="{{ meta_description or '查询或取消骑行服预报名。' }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   {% include '_theme_bootstrap.html' %}
@@ -20,7 +20,7 @@
       <section class="event-signup-hero">
         <div class="event-signup-title-wrap">
           <p class="hero-kicker">Lookup</p>
-          <h1>查询/取消预报名</h1>
+          <h1>{{ '查询预报名' if batch.status == 'ended' else '查询/取消预报名' }}</h1>
           <p class="event-signup-subtitle">{{ batch.title }}</p>
         </div>
       </section>

@@ -455,6 +455,18 @@ def _merch_registration_query(batch_id: int, name: str, student_id: str):
     )
 
 
+def _merch_registration_can_cancel(registration: MerchPreorderRegistration | None) -> bool:
+    if not registration or not registration.batch:
+        return False
+    batch = registration.batch
+    return bool(
+        batch.status == MERCH_BATCH_ACTIVE
+        and registration.status in {MERCH_ORDER_PENDING, MERCH_ORDER_CONFIRMED}
+        and batch.deadline_at
+        and _to_local_time(utcnow()) < _to_local_time(batch.deadline_at)
+    )
+
+
 def _activity_detail_or_404(activity_id: int) -> Activity:
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
@@ -676,6 +688,41 @@ def kit_preorder_list() -> str:
     )
 
 
+@bp.get("/kit/lookup")
+def kit_preorder_global_lookup() -> str:
+    name = (request.args.get("name") or "").strip()
+    student_id = (request.args.get("student_id") or "").strip()
+    registrations = []
+    message = ""
+    if name or student_id:
+        if not name or not student_id:
+            message = "请同时填写姓名和学号。"
+        else:
+            registrations = (
+                MerchPreorderRegistration.query
+                .join(MerchPreorderBatch)
+                .filter(
+                    MerchPreorderBatch.is_visible.is_(True),
+                    db.func.lower(MerchPreorderRegistration.student_id) == student_id.lower(),
+                    db.func.lower(MerchPreorderRegistration.name) == name.lower(),
+                )
+                .order_by(MerchPreorderBatch.deadline_at.desc(), MerchPreorderRegistration.created_at.desc())
+                .all()
+            )
+            if not registrations:
+                message = "没有查询到对应的预报名记录。"
+    cancel_map = {item.id: _merch_registration_can_cancel(item) for item in registrations}
+    return render_template(
+        "kit_preorder_global_lookup.html",
+        registrations=registrations,
+        cancel_map=cancel_map,
+        message=message,
+        submitted_name=name,
+        submitted_student_id=student_id,
+        meta_description="查询 2Tired 骑行社所有骑行服预报名记录。",
+    )
+
+
 @bp.get("/kit/<int:batch_id>")
 def kit_preorder_detail(batch_id: int) -> str:
     batch = _merch_batch_or_404(batch_id)
@@ -819,12 +866,7 @@ def kit_preorder_lookup(batch_id: int) -> str:
             registration = _merch_registration_query(batch.id, name, student_id)
             if not registration:
                 message = "没有查询到对应的预报名记录。"
-    can_cancel = bool(
-        registration
-        and registration.status in {MERCH_ORDER_PENDING, MERCH_ORDER_CONFIRMED}
-        and batch.deadline_at
-        and _to_local_time(utcnow()) < _to_local_time(batch.deadline_at)
-    )
+    can_cancel = _merch_registration_can_cancel(registration)
     return render_template(
         "kit_preorder_lookup.html",
         batch=batch,
@@ -842,21 +884,21 @@ def kit_preorder_cancel(batch_id: int):
     batch = _merch_batch_or_404(batch_id)
     name = (request.form.get("name") or "").strip()
     student_id = (request.form.get("student_id") or "").strip()
+    source = (request.form.get("source") or "").strip()
     registration = _merch_registration_query(batch.id, name, student_id) if name and student_id else None
+    redirect_endpoint = "web.kit_preorder_global_lookup" if source == "global" else "web.kit_preorder_lookup"
+    redirect_values = {"name": name, "student_id": student_id}
+    if source != "global":
+        redirect_values["batch_id"] = batch.id
     if not registration:
-        return redirect(_url_for("web.kit_preorder_lookup", batch_id=batch.id, name=name, student_id=student_id))
-    deadline_local = _to_local_time(batch.deadline_at) if batch.deadline_at else None
-    if (
-        registration.status not in {MERCH_ORDER_PENDING, MERCH_ORDER_CONFIRMED}
-        or deadline_local is None
-        or _to_local_time(utcnow()) >= deadline_local
-    ):
-        return redirect(_url_for("web.kit_preorder_lookup", batch_id=batch.id, name=name, student_id=student_id))
+        return redirect(_url_for(redirect_endpoint, **redirect_values))
+    if not _merch_registration_can_cancel(registration):
+        return redirect(_url_for(redirect_endpoint, **redirect_values))
     registration.status = MERCH_ORDER_CANCELLED
     registration.cancelled_at = utcnow()
     registration.updated_at = utcnow()
     db.session.commit()
-    return redirect(_url_for("web.kit_preorder_lookup", batch_id=batch.id, name=name, student_id=student_id, cancelled=1))
+    return redirect(_url_for(redirect_endpoint, **redirect_values, cancelled=1))
 
 
 @bp.get("/kit/image/<int:image_id>")

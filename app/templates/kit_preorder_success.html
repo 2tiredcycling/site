@@ -29,7 +29,9 @@
           <p>当前批次已有 {{ registration_count }} 人预报名。最终价格将根据实际预报名人数确定，但不会超过页面标注上限。</p>
           <p>如需取消，请在截止日期前通过姓名和学号查询并取消。</p>
           <div class="row-actions">
-            <a class="btn btn-solid" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">查询/取消</a>
+            {% if batch.status != 'upcoming' %}
+              <a class="btn btn-solid" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">{{ '查询' if batch.status == 'ended' else '查询/取消' }}</a>
+            {% endif %}
             <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">返回批次</a>
           </div>
         </section>

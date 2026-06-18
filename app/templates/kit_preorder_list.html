@@ -21,10 +21,16 @@
           <h1>骑行服预定</h1>
           <p class="event-signup-subtitle">查看当前预报名批次，提交或管理自己的预报名信息。</p>
         </div>
+        <div class="row-actions kit-global-actions">
+          <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_global_lookup') }}">查询全部预报名</a>
+        </div>
       </section>
 
+      {% set featured_batches = batches[:2] %}
+      {% set compact_batches = batches[2:] %}
+
       <section class="kit-batch-grid">
-        {% for batch in batches %}
+        {% for batch in featured_batches %}
           <article class="event-signup-panel kit-batch-card">
             <div class="event-signup-head">
               <span class="event-signup-state {{ 'is-open' if batch.status == 'active' else 'is-closed' }}">
@@ -43,7 +49,9 @@
             <p class="hint">{{ batch.description[:88] }}{% if batch.description|length > 88 %}...{% endif %}</p>
             <div class="row-actions">
               <a class="btn btn-solid" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">进入预报名</a>
-              <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">查询/取消</a>
+              {% if batch.status != 'upcoming' %}
+                <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">{{ '查询' if batch.status == 'ended' else '查询/取消' }}</a>
+              {% endif %}
             </div>
           </article>
         {% else %}
@@ -53,6 +61,37 @@
           </section>
         {% endfor %}
       </section>
+
+      {% if compact_batches %}
+        <section class="kit-compact-section">
+          <h2>更多预定批次</h2>
+          <div class="kit-compact-list">
+            {% for batch in compact_batches %}
+              <article class="kit-compact-row">
+                <div class="kit-compact-main">
+                  <span class="event-signup-state {{ 'is-open' if batch.status == 'active' else 'is-closed' }}">
+                    {% if batch.status == 'active' %}正在进行{% elif batch.status == 'upcoming' %}即将开始{% else %}已经结束{% endif %}
+                  </span>
+                  <div>
+                    <h3>{{ batch.title }}</h3>
+                    <p class="hint">
+                      截止 {{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d %H:%M') if batch.deadline_at else '待定' }}
+                      · {% if batch.price_min is not none and batch.price_max is not none %}{{ batch.price_min }}-{{ batch.price_max }} 元{% elif batch.price_max is not none %}不超过 {{ batch.price_max }} 元{% else %}价格待定{% endif %}
+                      · {{ count_map.get(batch.id, 0) }} 人
+                    </p>
+                  </div>
+                </div>
+                <div class="row-actions kit-compact-actions">
+                  <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">查看</a>
+                  {% if batch.status != 'upcoming' %}
+                    <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">{{ '查询' if batch.status == 'ended' else '查询/取消' }}</a>
+                  {% endif %}
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
     </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
