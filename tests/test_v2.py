@@ -219,6 +219,11 @@ def test_sitemap_xml_served(app_and_client):
 
 def test_v41_static_pages_available(app_and_client):
     _app, client = app_and_client
+    home = client.get("/")
+    assert home.status_code == 200
+    home_body = home.get_data(as_text=True)
+    assert "骑行服预定" in home_body
+    assert "/kit" in home_body
     assert client.get("/about").status_code == 200
     assert client.get("/team").status_code == 404
     assert client.get("/contact").status_code == 200
@@ -323,14 +328,21 @@ def test_kit_preorder_submit_update_lookup_and_cancel(app_and_client):
 def test_manage_kit_preorder_create_and_registrations_page(app_and_client):
     app, client = app_and_client
     assert login_admin(client).status_code == 200
+    new_page = client.get("/manage/kit-preorders/new")
+    assert new_page.status_code == 200
+    new_page_body = new_page.get_data(as_text=True)
+    assert 'name="status"' not in new_page_body
+    assert 'name="start_date"' in new_page_body
+    assert 'name="deadline_date"' in new_page_body
+
     csrf_token = get_manage_csrf(client)
     resp = client.post(
         "/manage/kit-preorders/create",
         data={
             "csrf_token": csrf_token,
             "title": "Managed Kit Batch",
-            "status": MERCH_BATCH_ACTIVE,
-            "deadline_at": "2026-12-31T23:00",
+            "start_date": "2026-12-01",
+            "deadline_date": "2026-12-31",
             "price_min": "180",
             "price_max": "220",
             "price_note": "最终价格按人数确认",
@@ -346,6 +358,10 @@ def test_manage_kit_preorder_create_and_registrations_page(app_and_client):
     with app.app_context():
         batch = MerchPreorderBatch.query.filter_by(title="Managed Kit Batch").first()
         assert batch is not None
+        assert batch.status == MERCH_BATCH_UPCOMING
+        assert batch.start_at is not None
+        assert batch.deadline_at is not None
+        assert batch.deadline_at.minute == 59
         batch_id = batch.id
         db.session.add(
             MerchPreorderRegistration(
@@ -374,7 +390,7 @@ def test_manage_kit_preorder_create_and_registrations_page(app_and_client):
 
 def test_ended_kit_preorder_only_allows_lookup(app_and_client):
     app, client = app_and_client
-    deadline = datetime.now(timezone.utc) + timedelta(days=7)
+    deadline = datetime.now(timezone.utc) - timedelta(days=1)
     with app.app_context():
         batch = MerchPreorderBatch(
             title="Ended Kit Batch",
@@ -418,24 +434,25 @@ def test_ended_kit_preorder_only_allows_lookup(app_and_client):
 
 def test_global_kit_preorder_lookup_lists_all_visible_records(app_and_client):
     app, client = app_and_client
-    deadline = datetime.now(timezone.utc) + timedelta(days=7)
+    active_deadline = datetime.now(timezone.utc) + timedelta(days=7)
+    ended_deadline = datetime.now(timezone.utc) - timedelta(days=1)
     with app.app_context():
         active_batch = MerchPreorderBatch(
             title="Global Active Batch",
             status=MERCH_BATCH_ACTIVE,
-            deadline_at=deadline,
+            deadline_at=active_deadline,
             is_visible=True,
         )
         ended_batch = MerchPreorderBatch(
             title="Global Ended Batch",
             status=MERCH_BATCH_ENDED,
-            deadline_at=deadline,
+            deadline_at=ended_deadline,
             is_visible=True,
         )
         hidden_batch = MerchPreorderBatch(
             title="Global Hidden Batch",
             status=MERCH_BATCH_ACTIVE,
-            deadline_at=deadline,
+            deadline_at=active_deadline,
             is_visible=False,
         )
         db.session.add_all([active_batch, ended_batch, hidden_batch])
@@ -500,11 +517,13 @@ def test_global_kit_preorder_lookup_lists_all_visible_records(app_and_client):
 
 def test_upcoming_kit_preorder_hides_lookup_entry(app_and_client):
     app, client = app_and_client
+    start_at = datetime.now(timezone.utc) + timedelta(days=3)
     deadline = datetime.now(timezone.utc) + timedelta(days=7)
     with app.app_context():
         batch = MerchPreorderBatch(
             title="Upcoming Kit Batch",
             status=MERCH_BATCH_UPCOMING,
+            start_at=start_at,
             deadline_at=deadline,
             is_visible=True,
         )

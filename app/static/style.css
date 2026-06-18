@@ -2693,6 +2693,42 @@ td {
   font-size: 16px;
 }
 
+.manage-kit-form {
+  display: grid;
+  gap: 16px;
+}
+
+.manage-kit-form .form-card-subsection {
+  margin: 0;
+}
+
+.manage-kit-visible-toggle {
+  align-self: end;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manage-kit-status-preview {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--brand-surface-soft);
+}
+
+.manage-kit-status-preview span,
+.manage-kit-status-preview small {
+  display: block;
+  color: var(--muted);
+}
+
+.manage-kit-status-preview strong {
+  display: block;
+  margin: 2px 0;
+}
+
 .kit-compact-section h2 {
   margin: 0 0 10px;
   font-size: 18px;

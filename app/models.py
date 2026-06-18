@@ -74,6 +74,25 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
+def _aware_utc(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def merch_batch_status_for_window(start_at, deadline_at, now_value=None):
+    now = _aware_utc(now_value or utcnow())
+    start = _aware_utc(start_at)
+    deadline = _aware_utc(deadline_at)
+    if start and now < start:
+        return MERCH_BATCH_UPCOMING
+    if deadline and now >= deadline:
+        return MERCH_BATCH_ENDED
+    return MERCH_BATCH_ACTIVE
+
+
 class User(db.Model):
     __tablename__ = "users"
 

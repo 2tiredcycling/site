@@ -1,7 +1,7 @@
 import base64
 import csv
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO, StringIO
 import mimetypes
 from pathlib import Path
@@ -49,7 +49,6 @@ from app.models import (
     FEEDBACK_REJECTED,
     MERCH_BATCH_ACTIVE,
     MERCH_BATCH_ENDED,
-    MERCH_BATCH_STATUSES,
     MERCH_BATCH_UPCOMING,
     MERCH_ORDER_CANCELLED,
     MERCH_ORDER_CONFIRMED,
@@ -86,6 +85,7 @@ from app.models import (
     SiteFeedback,
     User,
     db,
+    merch_batch_status_for_window,
     utcnow,
 )
 from app.querying import query_routes_from_request
@@ -1688,6 +1688,8 @@ def merch_preorders_page():
         MerchPreorderBatch.updated_at.desc(),
         MerchPreorderBatch.id.desc(),
     ).paginate(page=page, per_page=20, error_out=False)
+    for batch in pagination.items:
+        _apply_merch_batch_status(batch)
     count_map = {item.id: _merch_registration_count(item.id) for item in pagination.items}
     return render_template(
         "manage_kit_preorders.html",
@@ -1702,12 +1704,14 @@ def merch_preorders_page():
 @bp.get("/kit-preorders/new")
 @login_required
 def merch_preorder_new_page():
+    default_start_date, default_deadline_date = _default_merch_preorder_dates()
     return render_template(
         "manage_kit_preorder_form.html",
         batch=None,
         gallery_images=[],
         size_images=[],
-        batch_statuses=MERCH_BATCH_STATUSES,
+        default_start_date=default_start_date,
+        default_deadline_date=default_deadline_date,
         status_labels=MERCH_BATCH_STATUS_LABELS,
         can_edit=True,
     )
@@ -1720,12 +1724,15 @@ def merch_preorder_edit_page(batch_id: int):
     if not batch:
         flash("预报名批次不存在", "error")
         return redirect(url_for("admin.merch_preorders_page"))
+    _apply_merch_batch_status(batch)
+    default_start_date, default_deadline_date = _default_merch_preorder_dates()
     return render_template(
         "manage_kit_preorder_form.html",
         batch=batch,
         gallery_images=[item for item in batch.images if item.image_kind == "gallery"],
         size_images=[item for item in batch.images if item.image_kind == "size_chart"],
-        batch_statuses=MERCH_BATCH_STATUSES,
+        default_start_date=default_start_date,
+        default_deadline_date=default_deadline_date,
         status_labels=MERCH_BATCH_STATUS_LABELS,
         can_edit=can_edit(g.current_user),
     )
@@ -1998,13 +2005,59 @@ def _parse_int_field(value: str | None) -> int | None:
     return parsed if parsed >= 0 else None
 
 
+def _next_month_same_or_next_existing(today_value: date) -> date:
+    year = today_value.year
+    month = today_value.month + 1
+    if month > 12:
+        year += 1
+        month = 1
+    try:
+        return date(year, month, today_value.day)
+    except ValueError:
+        if month == 12:
+            return date(year + 1, 1, 1)
+        return date(year, month + 1, 1)
+
+
+def _default_merch_preorder_dates() -> tuple[date, date]:
+    today_value = _to_local_time(utcnow()).date()
+    return today_value, _next_month_same_or_next_existing(today_value)
+
+
+def _parse_merch_date(value: str | None, *, end_of_day: bool = False) -> datetime | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        if "T" in raw:
+            parsed_dt = _parse_activity_time(raw)
+            parsed_date = _to_local_time(parsed_dt).date() if parsed_dt else None
+        else:
+            parsed_date = date.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed_date is None:
+        return None
+    local_time = time(23, 59, 59) if end_of_day else time(0, 0)
+    return datetime.combine(parsed_date, local_time).replace(tzinfo=SH_TZ).astimezone(timezone.utc)
+
+
+def _apply_merch_batch_status(batch: MerchPreorderBatch) -> MerchPreorderBatch:
+    batch.status = merch_batch_status_for_window(batch.start_at, batch.deadline_at)
+    return batch
+
+
 def _merch_batch_from_form(batch: MerchPreorderBatch | None = None) -> tuple[dict, str | None]:
     title = (request.form.get("title") or (batch.title if batch else "")).strip()
-    status = (request.form.get("status") or (batch.status if batch else MERCH_BATCH_UPCOMING)).strip()
-    if status not in MERCH_BATCH_STATUSES:
-        status = MERCH_BATCH_UPCOMING
-    start_at = _parse_activity_time(request.form.get("start_at"))
-    deadline_at = _parse_activity_time(request.form.get("deadline_at"))
+    default_start_date, default_deadline_date = _default_merch_preorder_dates()
+    start_raw = request.form.get("start_date") or request.form.get("start_at")
+    deadline_raw = request.form.get("deadline_date") or request.form.get("deadline_at")
+    start_at = _parse_merch_date(start_raw) or (
+        batch.start_at if batch else _parse_merch_date(default_start_date.isoformat())
+    )
+    deadline_at = _parse_merch_date(deadline_raw, end_of_day=True) or (
+        batch.deadline_at if batch else _parse_merch_date(default_deadline_date.isoformat(), end_of_day=True)
+    )
     price_min = _parse_int_field(request.form.get("price_min"))
     price_max = _parse_int_field(request.form.get("price_max"))
     price_note = (request.form.get("price_note") or "").strip()
@@ -2015,9 +2068,9 @@ def _merch_batch_from_form(batch: MerchPreorderBatch | None = None) -> tuple[dic
     if not title:
         return {}, "预报名标题不能为空"
     if deadline_at is None:
-        return {}, "请填写最终截止时间"
-    if start_at and start_at >= deadline_at:
-        return {}, "开始时间必须早于最终截止时间"
+        return {}, "请填写最终截止日期"
+    if start_at and start_at > deadline_at:
+        return {}, "开始日期不能晚于最终截止日期"
     if price_min is not None and price_max is not None and price_min > price_max:
         return {}, "价格下限不能高于价格上限"
 
@@ -2028,7 +2081,7 @@ def _merch_batch_from_form(batch: MerchPreorderBatch | None = None) -> tuple[dic
 
     return {
         "title": title,
-        "status": status,
+        "status": merch_batch_status_for_window(start_at, deadline_at),
         "start_at": start_at,
         "deadline_at": deadline_at,
         "price_min": price_min,

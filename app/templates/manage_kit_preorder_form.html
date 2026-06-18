@@ -28,45 +28,62 @@
       {% endif %}
     {% endwith %}
 
-    <form class="card form-card" method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_merch_preorder', batch_id=batch.id) if batch else url_for('admin.create_merch_preorder') }}">
+    <form class="card form-card manage-kit-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_merch_preorder', batch_id=batch.id) if batch else url_for('admin.create_merch_preorder') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <section class="filter-grid">
-        <label>标题
-          <input name="title" type="text" required value="{{ batch.title if batch else '' }}">
-        </label>
-        <label>状态
-          <select name="status">
-            {% for status in batch_statuses %}
-              <option value="{{ status }}" {% if batch and batch.status == status %}selected{% endif %}>{{ status_labels.get(status, status) }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>开始时间
-          <input name="start_at" type="datetime-local" value="{{ to_local_time(batch.start_at).strftime('%Y-%m-%dT%H:%M') if batch and batch.start_at else '' }}">
-        </label>
-        <label>最终截止时间
-          <input name="deadline_at" type="datetime-local" required value="{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%dT%H:%M') if batch and batch.deadline_at else '' }}">
-        </label>
-        <label>价格下限
-          <input name="price_min" type="number" min="0" step="1" value="{{ batch.price_min if batch and batch.price_min is not none else '' }}">
-        </label>
-        <label>价格上限
-          <input name="price_max" type="number" min="0" step="1" value="{{ batch.price_max if batch and batch.price_max is not none else '' }}">
+      <section class="form-card-subsection">
+        <h2>基础信息</h2>
+        <section class="filter-grid">
+          <label>标题
+            <input name="title" type="text" required value="{{ batch.title if batch else '' }}">
+          </label>
+          <label class="manage-kit-visible-toggle"><input type="checkbox" name="is_visible" value="1" {% if not batch or batch.is_visible %}checked{% endif %}> 前台展示该批次</label>
+        </section>
+      </section>
+
+      <section class="form-card-subsection">
+        <h2>时间与状态</h2>
+        <section class="filter-grid">
+          <label>开始日期
+            <input name="start_date" type="date" value="{{ to_local_time(batch.start_at).date().isoformat() if batch and batch.start_at else default_start_date.isoformat() }}">
+          </label>
+          <label>最终截止日期
+            <input name="deadline_date" type="date" required value="{{ to_local_time(batch.deadline_at).date().isoformat() if batch and batch.deadline_at else default_deadline_date.isoformat() }}">
+          </label>
+          <div class="manage-kit-status-preview">
+            <span>自动状态</span>
+            <strong>{{ status_labels.get(batch.status, batch.status) if batch else '创建后自动判断' }}</strong>
+            <small>开始日按 00:00 计算，截止日按 23:59 计算。</small>
+          </div>
+        </section>
+      </section>
+
+      <section class="form-card-subsection">
+        <h2>价格</h2>
+        <section class="filter-grid">
+          <label>价格下限
+            <input name="price_min" type="number" min="0" step="1" value="{{ batch.price_min if batch and batch.price_min is not none else '' }}">
+          </label>
+          <label>价格上限
+            <input name="price_max" type="number" min="0" step="1" value="{{ batch.price_max if batch and batch.price_max is not none else '' }}">
+          </label>
+        </section>
+        <label>
+          价格说明
+          <input name="price_note" type="text" value="{{ batch.price_note if batch else '最终价格将根据实际预报名人数确定，但不会超过上限。' }}">
         </label>
       </section>
-      <label>
-        价格说明
-        <input name="price_note" type="text" value="{{ batch.price_note if batch else '最终价格将根据实际预报名人数确定，但不会超过上限。' }}">
-      </label>
-      <label>
-        尺码提醒
-        <textarea name="size_note" rows="3">{{ batch.size_note if batch else '尺码偏小\n不追求极致贴身的非公路车玩家，建议买大一码或大两码' }}</textarea>
-      </label>
-      <label>
-        预定说明
-        <textarea name="description" rows="5">{{ batch.description if batch else '' }}</textarea>
-      </label>
-      <label><input type="checkbox" name="is_visible" value="1" {% if not batch or batch.is_visible %}checked{% endif %}> 前台展示该批次</label>
+
+      <section class="form-card-subsection">
+        <h2>文字说明</h2>
+        <label>
+          尺码提醒
+          <textarea name="size_note" rows="3">{{ batch.size_note if batch else '尺码偏小\n不追求极致贴身的非公路车玩家，建议买大一码或大两码' }}</textarea>
+        </label>
+        <label>
+          款式说明
+          <textarea name="description" rows="5">{{ batch.description if batch else '' }}</textarea>
+        </label>
+      </section>
 
       <section class="form-card-subsection">
         <h2>展示图片</h2>

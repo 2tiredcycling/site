@@ -34,6 +34,7 @@ from app.models import (
     SiteFeedback,
     SitePage,
     db,
+    merch_batch_status_for_window,
     utcnow,
 )
 from app.querying import query_routes_from_request
@@ -396,7 +397,9 @@ def _merch_batch_count_map(batch_ids: list[int]) -> dict[int, int]:
 
 
 def _merch_batch_open(batch: MerchPreorderBatch, now_value=None) -> bool:
-    if not bool(batch.is_visible) or batch.status != MERCH_BATCH_ACTIVE:
+    effective_status = merch_batch_status_for_window(batch.start_at, batch.deadline_at, now_value)
+    batch.status = effective_status
+    if not bool(batch.is_visible) or effective_status != MERCH_BATCH_ACTIVE:
         return False
     now_local = _to_local_time(now_value or utcnow())
     start_local = _to_local_time(batch.start_at) if batch.start_at else None
@@ -412,6 +415,7 @@ def _merch_batch_or_404(batch_id: int) -> MerchPreorderBatch:
     batch = MerchPreorderBatch.query.filter_by(id=batch_id, is_visible=True).first()
     if not batch:
         abort(404, description="Preorder batch not found")
+    batch.status = merch_batch_status_for_window(batch.start_at, batch.deadline_at)
     return batch
 
 
@@ -459,6 +463,7 @@ def _merch_registration_can_cancel(registration: MerchPreorderRegistration | Non
     if not registration or not registration.batch:
         return False
     batch = registration.batch
+    batch.status = merch_batch_status_for_window(batch.start_at, batch.deadline_at)
     return bool(
         batch.status == MERCH_BATCH_ACTIVE
         and registration.status in {MERCH_ORDER_PENDING, MERCH_ORDER_CONFIRMED}
@@ -669,15 +674,19 @@ def site_feedback() -> str:
 def kit_preorder_list() -> str:
     batches = (
         MerchPreorderBatch.query.filter_by(is_visible=True)
-        .order_by(
-            db.case(
-                (MerchPreorderBatch.status == MERCH_BATCH_ACTIVE, 0),
-                else_=1,
-            ),
-            MerchPreorderBatch.deadline_at.asc(),
-            MerchPreorderBatch.created_at.desc(),
-        )
+        .order_by(MerchPreorderBatch.deadline_at.asc(), MerchPreorderBatch.created_at.desc())
         .all()
+    )
+    for batch in batches:
+        batch.status = merch_batch_status_for_window(batch.start_at, batch.deadline_at)
+    status_rank = {"active": 0, "upcoming": 1, "ended": 2}
+    batches = sorted(
+        batches,
+        key=lambda item: (
+            status_rank.get(item.status, 9),
+            item.deadline_at or utcnow(),
+            -int(item.id or 0),
+        ),
     )
     count_map = _merch_batch_count_map([item.id for item in batches])
     return render_template(
@@ -711,6 +720,9 @@ def kit_preorder_global_lookup() -> str:
             )
             if not registrations:
                 message = "没有查询到对应的预报名记录。"
+    for item in registrations:
+        if item.batch:
+            item.batch.status = merch_batch_status_for_window(item.batch.start_at, item.batch.deadline_at)
     cancel_map = {item.id: _merch_registration_can_cancel(item) for item in registrations}
     return render_template(
         "kit_preorder_global_lookup.html",

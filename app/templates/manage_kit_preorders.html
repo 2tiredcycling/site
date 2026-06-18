@@ -39,7 +39,7 @@
               <td>{{ batch.id }}</td>
               <td>{{ batch.title }}</td>
               <td>{{ status_labels.get(batch.status, batch.status) }}</td>
-              <td>{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d %H:%M') if batch.deadline_at else '-' }}</td>
+              <td>{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d') if batch.deadline_at else '-' }}</td>
               <td>{{ count_map.get(batch.id, 0) }}</td>
               <td>{{ '是' if batch.is_visible else '否' }}</td>
               <td class="row-actions">
