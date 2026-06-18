@@ -424,6 +424,7 @@ def _render_merch_preorder_form(
     count_map = _merch_batch_count_map([batch.id])
     gallery_images = [item for item in batch.images if item.image_kind == "gallery"]
     size_images = [item for item in batch.images if item.image_kind == "size_chart"]
+    size_note_display = (batch.size_note or "").replace("。不追求", "\n不追求").replace("。", "")
     return render_template(
         "kit_preorder_detail.html",
         batch=batch,
@@ -436,6 +437,7 @@ def _render_merch_preorder_form(
         duplicate_registration_id=duplicate_registration_id,
         size_options=MERCH_SIZE_OPTIONS,
         gender_options=MERCH_GENDER_OPTIONS,
+        size_note_display=size_note_display,
         meta_description=f"{batch.title} | 2Tired 骑行社骑行服预定",
     )
 

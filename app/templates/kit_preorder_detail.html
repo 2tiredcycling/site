@@ -35,11 +35,33 @@
         <div class="alert">{{ error_message }}</div>
       {% endif %}
 
-      <section class="kit-media-grid">
-        {% for image in gallery_images %}
-          <figure class="kit-media-item"><img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}"></figure>
-        {% endfor %}
-      </section>
+      {% if gallery_images %}
+        <section class="kit-carousel" aria-label="展示图片">
+          <div class="kit-carousel-track">
+            {% for image in gallery_images %}
+              <figure class="kit-carousel-slide {% if loop.first %}is-active{% endif %}">
+                <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
+              </figure>
+            {% endfor %}
+          </div>
+          {% if gallery_images|length > 1 %}
+            <button class="kit-carousel-btn kit-carousel-prev" type="button" data-kit-carousel-prev aria-label="上一张展示图">‹</button>
+            <button class="kit-carousel-btn kit-carousel-next" type="button" data-kit-carousel-next aria-label="下一张展示图">›</button>
+            <div class="kit-carousel-dots" aria-label="展示图分页">
+              {% for image in gallery_images %}
+                <button class="{% if loop.first %}is-active{% endif %}" type="button" data-kit-carousel-dot="{{ loop.index0 }}" aria-label="第 {{ loop.index }} 张展示图"></button>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </section>
+      {% endif %}
+
+      {% if batch.description %}
+        <section class="event-signup-panel kit-description-panel">
+          <h2>款式说明</h2>
+          <p>{{ batch.description }}</p>
+        </section>
+      {% endif %}
 
       <section class="event-signup-layout">
         <section class="event-signup-panel event-signup-form-panel">
@@ -95,17 +117,16 @@
           </div>
           <div class="event-signup-notes kit-size-warning">
             <h3>尺码提醒</h3>
-            <p>{{ batch.size_note }}</p>
+            <p>{{ size_note_display }}</p>
           </div>
-          {% if batch.description %}
-            <div class="event-signup-notes"><h3>预定说明</h3><p>{{ batch.description }}</p></div>
-          {% endif %}
           {% if size_images %}
             <div class="event-signup-notes">
               <h3>尺码表</h3>
               <div class="kit-size-chart-list">
                 {% for image in size_images %}
-                  <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
+                  <button class="kit-size-chart-btn" type="button" data-lightbox-src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" data-lightbox-alt="{{ image.original_filename }}">
+                    <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
+                  </button>
                 {% endfor %}
               </div>
             </div>
@@ -119,9 +140,68 @@
       </section>
     </section>
   </main>
+
+  <div id="kitImageLightbox" class="kit-image-lightbox" aria-hidden="true">
+    <button id="kitImageLightboxClose" class="kit-image-lightbox-close" type="button" aria-label="关闭图片预览">关闭</button>
+    <img id="kitImageLightboxImg" alt="">
+  </div>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
   <script>
     (function () {
+      const carousel = document.querySelector('.kit-carousel');
+      if (carousel) {
+        const slides = Array.from(carousel.querySelectorAll('.kit-carousel-slide'));
+        const dots = Array.from(carousel.querySelectorAll('[data-kit-carousel-dot]'));
+        const prev = carousel.querySelector('[data-kit-carousel-prev]');
+        const next = carousel.querySelector('[data-kit-carousel-next]');
+        let current = 0;
+        const showSlide = function (index) {
+          if (!slides.length) return;
+          current = (index + slides.length) % slides.length;
+          slides.forEach(function (slide, slideIndex) {
+            slide.classList.toggle('is-active', slideIndex === current);
+          });
+          dots.forEach(function (dot, dotIndex) {
+            dot.classList.toggle('is-active', dotIndex === current);
+          });
+        };
+        if (prev) prev.addEventListener('click', function () { showSlide(current - 1); });
+        if (next) next.addEventListener('click', function () { showSlide(current + 1); });
+        dots.forEach(function (dot) {
+          dot.addEventListener('click', function () {
+            showSlide(Number(dot.getAttribute('data-kit-carousel-dot') || 0));
+          });
+        });
+      }
+
+      const lightbox = document.getElementById('kitImageLightbox');
+      const lightboxImg = document.getElementById('kitImageLightboxImg');
+      const lightboxClose = document.getElementById('kitImageLightboxClose');
+      const chartButtons = Array.from(document.querySelectorAll('[data-lightbox-src]'));
+      const closeLightbox = function () {
+        if (!lightbox || !lightboxImg) return;
+        lightbox.classList.remove('open');
+        lightbox.setAttribute('aria-hidden', 'true');
+        lightboxImg.removeAttribute('src');
+      };
+      if (lightbox && lightboxImg && lightboxClose) {
+        chartButtons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            lightboxImg.src = button.getAttribute('data-lightbox-src') || '';
+            lightboxImg.alt = button.getAttribute('data-lightbox-alt') || '尺码表';
+            lightbox.classList.add('open');
+            lightbox.setAttribute('aria-hidden', 'false');
+          });
+        });
+        lightboxClose.addEventListener('click', closeLightbox);
+        lightbox.addEventListener('click', function (event) {
+          if (event.target === lightbox) closeLightbox();
+        });
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && lightbox.classList.contains('open')) closeLightbox();
+        });
+      }
+
       const isOpen = {{ 'true' if is_open else 'false' }};
       const form = document.querySelector('.kit-preorder-form');
       const submitBtn = document.getElementById('kitSubmitBtn');

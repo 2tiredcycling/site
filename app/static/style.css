@@ -836,6 +836,7 @@ label {
 
 input[type="text"],
 input[type="number"],
+input[type="tel"],
 input[type="datetime-local"],
 input[type="password"],
 input[type="file"],
@@ -2663,6 +2664,99 @@ td {
   margin: 0 0 18px;
 }
 
+.kit-carousel {
+  position: relative;
+  margin: 0 0 18px;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--brand-surface-soft);
+}
+
+.kit-carousel-track {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.kit-carousel-slide {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.kit-carousel-slide.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.kit-carousel-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--brand-surface-soft);
+}
+
+.kit-carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.58);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.kit-carousel-prev {
+  left: 12px;
+}
+
+.kit-carousel-next {
+  right: 12px;
+}
+
+.kit-carousel-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.kit-carousel-dots button {
+  width: 9px;
+  height: 9px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.64);
+  cursor: pointer;
+}
+
+.kit-carousel-dots button.is-active {
+  background: var(--brand-primary);
+}
+
+.kit-description-panel {
+  margin-bottom: 18px;
+}
+
+.kit-description-panel p {
+  margin: 0;
+  white-space: pre-line;
+  line-height: 1.75;
+}
+
 .kit-media-item {
   margin: 0;
   overflow: hidden;
@@ -2687,11 +2781,64 @@ td {
 .kit-size-warning p {
   color: #7c2d12;
   font-weight: 700;
+  line-height: 1.75;
+  white-space: pre-line;
 }
 
 .kit-size-chart-list {
   display: grid;
   gap: 12px;
+}
+
+.kit-size-chart-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.kit-size-chart-btn:focus-visible {
+  outline: 3px solid var(--brand-border-strong);
+  outline-offset: 2px;
+}
+
+.kit-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.82);
+}
+
+.kit-image-lightbox.open {
+  display: flex;
+}
+
+.kit-image-lightbox img {
+  max-width: min(1080px, 94vw);
+  max-height: 88vh;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+}
+
+.kit-image-lightbox-close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  cursor: pointer;
 }
 
 .form-card-subsection {

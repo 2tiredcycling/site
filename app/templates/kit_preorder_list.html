@@ -30,7 +30,6 @@
               <span class="event-signup-state {{ 'is-open' if batch.status == 'active' else 'is-closed' }}">
                 {% if batch.status == 'active' %}正在进行{% elif batch.status == 'upcoming' %}即将开始{% else %}已经结束{% endif %}
               </span>
-              <span class="hint">{{ count_map.get(batch.id, 0) }} 人</span>
             </div>
             <h2>{{ batch.title }}</h2>
             <div class="event-signup-summary">
@@ -39,6 +38,7 @@
               {% endif %}
               <div><strong>截止时间</strong><span>{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d %H:%M') if batch.deadline_at else '待定' }}</span></div>
               <div><strong>价格区间</strong><span>{% if batch.price_min is not none and batch.price_max is not none %}{{ batch.price_min }}-{{ batch.price_max }} 元{% elif batch.price_max is not none %}不超过 {{ batch.price_max }} 元{% else %}待定{% endif %}</span></div>
+              <div><strong>当前人数</strong><span>{{ count_map.get(batch.id, 0) }} 人</span></div>
             </div>
             <p class="hint">{{ batch.description[:88] }}{% if batch.description|length > 88 %}...{% endif %}</p>
             <div class="row-actions">

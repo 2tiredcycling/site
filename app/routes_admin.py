@@ -2024,7 +2024,7 @@ def _merch_batch_from_form(batch: MerchPreorderBatch | None = None) -> tuple[dic
     if not price_note:
         price_note = "最终价格将根据实际预报名人数确定，但不会超过上限。"
     if not size_note:
-        size_note = "尺码偏小。不追求极致贴身的非公路车玩家，建议买大一码或大两码。"
+        size_note = "尺码偏小\n不追求极致贴身的非公路车玩家，建议买大一码或大两码"
 
     return {
         "title": title,
