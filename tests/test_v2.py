@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -237,6 +237,139 @@ def test_events_alias_pages_available(app_and_client):
     assert list_resp.status_code == 200
     detail_resp = client.get(f"/events/{activity_id}")
     assert detail_resp.status_code == 200
+
+
+def test_kit_preorder_submit_update_lookup_and_cancel(app_and_client):
+    app, client = app_and_client
+    deadline = datetime.now(timezone.utc) + timedelta(days=7)
+    with app.app_context():
+        batch = MerchPreorderBatch(
+            title="Kit Batch A",
+            status=MERCH_BATCH_ACTIVE,
+            deadline_at=deadline,
+            price_min=180,
+            price_max=220,
+            is_visible=True,
+        )
+        db.session.add(batch)
+        db.session.commit()
+        batch_id = batch.id
+
+    detail = client.get(f"/kit/{batch_id}")
+    assert detail.status_code == 200
+    assert "Kit Batch A" in detail.get_data(as_text=True)
+
+    submit_resp = client.post(
+        f"/kit/{batch_id}/submit",
+        data={
+            "name": "Alice",
+            "student_id": "123456",
+            "phone": "13800000000",
+            "gender": "女",
+            "size": "L",
+            "quantity": "1",
+            "notes": "first",
+        },
+        follow_redirects=False,
+    )
+    assert submit_resp.status_code == 302
+    assert f"/kit/{batch_id}/success" in submit_resp.headers.get("Location", "")
+
+    check_resp = client.get(f"/kit/{batch_id}/check-student?student_id=123456")
+    assert check_resp.status_code == 200
+    assert check_resp.get_json()["exists"] is True
+    registration_id = check_resp.get_json()["registration_id"]
+
+    update_resp = client.post(
+        f"/kit/{batch_id}/submit",
+        data={
+            "name": "Alice",
+            "student_id": "123456",
+            "phone": "13800000001",
+            "gender": "女",
+            "size": "XL",
+            "quantity": "2",
+            "notes": "updated",
+            "update_registration_id": str(registration_id),
+        },
+        follow_redirects=False,
+    )
+    assert update_resp.status_code == 302
+
+    with app.app_context():
+        rows = MerchPreorderRegistration.query.filter_by(batch_id=batch_id).all()
+        assert len(rows) == 1
+        assert rows[0].size == "XL"
+        assert rows[0].quantity == 2
+
+    lookup = client.get(f"/kit/{batch_id}/lookup?name=Alice&student_id=123456")
+    assert lookup.status_code == 200
+    body = lookup.get_data(as_text=True)
+    assert "XL" in body
+    assert "取消预报名" in body
+
+    cancel_resp = client.post(
+        f"/kit/{batch_id}/cancel",
+        data={"name": "Alice", "student_id": "123456"},
+        follow_redirects=False,
+    )
+    assert cancel_resp.status_code == 302
+    with app.app_context():
+        row = MerchPreorderRegistration.query.filter_by(batch_id=batch_id).first()
+        assert row is not None
+        assert row.status == MERCH_ORDER_CANCELLED
+
+
+def test_manage_kit_preorder_create_and_registrations_page(app_and_client):
+    app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    csrf_token = get_manage_csrf(client)
+    resp = client.post(
+        "/manage/kit-preorders/create",
+        data={
+            "csrf_token": csrf_token,
+            "title": "Managed Kit Batch",
+            "status": MERCH_BATCH_ACTIVE,
+            "deadline_at": "2026-12-31T23:00",
+            "price_min": "180",
+            "price_max": "220",
+            "price_note": "最终价格按人数确认",
+            "size_note": "尺码偏小，建议买大一码。",
+            "description": "后台创建测试",
+            "is_visible": "1",
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert "Managed Kit Batch" in resp.get_data(as_text=True)
+
+    with app.app_context():
+        batch = MerchPreorderBatch.query.filter_by(title="Managed Kit Batch").first()
+        assert batch is not None
+        batch_id = batch.id
+        db.session.add(
+            MerchPreorderRegistration(
+                batch_id=batch_id,
+                name="Bob",
+                student_id="654321",
+                phone="13900000000",
+                gender="男",
+                size="M",
+                quantity=1,
+                status=MERCH_ORDER_PENDING,
+            )
+        )
+        db.session.commit()
+
+    list_resp = client.get("/manage/kit-preorders")
+    assert list_resp.status_code == 200
+    assert "Managed Kit Batch" in list_resp.get_data(as_text=True)
+
+    registrations_resp = client.get(f"/manage/kit-preorders/{batch_id}/registrations")
+    assert registrations_resp.status_code == 200
+    text = registrations_resp.get_data(as_text=True)
+    assert "Bob" in text
+    assert "654321" in text
 
 
 def test_manage_announcements_crud(app_and_client):

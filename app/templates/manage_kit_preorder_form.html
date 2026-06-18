@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ '编辑预报名批次' if batch else '新增预报名批次' }} {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>{{ '编辑预报名批次' if batch else '新增预报名批次' }}</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.merch_preorders_page') }}">返回列表</a>
+        {% if batch %}
+          <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">查看前台</a>
+          <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_registrations_page', batch_id=batch.id) }}">预报名信息</a>
+        {% endif %}
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form class="card form-card" method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_merch_preorder', batch_id=batch.id) if batch else url_for('admin.create_merch_preorder') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <section class="filter-grid">
+        <label>标题
+          <input name="title" type="text" required value="{{ batch.title if batch else '' }}">
+        </label>
+        <label>状态
+          <select name="status">
+            {% for status in batch_statuses %}
+              <option value="{{ status }}" {% if batch and batch.status == status %}selected{% endif %}>{{ status_labels.get(status, status) }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>开始时间
+          <input name="start_at" type="datetime-local" value="{{ to_local_time(batch.start_at).strftime('%Y-%m-%dT%H:%M') if batch and batch.start_at else '' }}">
+        </label>
+        <label>最终截止时间
+          <input name="deadline_at" type="datetime-local" required value="{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%dT%H:%M') if batch and batch.deadline_at else '' }}">
+        </label>
+        <label>价格下限
+          <input name="price_min" type="number" min="0" step="1" value="{{ batch.price_min if batch and batch.price_min is not none else '' }}">
+        </label>
+        <label>价格上限
+          <input name="price_max" type="number" min="0" step="1" value="{{ batch.price_max if batch and batch.price_max is not none else '' }}">
+        </label>
+      </section>
+      <label>
+        价格说明
+        <input name="price_note" type="text" value="{{ batch.price_note if batch else '最终价格将根据实际预报名人数确定，但不会超过上限。' }}">
+      </label>
+      <label>
+        尺码提醒
+        <textarea name="size_note" rows="3">{{ batch.size_note if batch else '尺码偏小。不追求极致贴身的非公路车玩家，建议买大一码或大两码。' }}</textarea>
+      </label>
+      <label>
+        预定说明
+        <textarea name="description" rows="5">{{ batch.description if batch else '' }}</textarea>
+      </label>
+      <label><input type="checkbox" name="is_visible" value="1" {% if not batch or batch.is_visible %}checked{% endif %}> 前台展示该批次</label>
+
+      <section class="form-card-subsection">
+        <h2>展示图片</h2>
+        <input name="gallery_images" type="file" accept="image/*" multiple>
+        {% if gallery_images %}
+          <div class="manage-media-grid">
+            {% for image in gallery_images %}
+              <article>
+                <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
+                <button class="btn btn-muted" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
+              </article>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="form-card-subsection">
+        <h2>尺码表图片</h2>
+        <input name="size_chart_images" type="file" accept="image/*" multiple>
+        {% if size_images %}
+          <div class="manage-media-grid">
+            {% for image in size_images %}
+              <article>
+                <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
+                <button class="btn btn-muted" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
+              </article>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </section>
+
+      <div class="row-actions">
+        <button class="btn btn-solid" type="submit">保存批次</button>
+      </div>
+    </form>
+    {% if batch %}
+      {% for image in gallery_images + size_images %}
+        <form id="deleteMerchImage{{ image.id }}" method="post" action="{{ url_for('admin.delete_merch_preorder_image', batch_id=batch.id, image_id=image.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        </form>
+      {% endfor %}
+    {% endif %}
+  </main>
+</body>
+</html>

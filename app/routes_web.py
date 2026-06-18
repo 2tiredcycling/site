@@ -15,6 +15,12 @@ from app.models import (
     ActivityRouteOption,
     Announcement,
     EventRegistration,
+    MERCH_BATCH_ACTIVE,
+    MERCH_ORDER_CANCELLED,
+    MERCH_ORDER_CONFIRMED,
+    MERCH_ORDER_PENDING,
+    MERCH_ORDER_PICKED_UP,
+    MERCH_ORDER_READY,
     Route,
     RouteFeedback,
     REGISTRATION_CONFIRMED,
@@ -22,6 +28,9 @@ from app.models import (
     SITE_FEEDBACK_PENDING,
     STATUS_PUBLISHED,
     MediaAsset,
+    MerchPreorderBatch,
+    MerchPreorderImage,
+    MerchPreorderRegistration,
     SiteFeedback,
     SitePage,
     db,
@@ -35,6 +44,14 @@ bp = Blueprint("web", __name__)
 SH_TZ = timezone(timedelta(hours=8))
 SITE_FEEDBACK_LIMIT_PER_MINUTE = 5
 SITE_FEEDBACK_WINDOW_SECONDS = 60
+MERCH_ACTIVE_ORDER_STATUSES = (
+    MERCH_ORDER_PENDING,
+    MERCH_ORDER_CONFIRMED,
+    MERCH_ORDER_READY,
+    MERCH_ORDER_PICKED_UP,
+)
+MERCH_SIZE_OPTIONS = ("XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL")
+MERCH_GENDER_OPTIONS = ("男", "女", "其他/不便填写")
 
 
 def _url_for(endpoint: str, **values):
@@ -357,6 +374,85 @@ def _activity_signup_open_map(activities: list[Activity], now_value=None) -> dic
     }
 
 
+def _merch_batch_count_map(batch_ids: list[int]) -> dict[int, int]:
+    if not batch_ids:
+        return {}
+    rows = (
+        db.session.query(
+            MerchPreorderRegistration.batch_id,
+            db.func.coalesce(db.func.sum(MerchPreorderRegistration.quantity), 0).label("count"),
+        )
+        .filter(
+            MerchPreorderRegistration.batch_id.in_(batch_ids),
+            MerchPreorderRegistration.status.in_(MERCH_ACTIVE_ORDER_STATUSES),
+        )
+        .group_by(MerchPreorderRegistration.batch_id)
+        .all()
+    )
+    result = {batch_id: 0 for batch_id in batch_ids}
+    for batch_id, count_value in rows:
+        result[int(batch_id)] = int(count_value or 0)
+    return result
+
+
+def _merch_batch_open(batch: MerchPreorderBatch, now_value=None) -> bool:
+    if not bool(batch.is_visible) or batch.status != MERCH_BATCH_ACTIVE:
+        return False
+    now_local = _to_local_time(now_value or utcnow())
+    start_local = _to_local_time(batch.start_at) if batch.start_at else None
+    deadline_local = _to_local_time(batch.deadline_at) if batch.deadline_at else None
+    if start_local and now_local < start_local:
+        return False
+    if deadline_local and now_local >= deadline_local:
+        return False
+    return True
+
+
+def _merch_batch_or_404(batch_id: int) -> MerchPreorderBatch:
+    batch = MerchPreorderBatch.query.filter_by(id=batch_id, is_visible=True).first()
+    if not batch:
+        abort(404, description="Preorder batch not found")
+    return batch
+
+
+def _render_merch_preorder_form(
+    batch: MerchPreorderBatch,
+    error_message: str = "",
+    submitted: dict | None = None,
+    duplicate_registration_id: int | None = None,
+) -> str:
+    count_map = _merch_batch_count_map([batch.id])
+    gallery_images = [item for item in batch.images if item.image_kind == "gallery"]
+    size_images = [item for item in batch.images if item.image_kind == "size_chart"]
+    return render_template(
+        "kit_preorder_detail.html",
+        batch=batch,
+        registration_count=count_map.get(batch.id, 0),
+        gallery_images=gallery_images,
+        size_images=size_images,
+        is_open=_merch_batch_open(batch),
+        error_message=error_message,
+        submitted=submitted or {},
+        duplicate_registration_id=duplicate_registration_id,
+        size_options=MERCH_SIZE_OPTIONS,
+        gender_options=MERCH_GENDER_OPTIONS,
+        meta_description=f"{batch.title} | 2Tired 骑行社骑行服预定",
+    )
+
+
+def _merch_registration_query(batch_id: int, name: str, student_id: str):
+    return (
+        MerchPreorderRegistration.query
+        .filter(
+            MerchPreorderRegistration.batch_id == batch_id,
+            db.func.lower(MerchPreorderRegistration.student_id) == student_id.lower(),
+            db.func.lower(MerchPreorderRegistration.name) == name.lower(),
+        )
+        .order_by(MerchPreorderRegistration.created_at.desc())
+        .first()
+    )
+
+
 def _activity_detail_or_404(activity_id: int) -> Activity:
     activity = Activity.query.filter_by(id=activity_id).first()
     if not activity:
@@ -553,6 +649,235 @@ def contact_page() -> str:
 def site_feedback() -> str:
     source = (request.args.get("source") or "").strip()
     return render_template("site_feedback.html", source=source)
+
+
+@bp.get("/kit")
+def kit_preorder_list() -> str:
+    batches = (
+        MerchPreorderBatch.query.filter_by(is_visible=True)
+        .order_by(
+            db.case(
+                (MerchPreorderBatch.status == MERCH_BATCH_ACTIVE, 0),
+                else_=1,
+            ),
+            MerchPreorderBatch.deadline_at.asc(),
+            MerchPreorderBatch.created_at.desc(),
+        )
+        .all()
+    )
+    count_map = _merch_batch_count_map([item.id for item in batches])
+    return render_template(
+        "kit_preorder_list.html",
+        batches=batches,
+        count_map=count_map,
+        meta_description="2Tired 骑行社骑行服与社团装备预定入口。",
+    )
+
+
+@bp.get("/kit/<int:batch_id>")
+def kit_preorder_detail(batch_id: int) -> str:
+    batch = _merch_batch_or_404(batch_id)
+    return _render_merch_preorder_form(batch)
+
+
+@bp.get("/kit/<int:batch_id>/check-student")
+def kit_preorder_check_student(batch_id: int):
+    _merch_batch_or_404(batch_id)
+    student_id = (request.args.get("student_id") or "").strip()
+    if not student_id:
+        return jsonify({"exists": False})
+    registration = (
+        MerchPreorderRegistration.query
+        .filter(
+            MerchPreorderRegistration.batch_id == batch_id,
+            db.func.lower(MerchPreorderRegistration.student_id) == student_id.lower(),
+            MerchPreorderRegistration.status.in_(MERCH_ACTIVE_ORDER_STATUSES),
+        )
+        .first()
+    )
+    if not registration:
+        return jsonify({"exists": False})
+    return jsonify({"exists": True, "registration_id": registration.id})
+
+
+@bp.post("/kit/<int:batch_id>/submit")
+def kit_preorder_submit(batch_id: int):
+    batch = _merch_batch_or_404(batch_id)
+    name = (request.form.get("name") or "").strip()
+    student_id = (request.form.get("student_id") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    gender = (request.form.get("gender") or "").strip()
+    size = (request.form.get("size") or "").strip()
+    notes = (request.form.get("notes") or "").strip()
+    update_registration_id = request.form.get("update_registration_id", type=int)
+    try:
+        quantity = int((request.form.get("quantity") or "1").strip())
+    except ValueError:
+        quantity = 0
+    submitted = {
+        "name": name,
+        "student_id": student_id,
+        "phone": phone,
+        "gender": gender,
+        "size": size,
+        "quantity": quantity if quantity > 0 else "",
+        "notes": notes,
+    }
+
+    if not _merch_batch_open(batch):
+        return _render_merch_preorder_form(batch, "当前批次未开放预报名或已经截止。", submitted=submitted)
+    if not name or len(name) > 64:
+        return _render_merch_preorder_form(batch, "请填写 1-64 个字符的姓名。", submitted=submitted)
+    if not student_id or len(student_id) > 32:
+        return _render_merch_preorder_form(batch, "请填写 1-32 个字符的学号。", submitted=submitted)
+    if not phone or len(phone) > 32:
+        return _render_merch_preorder_form(batch, "请填写 1-32 个字符的手机号。", submitted=submitted)
+    if gender not in MERCH_GENDER_OPTIONS:
+        return _render_merch_preorder_form(batch, "请选择性别。", submitted=submitted)
+    if size not in MERCH_SIZE_OPTIONS:
+        return _render_merch_preorder_form(batch, "请选择尺码。", submitted=submitted)
+    if quantity < 1 or quantity > 10:
+        return _render_merch_preorder_form(batch, "件数需要在 1-10 之间。", submitted=submitted)
+
+    existing_registration = (
+        MerchPreorderRegistration.query
+        .filter(
+            MerchPreorderRegistration.batch_id == batch.id,
+            db.func.lower(MerchPreorderRegistration.student_id) == student_id.lower(),
+            MerchPreorderRegistration.status.in_(MERCH_ACTIVE_ORDER_STATUSES),
+        )
+        .first()
+    )
+    if existing_registration and update_registration_id != existing_registration.id:
+        return _render_merch_preorder_form(
+            batch,
+            "该学号已提交过本批次预报名。请确认是否修改原预报名信息。",
+            submitted=submitted,
+            duplicate_registration_id=existing_registration.id,
+        )
+
+    if existing_registration and update_registration_id == existing_registration.id:
+        existing_registration.name = name
+        existing_registration.student_id = student_id
+        existing_registration.phone = phone
+        existing_registration.gender = gender
+        existing_registration.size = size
+        existing_registration.quantity = quantity
+        existing_registration.notes = notes[:1000]
+        existing_registration.updated_at = utcnow()
+        updated = True
+    else:
+        registration = MerchPreorderRegistration(
+            batch_id=batch.id,
+            name=name,
+            student_id=student_id,
+            phone=phone,
+            gender=gender,
+            size=size,
+            quantity=quantity,
+            notes=notes[:1000],
+            status=MERCH_ORDER_PENDING,
+            source_ip=(client_ip() or "")[:64],
+            user_agent=(request.user_agent.string or "")[:255],
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        db.session.add(registration)
+        updated = False
+    db.session.commit()
+
+    return redirect(_url_for("web.kit_preorder_success", batch_id=batch.id, updated=(1 if updated else 0)))
+
+
+@bp.get("/kit/<int:batch_id>/success")
+def kit_preorder_success(batch_id: int) -> str:
+    batch = _merch_batch_or_404(batch_id)
+    updated = (request.args.get("updated") or "").strip() == "1"
+    count_map = _merch_batch_count_map([batch.id])
+    return render_template(
+        "kit_preorder_success.html",
+        batch=batch,
+        updated=updated,
+        registration_count=count_map.get(batch.id, 0),
+        meta_description=f"{batch.title} 预报名成功。",
+    )
+
+
+@bp.get("/kit/<int:batch_id>/lookup")
+def kit_preorder_lookup(batch_id: int) -> str:
+    batch = _merch_batch_or_404(batch_id)
+    name = (request.args.get("name") or "").strip()
+    student_id = (request.args.get("student_id") or "").strip()
+    registration = None
+    message = ""
+    if name or student_id:
+        if not name or not student_id:
+            message = "请同时填写姓名和学号。"
+        else:
+            registration = _merch_registration_query(batch.id, name, student_id)
+            if not registration:
+                message = "没有查询到对应的预报名记录。"
+    can_cancel = bool(
+        registration
+        and registration.status in {MERCH_ORDER_PENDING, MERCH_ORDER_CONFIRMED}
+        and batch.deadline_at
+        and _to_local_time(utcnow()) < _to_local_time(batch.deadline_at)
+    )
+    return render_template(
+        "kit_preorder_lookup.html",
+        batch=batch,
+        registration=registration,
+        message=message,
+        can_cancel=can_cancel,
+        submitted_name=name,
+        submitted_student_id=student_id,
+        meta_description=f"{batch.title} 预报名查询与取消。",
+    )
+
+
+@bp.post("/kit/<int:batch_id>/cancel")
+def kit_preorder_cancel(batch_id: int):
+    batch = _merch_batch_or_404(batch_id)
+    name = (request.form.get("name") or "").strip()
+    student_id = (request.form.get("student_id") or "").strip()
+    registration = _merch_registration_query(batch.id, name, student_id) if name and student_id else None
+    if not registration:
+        return redirect(_url_for("web.kit_preorder_lookup", batch_id=batch.id, name=name, student_id=student_id))
+    deadline_local = _to_local_time(batch.deadline_at) if batch.deadline_at else None
+    if (
+        registration.status not in {MERCH_ORDER_PENDING, MERCH_ORDER_CONFIRMED}
+        or deadline_local is None
+        or _to_local_time(utcnow()) >= deadline_local
+    ):
+        return redirect(_url_for("web.kit_preorder_lookup", batch_id=batch.id, name=name, student_id=student_id))
+    registration.status = MERCH_ORDER_CANCELLED
+    registration.cancelled_at = utcnow()
+    registration.updated_at = utcnow()
+    db.session.commit()
+    return redirect(_url_for("web.kit_preorder_lookup", batch_id=batch.id, name=name, student_id=student_id, cancelled=1))
+
+
+@bp.get("/kit/image/<int:image_id>")
+def kit_preorder_image(image_id: int):
+    image = MerchPreorderImage.query.filter_by(id=image_id).first()
+    if not image or not image.batch or not image.batch.is_visible:
+        abort(404, description="Preorder image not found")
+    media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
+    file_path = media_dir / (image.storage_path or "")
+    if not file_path.exists() or not file_path.is_file():
+        abort(404, description="Preorder image missing")
+    response = send_from_directory(
+        directory=str(media_dir),
+        path=image.storage_path,
+        as_attachment=False,
+        download_name=image.original_filename or image.storage_path,
+        mimetype=image.mime_type or "application/octet-stream",
+        max_age=31536000,
+    )
+    response.cache_control.public = True
+    response.cache_control.max_age = 31536000
+    response.cache_control.immutable = True
+    return response
 
 
 @bp.post("/feedback")

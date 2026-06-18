@@ -47,6 +47,28 @@ REGISTRATION_STATUSES = (
     REGISTRATION_CANCELLED,
 )
 
+MERCH_BATCH_UPCOMING = "upcoming"
+MERCH_BATCH_ACTIVE = "active"
+MERCH_BATCH_ENDED = "ended"
+MERCH_BATCH_STATUSES = (
+    MERCH_BATCH_UPCOMING,
+    MERCH_BATCH_ACTIVE,
+    MERCH_BATCH_ENDED,
+)
+
+MERCH_ORDER_PENDING = "pending"
+MERCH_ORDER_CONFIRMED = "confirmed"
+MERCH_ORDER_CANCELLED = "cancelled"
+MERCH_ORDER_READY = "ready_for_pickup"
+MERCH_ORDER_PICKED_UP = "picked_up"
+MERCH_ORDER_STATUSES = (
+    MERCH_ORDER_PENDING,
+    MERCH_ORDER_CONFIRMED,
+    MERCH_ORDER_CANCELLED,
+    MERCH_ORDER_READY,
+    MERCH_ORDER_PICKED_UP,
+)
+
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -423,6 +445,92 @@ class EventRegistration(db.Model):
 
     activity = db.relationship("Activity", lazy="joined")
     reviewer = db.relationship("User", foreign_keys=[reviewed_by], lazy="joined")
+
+
+class MerchPreorderBatch(db.Model):
+    __tablename__ = "merch_preorder_batches"
+    __table_args__ = (
+        Index("idx_merch_batches_status_visible", "status", "is_visible"),
+        Index("idx_merch_batches_deadline", "deadline_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(160), nullable=False)
+    status = db.Column(db.String(32), nullable=False, default=MERCH_BATCH_UPCOMING)
+    start_at = db.Column(db.DateTime, nullable=True)
+    deadline_at = db.Column(db.DateTime, nullable=False)
+    price_min = db.Column(db.Integer, nullable=True)
+    price_max = db.Column(db.Integer, nullable=True)
+    price_note = db.Column(db.String(255), nullable=False, default="")
+    description = db.Column(db.Text, nullable=False, default="")
+    size_note = db.Column(db.Text, nullable=False, default="")
+    is_visible = db.Column(db.Boolean, nullable=False, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    updated_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    creator = db.relationship("User", foreign_keys=[created_by], lazy="joined")
+    updater = db.relationship("User", foreign_keys=[updated_by], lazy="joined")
+    images = db.relationship(
+        "MerchPreorderImage",
+        back_populates="batch",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        order_by="MerchPreorderImage.sort_order.asc(), MerchPreorderImage.id.asc()",
+    )
+    registrations = db.relationship(
+        "MerchPreorderRegistration",
+        back_populates="batch",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+class MerchPreorderImage(db.Model):
+    __tablename__ = "merch_preorder_images"
+    __table_args__ = (
+        Index("idx_merch_images_batch_kind_sort", "batch_id", "image_kind", "sort_order"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey("merch_preorder_batches.id"), nullable=False)
+    image_kind = db.Column(db.String(32), nullable=False, default="gallery")
+    original_filename = db.Column(db.String(255), nullable=False)
+    storage_path = db.Column(db.String(255), nullable=False)
+    mime_type = db.Column(db.String(128), nullable=False, default="")
+    size_bytes = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    batch = db.relationship("MerchPreorderBatch", back_populates="images", lazy="joined")
+
+
+class MerchPreorderRegistration(db.Model):
+    __tablename__ = "merch_preorder_registrations"
+    __table_args__ = (
+        Index("idx_merch_registrations_batch_status", "batch_id", "status"),
+        Index("idx_merch_registrations_student_id", "student_id"),
+        Index("idx_merch_registrations_created_at", "created_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey("merch_preorder_batches.id"), nullable=False)
+    name = db.Column(db.String(64), nullable=False)
+    student_id = db.Column(db.String(32), nullable=False)
+    phone = db.Column(db.String(32), nullable=False)
+    gender = db.Column(db.String(16), nullable=False, default="")
+    size = db.Column(db.String(16), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    notes = db.Column(db.Text, nullable=False, default="")
+    status = db.Column(db.String(32), nullable=False, default=MERCH_ORDER_PENDING)
+    cancelled_at = db.Column(db.DateTime, nullable=True)
+    source_ip = db.Column(db.String(64), nullable=False, default="")
+    user_agent = db.Column(db.String(255), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    batch = db.relationship("MerchPreorderBatch", back_populates="registrations", lazy="joined")
 
 
 class RouteVersion(db.Model):

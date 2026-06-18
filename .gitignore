@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 instance/*.db
+instance/*.db-journal
 tmp_restore_drill/
 backups/
 server-sync/

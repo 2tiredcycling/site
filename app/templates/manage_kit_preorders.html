@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>骑行服预定管理 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>骑行服预定管理</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        {% if can_edit %}
+          <a class="btn" href="{{ url_for('admin.merch_preorder_new_page') }}">新增批次</a>
+        {% endif %}
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <h2>预报名批次</h2>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>标题</th><th>状态</th><th>截止时间</th><th>人数</th><th>展示</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for batch in batches %}
+            <tr>
+              <td>{{ batch.id }}</td>
+              <td>{{ batch.title }}</td>
+              <td>{{ status_labels.get(batch.status, batch.status) }}</td>
+              <td>{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d %H:%M') if batch.deadline_at else '-' }}</td>
+              <td>{{ count_map.get(batch.id, 0) }}</td>
+              <td>{{ '是' if batch.is_visible else '否' }}</td>
+              <td class="row-actions">
+                <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">查看</a>
+                <a class="btn" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">编辑</a>
+                <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_registrations_page', batch_id=batch.id) }}">预报名信息</a>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7">暂无预报名批次</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.merch_preorders_page', page=pagination.prev_num) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.merch_preorders_page', page=pagination.next_num) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

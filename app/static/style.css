@@ -2640,6 +2640,83 @@ td {
   line-height: 1.08;
 }
 
+.kit-page .event-signup-hero {
+  margin-bottom: 18px;
+}
+
+.kit-batch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.kit-batch-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kit-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 0 0 18px;
+}
+
+.kit-media-item {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--brand-surface-soft);
+}
+
+.kit-media-item img,
+.kit-size-chart-list img,
+.manage-media-grid img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.kit-size-warning {
+  border-color: rgba(176, 78, 0, 0.28);
+  background: rgba(255, 247, 237, 0.78);
+}
+
+.kit-size-warning p {
+  color: #7c2d12;
+  font-weight: 700;
+}
+
+.kit-size-chart-list {
+  display: grid;
+  gap: 12px;
+}
+
+.form-card-subsection {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--card-border);
+}
+
+.manage-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.manage-media-grid article {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--brand-surface-soft);
+}
+
 .event-signup-success-time {
   display: inline-grid;
   gap: 4px;

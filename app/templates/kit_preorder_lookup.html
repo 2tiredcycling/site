@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>查询/取消预报名 | {{ batch.title }} | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '查询或取消骑行服预报名。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+    <section class="card form-card event-signup-card kit-page">
+      <div class="event-signup-head">
+        <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">返回批次</a>
+      </div>
+      <section class="event-signup-hero">
+        <div class="event-signup-title-wrap">
+          <p class="hero-kicker">Lookup</p>
+          <h1>查询/取消预报名</h1>
+          <p class="event-signup-subtitle">{{ batch.title }}</p>
+        </div>
+      </section>
+      {% if request.args.get('cancelled') == '1' %}
+        <div class="alert alert-ok">预报名已取消。</div>
+      {% elif message %}
+        <div class="alert">{{ message }}</div>
+      {% endif %}
+      <section class="event-signup-layout">
+        <section class="event-signup-panel">
+          <h2>查询信息</h2>
+          <form class="event-signup-form" action="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}" method="get">
+            <label>姓名<input name="name" type="text" required value="{{ submitted_name or '' }}"></label>
+            <label>学号<input name="student_id" type="text" required value="{{ submitted_student_id or '' }}"></label>
+            <button class="btn btn-solid event-signup-submit-btn" type="submit">查询预报名</button>
+          </form>
+        </section>
+        <aside class="event-signup-panel">
+          <h2>查询结果</h2>
+          {% if registration %}
+            <div class="event-signup-summary">
+              <div><strong>姓名</strong><span>{{ registration.name }}</span></div>
+              <div><strong>学号</strong><span>{{ registration.student_id }}</span></div>
+              <div><strong>手机号</strong><span>{{ registration.phone }}</span></div>
+              <div><strong>尺码</strong><span>{{ registration.size }}</span></div>
+              <div><strong>件数</strong><span>{{ registration.quantity }}</span></div>
+              <div><strong>状态</strong><span>{% if registration.status == 'pending' %}待确认{% elif registration.status == 'confirmed' %}已确认{% elif registration.status == 'cancelled' %}已取消{% elif registration.status == 'ready_for_pickup' %}待领取{% elif registration.status == 'picked_up' %}已领取{% else %}{{ registration.status }}{% endif %}</span></div>
+            </div>
+            {% if can_cancel %}
+              <form method="post" action="{{ url_for('web.kit_preorder_cancel', batch_id=batch.id) }}">
+                <input type="hidden" name="name" value="{{ registration.name }}">
+                <input type="hidden" name="student_id" value="{{ registration.student_id }}">
+                <button class="btn btn-muted" type="submit">取消预报名</button>
+              </form>
+            {% else %}
+              <p class="hint">当前状态或截止时间不支持前台自行取消。如需处理，请联系管理员。</p>
+            {% endif %}
+          {% else %}
+            <p class="hint">请输入姓名和学号查询自己的预报名记录。</p>
+          {% endif %}
+        </aside>
+      </section>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

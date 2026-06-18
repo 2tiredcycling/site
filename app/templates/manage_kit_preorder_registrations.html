@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>预报名信息 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>预报名信息</h1>
+      <p>{{ batch.title }} · 当前统计 {{ registration_count }} 件</p>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.merch_preorders_page') }}">返回批次</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">编辑批次</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.export_merch_preorder_registrations_excel', batch_id=batch.id) }}">导出 Excel</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <form class="filter-grid" method="get">
+        <label>状态筛选
+          <select name="status">
+            <option value="">全部</option>
+            {% for status in order_statuses %}
+              <option value="{{ status }}" {% if status_filter == status %}selected{% endif %}>{{ status_labels.get(status, status) }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="row-actions"><button class="btn btn-muted" type="submit">筛选</button></div>
+      </form>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>姓名</th><th>学号</th><th>手机号</th><th>性别</th><th>尺码</th><th>件数</th><th>状态</th><th>备注</th><th>提交时间</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for item in registrations %}
+            <tr>
+              <td>{{ item.id }}</td>
+              <td>{{ item.name }}</td>
+              <td>{{ item.student_id }}</td>
+              <td>{{ item.phone }}</td>
+              <td>{{ item.gender }}</td>
+              <td>{{ item.size }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>{{ status_labels.get(item.status, item.status) }}</td>
+              <td>{{ item.notes }}</td>
+              <td>{{ to_local_time(item.created_at).strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</td>
+              <td>
+                <form method="post" action="{{ url_for('admin.update_merch_preorder_registration_status', batch_id=batch.id, registration_id=item.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <select name="status">
+                    {% for status in order_statuses %}
+                      <option value="{{ status }}" {% if item.status == status %}selected{% endif %}>{{ status_labels.get(status, status) }}</option>
+                    {% endfor %}
+                  </select>
+                  <button class="btn btn-muted" type="submit">更新</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="11">暂无预报名记录</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_registrations_page', batch_id=batch.id, page=pagination.prev_num, status=status_filter) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_registrations_page', batch_id=batch.id, page=pagination.next_num, status=status_filter) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>骑行服预定 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '2Tired 骑行社骑行服预定入口。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+
+    <section class="card form-card event-signup-card kit-page">
+      <section class="event-signup-hero">
+        <div class="event-signup-title-wrap">
+          <p class="hero-kicker">Kit Preorder</p>
+          <h1>骑行服预定</h1>
+          <p class="event-signup-subtitle">查看当前预报名批次，提交或管理自己的预报名信息。</p>
+        </div>
+      </section>
+
+      <section class="kit-batch-grid">
+        {% for batch in batches %}
+          <article class="event-signup-panel kit-batch-card">
+            <div class="event-signup-head">
+              <span class="event-signup-state {{ 'is-open' if batch.status == 'active' else 'is-closed' }}">
+                {% if batch.status == 'active' %}正在进行{% elif batch.status == 'upcoming' %}即将开始{% else %}已经结束{% endif %}
+              </span>
+              <span class="hint">{{ count_map.get(batch.id, 0) }} 人</span>
+            </div>
+            <h2>{{ batch.title }}</h2>
+            <div class="event-signup-summary">
+              {% if batch.start_at %}
+                <div><strong>开始时间</strong><span>{{ to_local_time(batch.start_at).strftime('%Y-%m-%d %H:%M') }}</span></div>
+              {% endif %}
+              <div><strong>截止时间</strong><span>{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d %H:%M') if batch.deadline_at else '待定' }}</span></div>
+              <div><strong>价格区间</strong><span>{% if batch.price_min is not none and batch.price_max is not none %}{{ batch.price_min }}-{{ batch.price_max }} 元{% elif batch.price_max is not none %}不超过 {{ batch.price_max }} 元{% else %}待定{% endif %}</span></div>
+            </div>
+            <p class="hint">{{ batch.description[:88] }}{% if batch.description|length > 88 %}...{% endif %}</p>
+            <div class="row-actions">
+              <a class="btn btn-solid" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">进入预报名</a>
+              <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">查询/取消</a>
+            </div>
+          </article>
+        {% else %}
+          <section class="event-signup-panel">
+            <h2>暂无开放批次</h2>
+            <p class="hint">当前没有可展示的骑行服预报名批次，请稍后关注社团通知。</p>
+          </section>
+        {% endfor %}
+      </section>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

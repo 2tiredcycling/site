@@ -38,6 +38,7 @@
         <div><strong>路线总数</strong><div>{{ summary.route_total }}</div></div>
         <div><strong>回收站</strong><div>{{ summary.route_deleted }}</div></div>
         <div><strong>活动总数</strong><div>{{ summary.activity_total }}</div></div>
+        <div><strong>预定批次</strong><div>{{ summary.merch_batch_total }}</div></div>
         <div><strong>公告总数</strong><div>{{ summary.announcement_total }}</div></div>
         <div><strong>待审核反馈</strong><div>{{ summary.feedback_pending }}</div></div>
         <div><strong>网站问题待处理</strong><div>{{ summary.site_feedback_pending }}</div></div>
@@ -102,6 +103,22 @@
             </a>
           {% else %}
             <p>暂无活动</p>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% if can_edit %}
+        <section class="card form-card card-link" data-href="{{ url_for('admin.merch_preorders_page') }}">
+          <h2>骑行服预定</h2>
+          {% for batch in latest_merch_batches %}
+            <a class="quick-link" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">
+              <article class="edit-item compact-item">
+                <div><strong>{{ batch.title }}</strong></div>
+                <div class="hint">状态：{{ merch_batch_status_labels.get(batch.status, batch.status) }}，截止：{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d %H:%M') if batch.deadline_at else '-' }}</div>
+              </article>
+            </a>
+          {% else %}
+            <p>暂无预定批次</p>
           {% endfor %}
         </section>
       {% endif %}

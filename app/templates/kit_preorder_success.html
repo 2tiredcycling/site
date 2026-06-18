@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>预报名成功 | {{ batch.title }} | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '预报名成功。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+    <section class="card form-card event-signup-card event-signup-success-card">
+      <section class="event-signup-success-hero">
+        <p class="hero-kicker">Kit Preorder</p>
+        <h1>{{ '预报名信息已更新' if updated else '预报名成功' }}</h1>
+        <p>{{ batch.title }}</p>
+        <div class="event-signup-success-time">
+          <strong>截止时间</strong>
+          <span>{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d %H:%M') if batch.deadline_at else '待定' }}</span>
+        </div>
+      </section>
+      <section class="event-signup-success-layout">
+        <section class="event-signup-panel">
+          <h2>后续说明</h2>
+          <p>当前批次已有 {{ registration_count }} 人预报名。最终价格将根据实际预报名人数确定，但不会超过页面标注上限。</p>
+          <p>如需取消，请在截止日期前通过姓名和学号查询并取消。</p>
+          <div class="row-actions">
+            <a class="btn btn-solid" href="{{ url_for('web.kit_preorder_lookup', batch_id=batch.id) }}">查询/取消</a>
+            <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">返回批次</a>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

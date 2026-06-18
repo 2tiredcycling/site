@@ -47,6 +47,16 @@ from app.models import (
     FEEDBACK_APPROVED,
     FEEDBACK_PENDING,
     FEEDBACK_REJECTED,
+    MERCH_BATCH_ACTIVE,
+    MERCH_BATCH_ENDED,
+    MERCH_BATCH_STATUSES,
+    MERCH_BATCH_UPCOMING,
+    MERCH_ORDER_CANCELLED,
+    MERCH_ORDER_CONFIRMED,
+    MERCH_ORDER_PENDING,
+    MERCH_ORDER_PICKED_UP,
+    MERCH_ORDER_READY,
+    MERCH_ORDER_STATUSES,
     ROLE_CONTENT_ADMIN,
     ROLE_OPS_ADMIN,
     ROLE_SUPER_ADMIN,
@@ -67,6 +77,9 @@ from app.models import (
     EventRegistration,
     ImportReport,
     MediaAsset,
+    MerchPreorderBatch,
+    MerchPreorderImage,
+    MerchPreorderRegistration,
     Route,
     RouteFeedback,
     RouteVersion,
@@ -113,6 +126,24 @@ ACTIVITY_ROUTE_LEVELS = (
     ("beginner", "初级"),
     ("intermediate", "中级"),
     ("advanced", "高级"),
+)
+MERCH_BATCH_STATUS_LABELS = {
+    MERCH_BATCH_UPCOMING: "即将开始",
+    MERCH_BATCH_ACTIVE: "正在进行",
+    MERCH_BATCH_ENDED: "已经结束",
+}
+MERCH_ORDER_STATUS_LABELS = {
+    MERCH_ORDER_PENDING: "待确认",
+    MERCH_ORDER_CONFIRMED: "已确认",
+    MERCH_ORDER_CANCELLED: "已取消",
+    MERCH_ORDER_READY: "待领取",
+    MERCH_ORDER_PICKED_UP: "已领取",
+}
+MERCH_ACTIVE_ORDER_STATUSES = (
+    MERCH_ORDER_PENDING,
+    MERCH_ORDER_CONFIRMED,
+    MERCH_ORDER_READY,
+    MERCH_ORDER_PICKED_UP,
 )
 
 
@@ -277,6 +308,62 @@ def _save_activity_media(activity_id: int, uploads, activity_route_option_id: in
         )
         saved_count += 1
     return saved_count
+
+
+def _save_merch_preorder_images(batch_id: int, uploads, image_kind: str) -> int:
+    media_dir = Path(current_app.config["MEDIA_UPLOAD_FOLDER"])
+    media_dir.mkdir(parents=True, exist_ok=True)
+    allowed_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    max_media_bytes = int(current_app.config.get("MAX_MEDIA_BYTES", 10 * 1024 * 1024))
+
+    saved_count = 0
+    existing_max = (
+        db.session.query(db.func.coalesce(db.func.max(MerchPreorderImage.sort_order), 0))
+        .filter_by(batch_id=batch_id, image_kind=image_kind)
+        .scalar()
+        or 0
+    )
+    for upload in uploads:
+        if not upload or not (upload.filename or "").strip():
+            continue
+        original_name = secure_filename(Path(upload.filename).name)
+        ext = Path(original_name).suffix.lower()
+        if not original_name or ext not in allowed_exts:
+            continue
+        if not file_size_ok(upload, max_media_bytes):
+            continue
+
+        token = f"merch_{batch_id}_{image_kind}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{secrets.token_hex(4)}{ext}"
+        target_path = media_dir / token
+        upload.save(target_path)
+        mime_type = (upload.mimetype or "").strip() or (mimetypes.guess_type(original_name)[0] or "application/octet-stream")
+        existing_max += 1
+        db.session.add(
+            MerchPreorderImage(
+                batch_id=batch_id,
+                image_kind=image_kind,
+                original_filename=original_name[:255],
+                storage_path=token,
+                mime_type=mime_type[:128],
+                size_bytes=int(target_path.stat().st_size),
+                sort_order=int(existing_max),
+                created_at=utcnow(),
+            )
+        )
+        saved_count += 1
+    return saved_count
+
+
+def _merch_registration_count(batch_id: int) -> int:
+    return int(
+        db.session.query(db.func.coalesce(db.func.sum(MerchPreorderRegistration.quantity), 0))
+        .filter(
+            MerchPreorderRegistration.batch_id == batch_id,
+            MerchPreorderRegistration.status.in_(MERCH_ACTIVE_ORDER_STATUSES),
+        )
+        .scalar()
+        or 0
+    )
 
 
 def _read_wechat_qr_upload(upload):
@@ -557,6 +644,7 @@ def _enforce_permission_matrix():
     if (
         path.startswith("/manage/routes")
         or path.startswith("/manage/activities")
+        or path.startswith("/manage/kit-preorders")
         or path.startswith("/manage/announcements")
         or path.startswith("/manage/bulk-import")
     ) and not can_edit(user):
@@ -708,6 +796,11 @@ def dashboard():
     )
     latest_routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).limit(3).all() if can_edit_flag else []
     latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(3).all() if can_edit_flag else []
+    latest_merch_batches = (
+        MerchPreorderBatch.query.order_by(MerchPreorderBatch.updated_at.desc(), MerchPreorderBatch.id.desc()).limit(3).all()
+        if can_edit_flag
+        else []
+    )
     latest_announcements = (
         Announcement.query.order_by(
             Announcement.is_pinned.desc(),
@@ -725,6 +818,7 @@ def dashboard():
         "route_total": Route.query.filter_by(is_deleted=False).count(),
         "route_deleted": Route.query.filter_by(is_deleted=True).count(),
         "activity_total": Activity.query.count(),
+        "merch_batch_total": MerchPreorderBatch.query.count(),
         "announcement_total": Announcement.query.count(),
         "feedback_pending": pending_feedback_count,
         "site_feedback_pending": pending_site_feedback_count,
@@ -789,6 +883,8 @@ def dashboard():
         audit_logs_pagination=audit_logs_pagination,
         latest_routes=latest_routes,
         latest_activities=latest_activities,
+        latest_merch_batches=latest_merch_batches,
+        merch_batch_status_labels=MERCH_BATCH_STATUS_LABELS,
         latest_announcements=latest_announcements,
         latest_feedback=latest_feedback,
         latest_site_feedback=latest_site_feedback,
@@ -1584,6 +1680,138 @@ def export_activity_registrations_excel(activity_id: int):
     )
 
 
+@bp.get("/kit-preorders")
+@login_required
+def merch_preorders_page():
+    page = max(1, request.args.get("page", default=1, type=int))
+    pagination = MerchPreorderBatch.query.order_by(
+        MerchPreorderBatch.updated_at.desc(),
+        MerchPreorderBatch.id.desc(),
+    ).paginate(page=page, per_page=20, error_out=False)
+    count_map = {item.id: _merch_registration_count(item.id) for item in pagination.items}
+    return render_template(
+        "manage_kit_preorders.html",
+        batches=pagination.items,
+        pagination=pagination,
+        count_map=count_map,
+        status_labels=MERCH_BATCH_STATUS_LABELS,
+        can_edit=can_edit(g.current_user),
+    )
+
+
+@bp.get("/kit-preorders/new")
+@login_required
+def merch_preorder_new_page():
+    return render_template(
+        "manage_kit_preorder_form.html",
+        batch=None,
+        gallery_images=[],
+        size_images=[],
+        batch_statuses=MERCH_BATCH_STATUSES,
+        status_labels=MERCH_BATCH_STATUS_LABELS,
+        can_edit=True,
+    )
+
+
+@bp.get("/kit-preorders/<int:batch_id>/edit")
+@login_required
+def merch_preorder_edit_page(batch_id: int):
+    batch = MerchPreorderBatch.query.filter_by(id=batch_id).first()
+    if not batch:
+        flash("预报名批次不存在", "error")
+        return redirect(url_for("admin.merch_preorders_page"))
+    return render_template(
+        "manage_kit_preorder_form.html",
+        batch=batch,
+        gallery_images=[item for item in batch.images if item.image_kind == "gallery"],
+        size_images=[item for item in batch.images if item.image_kind == "size_chart"],
+        batch_statuses=MERCH_BATCH_STATUSES,
+        status_labels=MERCH_BATCH_STATUS_LABELS,
+        can_edit=can_edit(g.current_user),
+    )
+
+
+@bp.get("/kit-preorders/<int:batch_id>/registrations")
+@login_required
+def merch_preorder_registrations_page(batch_id: int):
+    batch = MerchPreorderBatch.query.filter_by(id=batch_id).first()
+    if not batch:
+        flash("预报名批次不存在", "error")
+        return redirect(url_for("admin.merch_preorders_page"))
+    page = max(1, request.args.get("page", default=1, type=int))
+    status_filter = (request.args.get("status") or "").strip()
+    query = MerchPreorderRegistration.query.filter_by(batch_id=batch.id)
+    if status_filter in MERCH_ORDER_STATUSES:
+        query = query.filter(MerchPreorderRegistration.status == status_filter)
+    pagination = query.order_by(
+        MerchPreorderRegistration.created_at.desc(),
+        MerchPreorderRegistration.id.desc(),
+    ).paginate(page=page, per_page=50, error_out=False)
+    return render_template(
+        "manage_kit_preorder_registrations.html",
+        batch=batch,
+        registrations=pagination.items,
+        pagination=pagination,
+        status_filter=status_filter,
+        order_statuses=MERCH_ORDER_STATUSES,
+        status_labels=MERCH_ORDER_STATUS_LABELS,
+        registration_count=_merch_registration_count(batch.id),
+    )
+
+
+@bp.get("/kit-preorders/<int:batch_id>/registrations/export.xlsx")
+@login_required
+def export_merch_preorder_registrations_excel(batch_id: int):
+    batch = MerchPreorderBatch.query.filter_by(id=batch_id).first()
+    if not batch:
+        flash("预报名批次不存在", "error")
+        return redirect(url_for("admin.merch_preorders_page"))
+    try:
+        from openpyxl import Workbook
+    except Exception:
+        flash("导出失败：缺少 openpyxl 依赖，请先安装后重试。", "error")
+        return redirect(url_for("admin.merch_preorder_registrations_page", batch_id=batch.id))
+
+    rows = (
+        MerchPreorderRegistration.query.filter_by(batch_id=batch.id)
+        .order_by(MerchPreorderRegistration.created_at.asc(), MerchPreorderRegistration.id.asc())
+        .all()
+    )
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "预报名"
+    headers = ["姓名", "学号", "手机号", "性别", "尺码", "件数", "状态", "备注", "提交时间"]
+    sheet.append(headers)
+    for item in rows:
+        sheet.append(
+            [
+                item.name,
+                item.student_id,
+                item.phone,
+                item.gender,
+                item.size,
+                item.quantity,
+                MERCH_ORDER_STATUS_LABELS.get(item.status, item.status),
+                item.notes,
+                _to_local_time(item.created_at).strftime("%Y-%m-%d %H:%M") if item.created_at else "",
+            ]
+        )
+    for column_cells in sheet.columns:
+        width = max(len(str(cell.value or "")) for cell in column_cells)
+        sheet.column_dimensions[column_cells[0].column_letter].width = min(max(width + 2, 10), 28)
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    filename = f"kit_preorder_{batch.id}_registrations.xlsx"
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @bp.get("/announcements")
 @login_required
 def announcements_page():
@@ -1757,6 +1985,59 @@ def _parse_activity_time(value: str | None) -> datetime | None:
         parsed = parsed.replace(tzinfo=SH_TZ)
 
     return parsed.astimezone(timezone.utc)
+
+
+def _parse_int_field(value: str | None) -> int | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
+def _merch_batch_from_form(batch: MerchPreorderBatch | None = None) -> tuple[dict, str | None]:
+    title = (request.form.get("title") or (batch.title if batch else "")).strip()
+    status = (request.form.get("status") or (batch.status if batch else MERCH_BATCH_UPCOMING)).strip()
+    if status not in MERCH_BATCH_STATUSES:
+        status = MERCH_BATCH_UPCOMING
+    start_at = _parse_activity_time(request.form.get("start_at"))
+    deadline_at = _parse_activity_time(request.form.get("deadline_at"))
+    price_min = _parse_int_field(request.form.get("price_min"))
+    price_max = _parse_int_field(request.form.get("price_max"))
+    price_note = (request.form.get("price_note") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    size_note = (request.form.get("size_note") or "").strip()
+    is_visible = (request.form.get("is_visible") or "0").strip() == "1"
+
+    if not title:
+        return {}, "预报名标题不能为空"
+    if deadline_at is None:
+        return {}, "请填写最终截止时间"
+    if start_at and start_at >= deadline_at:
+        return {}, "开始时间必须早于最终截止时间"
+    if price_min is not None and price_max is not None and price_min > price_max:
+        return {}, "价格下限不能高于价格上限"
+
+    if not price_note:
+        price_note = "最终价格将根据实际预报名人数确定，但不会超过上限。"
+    if not size_note:
+        size_note = "尺码偏小。不追求极致贴身的非公路车玩家，建议买大一码或大两码。"
+
+    return {
+        "title": title,
+        "status": status,
+        "start_at": start_at,
+        "deadline_at": deadline_at,
+        "price_min": price_min,
+        "price_max": price_max,
+        "price_note": price_note,
+        "description": description,
+        "size_note": size_note,
+        "is_visible": is_visible,
+    }, None
 
 
 def _announcement_from_form(announcement: Announcement | None = None) -> dict:
@@ -2488,6 +2769,91 @@ def assign_activity_media(activity_id: int, asset_id: int):
     )
     flash("媒体路线归属已更新", "success")
     return redirect(url_for("admin.activity_edit_page", activity_id=activity_id))
+
+
+@bp.post("/kit-preorders/create")
+@login_required
+def create_merch_preorder():
+    payload, error = _merch_batch_from_form()
+    if error:
+        flash(error, "error")
+        return redirect(url_for("admin.merch_preorder_new_page"))
+    batch = MerchPreorderBatch(**payload, created_by=g.current_user.id, updated_by=g.current_user.id)
+    db.session.add(batch)
+    db.session.flush()
+    uploaded_count = _save_merch_preorder_images(batch.id, request.files.getlist("gallery_images"), "gallery")
+    uploaded_count += _save_merch_preorder_images(batch.id, request.files.getlist("size_chart_images"), "size_chart")
+    db.session.commit()
+    write_audit_log(g.current_user.id, "merch_preorder.create", "merch_preorder_batch", str(batch.id), batch.title)
+    flash(f"预报名批次创建成功，已上传图片 {uploaded_count} 张", "success")
+    return redirect(url_for("admin.merch_preorders_page"))
+
+
+@bp.post("/kit-preorders/<int:batch_id>/update")
+@login_required
+def update_merch_preorder(batch_id: int):
+    batch = MerchPreorderBatch.query.filter_by(id=batch_id).first()
+    if not batch:
+        flash("预报名批次不存在", "error")
+        return redirect(url_for("admin.merch_preorders_page"))
+    payload, error = _merch_batch_from_form(batch)
+    if error:
+        flash(error, "error")
+        return redirect(url_for("admin.merch_preorder_edit_page", batch_id=batch.id))
+    for key, value in payload.items():
+        setattr(batch, key, value)
+    batch.updated_by = g.current_user.id
+    batch.updated_at = utcnow()
+    uploaded_count = _save_merch_preorder_images(batch.id, request.files.getlist("gallery_images"), "gallery")
+    uploaded_count += _save_merch_preorder_images(batch.id, request.files.getlist("size_chart_images"), "size_chart")
+    db.session.commit()
+    write_audit_log(g.current_user.id, "merch_preorder.update", "merch_preorder_batch", str(batch.id), batch.title)
+    flash(f"预报名批次已更新，新增图片 {uploaded_count} 张", "success")
+    return redirect(url_for("admin.merch_preorder_edit_page", batch_id=batch.id))
+
+
+@bp.post("/kit-preorders/<int:batch_id>/images/<int:image_id>/delete")
+@login_required
+def delete_merch_preorder_image(batch_id: int, image_id: int):
+    batch = MerchPreorderBatch.query.filter_by(id=batch_id).first()
+    image = MerchPreorderImage.query.filter_by(id=image_id, batch_id=batch_id).first()
+    if not batch or not image:
+        flash("图片不存在", "error")
+        return redirect(url_for("admin.merch_preorders_page"))
+    target_path = Path(current_app.config["MEDIA_UPLOAD_FOLDER"]) / (image.storage_path or "")
+    db.session.delete(image)
+    db.session.commit()
+    _cleanup_paths([target_path])
+    write_audit_log(g.current_user.id, "merch_preorder.image.delete", "merch_preorder_image", str(image_id), f"batch={batch_id}")
+    flash("图片已删除", "success")
+    return redirect(url_for("admin.merch_preorder_edit_page", batch_id=batch.id))
+
+
+@bp.post("/kit-preorders/<int:batch_id>/registrations/<int:registration_id>/status")
+@login_required
+def update_merch_preorder_registration_status(batch_id: int, registration_id: int):
+    registration = MerchPreorderRegistration.query.filter_by(id=registration_id, batch_id=batch_id).first()
+    if not registration:
+        flash("预报名记录不存在", "error")
+        return redirect(url_for("admin.merch_preorders_page"))
+    status = (request.form.get("status") or "").strip()
+    if status not in MERCH_ORDER_STATUSES:
+        flash("记录状态无效", "error")
+        return redirect(url_for("admin.merch_preorder_registrations_page", batch_id=batch_id))
+    registration.status = status
+    if status == MERCH_ORDER_CANCELLED and not registration.cancelled_at:
+        registration.cancelled_at = utcnow()
+    registration.updated_at = utcnow()
+    db.session.commit()
+    write_audit_log(
+        g.current_user.id,
+        "merch_preorder.registration.status",
+        "merch_preorder_registration",
+        str(registration.id),
+        status,
+    )
+    flash("预报名记录状态已更新", "success")
+    return redirect(url_for("admin.merch_preorder_registrations_page", batch_id=batch_id))
 
 
 @bp.post("/announcements/create")
