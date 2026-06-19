@@ -252,6 +252,7 @@ def test_kit_preorder_submit_update_lookup_and_cancel(app_and_client):
             title="Kit Batch A",
             status=MERCH_BATCH_ACTIVE,
             deadline_at=deadline,
+            description="This overview description should stay hidden",
             price_min=180,
             price_max=220,
             is_visible=True,
@@ -263,6 +264,9 @@ def test_kit_preorder_submit_update_lookup_and_cancel(app_and_client):
     detail = client.get(f"/kit/{batch_id}")
     assert detail.status_code == 200
     assert "Kit Batch A" in detail.get_data(as_text=True)
+    list_resp = client.get("/kit")
+    assert list_resp.status_code == 200
+    assert "This overview description should stay hidden" not in list_resp.get_data(as_text=True)
 
     submit_resp = client.post(
         f"/kit/{batch_id}/submit",
@@ -328,6 +332,9 @@ def test_kit_preorder_submit_update_lookup_and_cancel(app_and_client):
 def test_manage_kit_preorder_create_and_registrations_page(app_and_client):
     app, client = app_and_client
     assert login_admin(client).status_code == 200
+    manage_page = client.get("/manage")
+    assert manage_page.status_code == 200
+    assert "当前版本：v4.5.2" in manage_page.get_data(as_text=True)
     new_page = client.get("/manage/kit-preorders/new")
     assert new_page.status_code == 200
     new_page_body = new_page.get_data(as_text=True)
@@ -995,7 +1002,7 @@ def test_manage_dashboard_shows_security_entry(app_and_client):
     assert resp.status_code == 200
     text = resp.get_data(as_text=True)
     assert "安全监控" in text
-    assert "当前版本：" not in text
+    assert "当前版本：v4.5.2" in text
 
 
 def test_manage_security_page_available_after_login(app_and_client):

@@ -46,7 +46,6 @@
               <div><strong>价格区间</strong><span>{% if batch.price_min is not none and batch.price_max is not none %}{{ batch.price_min }}-{{ batch.price_max }} 元{% elif batch.price_max is not none %}不超过 {{ batch.price_max }} 元{% else %}待定{% endif %}</span></div>
               <div><strong>当前人数</strong><span>{{ count_map.get(batch.id, 0) }} 人</span></div>
             </div>
-            <p class="hint">{{ batch.description[:88] }}{% if batch.description|length > 88 %}...{% endif %}</p>
             <div class="row-actions">
               <a class="btn btn-solid" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">进入预报名</a>
               {% if batch.status != 'upcoming' %}

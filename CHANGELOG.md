@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.5.2]
+
+### Fixed
+
+- Hid cycling kit style descriptions from the public preorder overview cards.
+- Displayed the current app version on the management dashboard.
+- Added backup policy documentation for safer server updates.
+
 ## [v4.5.1]
 
 ### Fixed
