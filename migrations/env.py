@@ -1,11 +1,16 @@
-﻿from logging.config import fileConfig
+from logging.config import fileConfig
+import os
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
+from flask import Flask
 from sqlalchemy import engine_from_config, pool
 
 from app.models import db
 
 config = context.config
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -14,10 +19,31 @@ if config.config_file_name is not None:
 target_metadata = db.metadata
 
 
+def _load_flask_database_url() -> str:
+    load_dotenv(PROJECT_ROOT / ".env")
+    env = os.getenv("FLASK_ENV", "development").lower()
+    app = Flask(__name__, instance_relative_config=True)
+    if env == "production":
+        app.config.from_object("config.ProductionConfig")
+    else:
+        app.config.from_object("config.DevelopmentConfig")
+    return app.config["SQLALCHEMY_DATABASE_URI"]
+
+
+def _configure_database_url() -> str:
+    database_url = _load_flask_database_url()
+    # Alembic config values use ConfigParser interpolation, so literal percent
+    # signs in database URLs must be escaped before set_main_option.
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+    return database_url
+
+
+DATABASE_URL = _configure_database_url()
+
+
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
+        url=DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},

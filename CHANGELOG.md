@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.5.1]
+
+### Fixed
+
+- Updated Alembic environment configuration to resolve the database URL from the Flask app configuration path, reducing the risk of stamping the wrong SQLite database during deployment.
+- Documented the v4.5.x database initialization and Alembic stamping workflow.
+- Saved `alembic.ini` without UTF-8 BOM.
+
 ## [v4.5.0]
 
 ### Added
