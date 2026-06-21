@@ -30,16 +30,16 @@
       {% endif %}
     {% endwith %}
 
-    <section class="card form-card">
-      <h2>筛选</h2>
-      <form method="get" action="{{ url_for('admin.routes_page') }}" class="single-form">
-        <div class="filter-grid">
-          <label>关键词<input type="text" name="q" value="{{ filters.q }}"></label>
-          <label>最小里程<input type="number" name="min_km" step="0.1" value="{{ filters.min_km }}"></label>
-          <label>最大里程<input type="number" name="max_km" step="0.1" value="{{ filters.max_km }}"></label>
-          <label>最低评分<input type="number" name="min_rating" step="0.1" min="0" max="5" value="{{ filters.min_rating }}"></label>
-          <label>
-            状态
+    <section class="card form-card manage-route-filter-card">
+      <form method="get" action="{{ url_for('admin.routes_page') }}" class="single-form manage-route-filter-form">
+        <div class="manage-route-filter-main">
+          <h2 class="manage-route-filter-title">筛选</h2>
+          <label class="manage-filter-field manage-filter-keyword">
+            <span>关键词</span>
+            <input type="text" name="q" value="{{ filters.q }}">
+          </label>
+          <label class="manage-filter-field manage-filter-status">
+            <span>状态</span>
             <select name="status">
               <option value="">全部</option>
               {% for st in statuses %}
@@ -47,10 +47,27 @@
               {% endfor %}
             </select>
           </label>
-        </div>
-        <div class="row-actions">
-          <button class="btn" type="submit">应用</button>
-          <a class="btn btn-muted" href="{{ url_for('admin.routes_page') }}">重置</a>
+          <div class="manage-filter-actions">
+            <button class="btn" type="submit">应用</button>
+            <a class="btn btn-muted" href="{{ url_for('admin.routes_page') }}">重置</a>
+          </div>
+          <details class="manage-filter-advanced" {% if filters.min_km or filters.max_km or filters.min_rating %}open{% endif %}>
+            <summary>高级筛选</summary>
+            <div class="manage-filter-advanced-grid">
+              <label class="manage-filter-field">
+                <span>最小里程</span>
+                <input type="number" name="min_km" step="0.1" value="{{ filters.min_km }}">
+              </label>
+              <label class="manage-filter-field">
+                <span>最大里程</span>
+                <input type="number" name="max_km" step="0.1" value="{{ filters.max_km }}">
+              </label>
+              <label class="manage-filter-field">
+                <span>最低评分</span>
+                <input type="number" name="min_rating" step="0.1" min="0" max="5" value="{{ filters.min_rating }}">
+              </label>
+            </div>
+          </details>
         </div>
       </form>
     </section>

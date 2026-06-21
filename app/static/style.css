@@ -357,6 +357,91 @@ body {
   color: var(--text-muted);
 }
 
+.manage-route-filter-card {
+  padding: 14px 16px;
+}
+
+.manage-route-filter-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.manage-route-filter-form {
+  gap: 10px;
+}
+
+.manage-route-filter-main {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1.4fr) minmax(150px, 0.7fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.manage-route-filter-title {
+  align-self: center;
+  color: var(--brand-primary);
+  white-space: nowrap;
+}
+
+.manage-filter-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.manage-filter-field span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.manage-filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.manage-filter-advanced {
+  align-self: end;
+  min-width: 0;
+}
+
+.manage-filter-advanced summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--brand-primary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
+  list-style-position: inside;
+}
+
+.manage-filter-advanced summary:hover {
+  border-color: var(--brand-border-strong);
+  background: var(--brand-surface-soft);
+  color: var(--brand-primary-strong);
+}
+
+.manage-filter-advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--card-border) 78%, var(--brand-border) 22%);
+}
+
+.manage-filter-advanced[open] {
+  grid-column: 1 / -1;
+}
+
 .manage-top-nav {
   display: flex;
   gap: 6px;
@@ -1903,6 +1988,14 @@ td {
   .manage-entry-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .manage-route-filter-main {
+    grid-template-columns: auto minmax(0, 1fr) minmax(150px, 0.7fr);
+  }
+
+  .manage-filter-advanced {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1977,6 +2070,19 @@ td {
   .manage-dashboard-grid,
   .manage-entry-grid {
     grid-template-columns: 1fr;
+  }
+
+  .manage-route-filter-main,
+  .manage-filter-advanced-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manage-route-filter-title {
+    align-self: start;
+  }
+
+  .manage-filter-actions {
+    flex-wrap: wrap;
   }
 
   .manage-metric-card {
