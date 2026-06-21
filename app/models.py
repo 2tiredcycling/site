@@ -156,6 +156,7 @@ class Route(db.Model):
     descent_m = db.Column(db.Float, nullable=True)
     min_ele_m = db.Column(db.Float, nullable=True)
     max_ele_m = db.Column(db.Float, nullable=True)
+    manual_stat_overrides = db.Column(db.Text, nullable=False, default="{}")
     is_deleted = db.Column(db.Boolean, nullable=False, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     deleted_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
@@ -189,6 +190,7 @@ class Route(db.Model):
             "descent_m": self.descent_m,
             "min_ele_m": self.min_ele_m,
             "max_ele_m": self.max_ele_m,
+            "manual_stat_overrides": self.manual_stat_overrides,
             "is_deleted": self.is_deleted,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "deleted_by": self.deleted_by,

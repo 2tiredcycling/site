@@ -1,5 +1,6 @@
 import base64
 import csv
+import json
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO, StringIO
@@ -1468,7 +1469,14 @@ def routes_recycle_page():
 @bp.get("/routes/new")
 @login_required
 def route_new_page():
-    return render_template("manage_route_form.html", route=None, statuses=ROUTE_STATUSES, can_edit=True)
+    return render_template(
+        "manage_route_form.html",
+        route=None,
+        statuses=ROUTE_STATUSES,
+        can_edit=True,
+        manual_stats={},
+        manual_stat_summary="",
+    )
 
 
 @bp.get("/routes/<int:route_id>/edit")
@@ -1490,6 +1498,8 @@ def route_edit_page(route_id: int):
         statuses=ROUTE_STATUSES,
         versions=versions,
         can_edit=can_edit(g.current_user),
+        manual_stats=_route_manual_stat_overrides(route),
+        manual_stat_summary=_manual_stat_summary(_route_manual_stat_overrides(route)),
     )
 
 
@@ -2054,6 +2064,79 @@ def _calculate_suggested_duration_hours(distance_km: float | None, ascent_m: flo
     return round((distance_hours + ascent_hours) * 1.15, 1)
 
 
+ROUTE_MANUAL_STAT_FIELDS = {
+    "distance_km": {"label": "里程", "unit": "km", "digits": 1},
+    "ascent_m": {"label": "累计爬升", "unit": "m", "digits": 0},
+    "descent_m": {"label": "累计下降", "unit": "m", "digits": 0},
+    "min_ele_m": {"label": "最低海拔", "unit": "m", "digits": 0},
+    "max_ele_m": {"label": "最高海拔", "unit": "m", "digits": 0},
+    "suggested_duration_hours": {"label": "建议用时", "unit": "h", "digits": 1},
+}
+
+
+def _clean_manual_stat_overrides(raw: dict | None) -> dict:
+    overrides = {}
+    for key in ROUTE_MANUAL_STAT_FIELDS:
+        if not raw or key not in raw:
+            continue
+        try:
+            overrides[key] = float(raw[key])
+        except (TypeError, ValueError):
+            continue
+    return overrides
+
+
+def _route_manual_stat_overrides(route: Route | None) -> dict:
+    if not route or not route.manual_stat_overrides:
+        return {}
+    try:
+        raw = json.loads(route.manual_stat_overrides)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return _clean_manual_stat_overrides(raw)
+
+
+def _manual_stat_overrides_from_form(route: Route | None = None) -> tuple[dict, str | None]:
+    overrides = {}
+    for key in ROUTE_MANUAL_STAT_FIELDS:
+        raw = (request.form.get(f"manual_{key}") or "").strip()
+        if not raw:
+            continue
+        value = parse_distance(raw)
+        if value is None:
+            return {}, ROUTE_MANUAL_STAT_FIELDS[key]["label"]
+        overrides[key] = value
+    return overrides, None
+
+
+def _format_manual_stat_value(key: str, value: float) -> str:
+    field = ROUTE_MANUAL_STAT_FIELDS[key]
+    digits = field["digits"]
+    number = f"{float(value):.{digits}f}"
+    return f"{field['label']}已经人工指定为 {number} {field['unit']}"
+
+
+def _manual_stat_summary(overrides: dict) -> str:
+    return "；".join(_format_manual_stat_value(key, overrides[key]) for key in ROUTE_MANUAL_STAT_FIELDS if key in overrides)
+
+
+def _apply_route_manual_stat_overrides(route: Route, overrides: dict, difficulty: str | None) -> None:
+    for key in ("distance_km", "ascent_m", "descent_m", "min_ele_m", "max_ele_m"):
+        if key in overrides:
+            setattr(route, key, overrides[key])
+
+    if "suggested_duration_hours" in overrides:
+        route.suggested_duration_hours = overrides["suggested_duration_hours"]
+    else:
+        route.suggested_duration_hours = _calculate_suggested_duration_hours(
+            route.distance_km,
+            route.ascent_m,
+            difficulty,
+        )
+
+
 def _resolve_route_gpx_path(route: Route) -> Path:
     upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
     filename = route.gpx_filename or ""
@@ -2080,6 +2163,7 @@ def _resolve_route_gpx_path(route: Route) -> Path:
 
 
 def _route_stats_payload(route: Route) -> dict:
+    manual_overrides = _route_manual_stat_overrides(route)
     return {
         "distance_km": round(float(route.distance_km or 0), 1),
         "ascent_m": round(float(route.ascent_m or 0)),
@@ -2087,6 +2171,7 @@ def _route_stats_payload(route: Route) -> dict:
         "min_ele_m": round(float(route.min_ele_m or 0)),
         "max_ele_m": round(float(route.max_ele_m or 0)),
         "suggested_duration_hours": round(float(route.suggested_duration_hours or 0), 1),
+        "manual_summary": _manual_stat_summary(manual_overrides),
     }
 
 
@@ -2371,6 +2456,7 @@ def _sync_activity_route_options(activity: Activity, option_items: list[dict]) -
 @login_required
 def create_route():
     payload = _route_from_form()
+    manual_overrides, manual_error = _manual_stat_overrides_from_form()
     gpx_file = request.files.get("gpx_file")
     submit_action = (request.form.get("submit_action") or "save").strip()
 
@@ -2382,6 +2468,9 @@ def create_route():
         return redirect(url_for("admin.routes_page"))
     if payload["suggested_duration_hours"] is None:
         flash("参数错误：预计用时格式错误", "error")
+        return redirect(url_for("admin.routes_page"))
+    if manual_error:
+        flash(f"参数错误：{manual_error}人工指定值格式错误", "error")
         return redirect(url_for("admin.routes_page"))
     if not allowed_file(gpx_file.filename or "", {".gpx"}):
         flash("参数错误：仅支持 .gpx 文件", "error")
@@ -2426,9 +2515,11 @@ def create_route():
             descent_m=computed_stats["descent_m"],
             min_ele_m=computed_stats["min_ele_m"],
             max_ele_m=computed_stats["max_ele_m"],
+            manual_stat_overrides=json.dumps(manual_overrides, ensure_ascii=False),
             created_by=g.current_user.id,
             updated_by=g.current_user.id,
         )
+        _apply_route_manual_stat_overrides(route, manual_overrides, payload["difficulty"])
         db.session.add(route)
         db.session.flush()
         create_route_version(route, g.current_user.id, change_note="create")
@@ -2457,11 +2548,16 @@ def update_route(route_id: int):
 
     submit_action = (request.form.get("submit_action") or "save").strip()
     payload = _route_from_form(route)
+    manual_overrides, manual_error = _manual_stat_overrides_from_form(route)
     if not payload["route_name"] or payload["status"] not in ROUTE_STATUSES:
         flash("参数错误：请检查必填项", "error")
         return redirect(url_for("admin.routes_page"))
     if payload["suggested_duration_hours"] is None:
         flash("参数错误：预计用时格式错误", "error")
+        return redirect(url_for("admin.routes_page"))
+
+    if manual_error:
+        flash(f"参数错误：{manual_error}人工指定值格式错误", "error")
         return redirect(url_for("admin.routes_page"))
 
     before = route_snapshot(route)
@@ -2493,11 +2589,8 @@ def update_route(route_id: int):
         route.is_active = payload["status"] == STATUS_PUBLISHED
         route.uploaded_at = utcnow()
         route.updated_by = g.current_user.id
-        route.suggested_duration_hours = _calculate_suggested_duration_hours(
-            stats["distance_km"],
-            stats["ascent_m"],
-            payload["difficulty"],
-        )
+        route.manual_stat_overrides = json.dumps(manual_overrides, ensure_ascii=False)
+        _apply_route_manual_stat_overrides(route, manual_overrides, payload["difficulty"])
         route.supply_points = payload["supply_points"]
         route.risk_warning = payload["risk_warning"]
         create_route_version(route, g.current_user.id, change_note="update")
@@ -2540,15 +2633,19 @@ def recalculate_route_stats(route_id: int):
         flash("GPX 文件不存在，无法更新统计", "error")
         return redirect(url_for("admin.route_edit_page", route_id=route_id))
 
+    manual_overrides, manual_error = _manual_stat_overrides_from_form(route)
+    if manual_error:
+        if wants_json:
+            return jsonify({"ok": False, "message": f"{manual_error}人工指定值格式错误"}), 400
+        flash(f"参数错误：{manual_error}人工指定值格式错误", "error")
+        return redirect(url_for("admin.route_edit_page", route_id=route_id))
+
     before = route_snapshot(route)
     try:
         stats = _apply_route_stats(route, gpx_path)
         difficulty_for_duration = request.form.get("difficulty") or route.difficulty
-        route.suggested_duration_hours = _calculate_suggested_duration_hours(
-            stats["distance_km"],
-            stats["ascent_m"],
-            difficulty_for_duration,
-        )
+        route.manual_stat_overrides = json.dumps(manual_overrides, ensure_ascii=False)
+        _apply_route_manual_stat_overrides(route, manual_overrides, difficulty_for_duration)
         route.updated_by = g.current_user.id
         route.updated_at = utcnow()
         create_route_version(route, g.current_user.id, change_note="recalculate_stats")

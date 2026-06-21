@@ -1716,6 +1716,34 @@ textarea {
   font-size: 15px;
 }
 
+.manage-route-manual-stats {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 70%, #ffffff 30%);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.manage-route-manual-stats summary {
+  cursor: pointer;
+  color: var(--brand-primary);
+  font-size: 15px;
+  font-weight: 700;
+  list-style-position: outside;
+}
+
+.manage-route-manual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.manage-route-manual-grid input {
+  padding: 8px 9px;
+}
+
 .manage-route-stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));

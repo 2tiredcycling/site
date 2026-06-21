@@ -92,6 +92,7 @@
                       title="根据 GPX 重新计算统计数据"
                       aria-label="根据 GPX 重新计算统计数据"
                       data-recalc-url="{{ url_for('admin.recalculate_route_stats', route_id=route.id) }}"
+                      data-manual-summary="{{ manual_stat_summary }}"
                     ><span class="spin-icon" aria-hidden="true">↻</span><span>根据 GPX 重新计算</span></button>
                   {% endif %}
                 </div>
@@ -122,6 +123,18 @@
                   </div>
                 </div>
               </div>
+              <details class="manage-route-manual-stats" {% if manual_stats %}open{% endif %}>
+                <summary>人工指定统计</summary>
+                <p class="hint">留空表示跟随 GPX 自动计算；填写后会优先使用人工值，重新计算也不会覆盖。</p>
+                <div class="manage-route-manual-grid">
+                  <label>里程 (km)<input type="number" name="manual_distance_km" min="0" step="0.1" value="{{ manual_stats.distance_km if manual_stats and manual_stats.distance_km is defined else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+                  <label>累计爬升 (m)<input type="number" name="manual_ascent_m" min="0" step="1" value="{{ manual_stats.ascent_m if manual_stats and manual_stats.ascent_m is defined else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+                  <label>累计下降 (m)<input type="number" name="manual_descent_m" min="0" step="1" value="{{ manual_stats.descent_m if manual_stats and manual_stats.descent_m is defined else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+                  <label>最低海拔 (m)<input type="number" name="manual_min_ele_m" step="1" value="{{ manual_stats.min_ele_m if manual_stats and manual_stats.min_ele_m is defined else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+                  <label>最高海拔 (m)<input type="number" name="manual_max_ele_m" step="1" value="{{ manual_stats.max_ele_m if manual_stats and manual_stats.max_ele_m is defined else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+                  <label>建议用时 (h)<input type="number" name="manual_suggested_duration_hours" min="0" step="0.1" value="{{ manual_stats.suggested_duration_hours if manual_stats and manual_stats.suggested_duration_hours is defined else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+                </div>
+              </details>
             </div>
           </section>
 
@@ -184,6 +197,24 @@
           suggested_duration_hours: {unit: ' h', digits: 1},
         };
 
+        const collectManualSummary = () => {
+          const fields = [
+            ['manual_distance_km', '里程', 'km', 1],
+            ['manual_ascent_m', '累计爬升', 'm', 0],
+            ['manual_descent_m', '累计下降', 'm', 0],
+            ['manual_min_ele_m', '最低海拔', 'm', 0],
+            ['manual_max_ele_m', '最高海拔', 'm', 0],
+            ['manual_suggested_duration_hours', '建议用时', 'h', 1],
+          ];
+          return fields.map(([name, label, unit, digits]) => {
+            const input = document.querySelector(`[name="${name}"]`);
+            if (!input || input.value.trim() === '') return '';
+            const value = Number(input.value);
+            if (!Number.isFinite(value)) return '';
+            return `${label}已经人工指定为 ${value.toFixed(digits)} ${unit}`;
+          }).filter(Boolean).join('；');
+        };
+
         const setStatus = (message, isError = false) => {
           if (!status) return;
           status.textContent = message || '';
@@ -207,8 +238,11 @@
 
         if (!button || !csrfInput) return;
         button.addEventListener('click', async () => {
-          const confirmed = window.confirm('这将根据 GPX 重新计算并覆盖当前统计数据，是否继续？');
-          if (!confirmed) return;
+          const manualSummary = collectManualSummary() || button.dataset.manualSummary || '';
+          if (manualSummary) {
+            const confirmed = window.confirm(`${manualSummary}。\n重新计算会保留这些人工指定值，是否继续？`);
+            if (!confirmed) return;
+          }
 
           const scrollX = window.scrollX;
           const scrollY = window.scrollY;
@@ -222,6 +256,9 @@
             if (difficultyInput) {
               body.append('difficulty', difficultyInput.value);
             }
+            document.querySelectorAll('.manage-route-manual-grid input').forEach((input) => {
+              body.append(input.name, input.value);
+            });
             const response = await fetch(button.dataset.recalcUrl, {
               method: 'POST',
               headers: {'Accept': 'application/json'},
