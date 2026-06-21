@@ -1518,15 +1518,13 @@ def download_route_gpx(route_id: int):
     if not route:
         abort(404, description="Route not found")
 
-    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
-    file_path = upload_folder / route.gpx_filename
+    file_path = _resolve_route_gpx_path(route)
     if not file_path.exists() or not file_path.is_file():
         flash("GPX 文件不存在", "error")
         return redirect(url_for("admin.routes_page"))
 
-    return send_from_directory(
-        upload_folder,
-        route.gpx_filename,
+    return send_file(
+        file_path,
         as_attachment=True,
         download_name=route.gpx_filename,
         mimetype="application/gpx+xml",
@@ -1540,7 +1538,7 @@ def route_preview_manage(route_id: int):
     if not route:
         return jsonify({"error": "route_not_found"}), 404
 
-    file_path = Path(current_app.config["UPLOAD_FOLDER"]) / route.gpx_filename
+    file_path = _resolve_route_gpx_path(route)
     if not file_path.exists():
         return jsonify({"error": "gpx_missing"}), 404
 
@@ -2037,6 +2035,61 @@ def _compute_route_stats(gpx_path: Path) -> dict:
     }
 
 
+def _suggested_speed_for_difficulty(difficulty: str | None) -> float:
+    speeds = {
+        "1": 12.0,
+        "2": 15.0,
+        "3": 18.0,
+        "4": 22.0,
+        "5": 25.0,
+    }
+    normalized = _normalize_difficulty(difficulty or "3")
+    return speeds.get(normalized, 18.0)
+
+
+def _calculate_suggested_duration_hours(distance_km: float | None, ascent_m: float | None, difficulty: str | None) -> float:
+    speed = _suggested_speed_for_difficulty(difficulty)
+    distance_hours = float(distance_km or 0.0) / speed
+    ascent_hours = float(ascent_m or 0.0) / 600.0
+    return round((distance_hours + ascent_hours) * 1.15, 1)
+
+
+def _resolve_route_gpx_path(route: Route) -> Path:
+    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+    filename = route.gpx_filename or ""
+    candidates = [filename]
+
+    match = re.match(r"^\d{14}_(.+)$", filename)
+    if match:
+        candidates.append(match.group(1))
+
+    for candidate in list(candidates):
+        if "_" in candidate:
+            candidates.append(candidate.replace("_", " "))
+
+    seen = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        path = upload_folder / candidate
+        if path.exists() and path.is_file():
+            return path
+
+    return upload_folder / filename
+
+
+def _route_stats_payload(route: Route) -> dict:
+    return {
+        "distance_km": round(float(route.distance_km or 0), 1),
+        "ascent_m": round(float(route.ascent_m or 0)),
+        "descent_m": round(float(route.descent_m or 0)),
+        "min_ele_m": round(float(route.min_ele_m or 0)),
+        "max_ele_m": round(float(route.max_ele_m or 0)),
+        "suggested_duration_hours": round(float(route.suggested_duration_hours or 0), 1),
+    }
+
+
 def _apply_route_stats(route: Route, gpx_path: Path) -> dict:
     stats = _compute_route_stats(gpx_path)
     route.distance_km = stats["distance_km"]
@@ -2351,6 +2404,11 @@ def create_route():
         return redirect(url_for("admin.routes_page"))
 
     try:
+        suggested_duration_hours = _calculate_suggested_duration_hours(
+            computed_stats["distance_km"],
+            computed_stats["ascent_m"],
+            payload["difficulty"],
+        )
         route = Route(
             route_name=payload["route_name"],
             gpx_filename=filename,
@@ -2361,7 +2419,7 @@ def create_route():
             description=payload["description"],
             status=payload["status"],
             is_active=(payload["status"] == STATUS_PUBLISHED),
-            suggested_duration_hours=payload["suggested_duration_hours"],
+            suggested_duration_hours=suggested_duration_hours,
             supply_points=payload["supply_points"],
             risk_warning=payload["risk_warning"],
             ascent_m=computed_stats["ascent_m"],
@@ -2410,7 +2468,7 @@ def update_route(route_id: int):
     gpx_file = request.files.get("gpx_file")
     old_filename = route.gpx_filename
     saved_path = None
-    stats_path = Path(current_app.config["UPLOAD_FOLDER"]) / route.gpx_filename
+    stats_path = _resolve_route_gpx_path(route)
     if gpx_file and gpx_file.filename:
         if not allowed_file(gpx_file.filename, {".gpx"}):
             flash("参数错误：仅支持 .gpx 文件", "error")
@@ -2426,7 +2484,7 @@ def update_route(route_id: int):
         stats_path = saved_path
 
     try:
-        _apply_route_stats(route, stats_path)
+        stats = _apply_route_stats(route, stats_path)
         route.route_name = payload["route_name"]
         route.difficulty = payload["difficulty"]
         route.category = payload["category"]
@@ -2435,7 +2493,11 @@ def update_route(route_id: int):
         route.is_active = payload["status"] == STATUS_PUBLISHED
         route.uploaded_at = utcnow()
         route.updated_by = g.current_user.id
-        route.suggested_duration_hours = payload["suggested_duration_hours"]
+        route.suggested_duration_hours = _calculate_suggested_duration_hours(
+            stats["distance_km"],
+            stats["ascent_m"],
+            payload["difficulty"],
+        )
         route.supply_points = payload["supply_points"]
         route.risk_warning = payload["risk_warning"]
         create_route_version(route, g.current_user.id, change_note="update")
@@ -2464,18 +2526,28 @@ def update_route(route_id: int):
 @login_required
 def recalculate_route_stats(route_id: int):
     route = Route.query.filter_by(id=route_id, is_deleted=False).first()
+    wants_json = request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html
     if not route:
+        if wants_json:
+            return jsonify({"ok": False, "message": "路线不存在"}), 404
         flash("路线不存在", "error")
         return redirect(url_for("admin.routes_page"))
 
-    gpx_path = Path(current_app.config["UPLOAD_FOLDER"]) / route.gpx_filename
+    gpx_path = _resolve_route_gpx_path(route)
     if not gpx_path.exists() or not gpx_path.is_file():
+        if wants_json:
+            return jsonify({"ok": False, "message": "GPX 文件不存在，无法更新统计"}), 404
         flash("GPX 文件不存在，无法更新统计", "error")
         return redirect(url_for("admin.route_edit_page", route_id=route_id))
 
     before = route_snapshot(route)
     try:
         stats = _apply_route_stats(route, gpx_path)
+        route.suggested_duration_hours = _calculate_suggested_duration_hours(
+            stats["distance_km"],
+            stats["ascent_m"],
+            route.difficulty,
+        )
         route.updated_by = g.current_user.id
         route.updated_at = utcnow()
         create_route_version(route, g.current_user.id, change_note="recalculate_stats")
@@ -2488,9 +2560,17 @@ def recalculate_route_stats(route_id: int):
             str(route.id),
             f"distance_km={stats['distance_km']}",
         )
+        if wants_json:
+            return jsonify({
+                "ok": True,
+                "message": "已根据 GPX 自动更新里程与爬升统计",
+                "stats": _route_stats_payload(route),
+            })
         flash("已根据 GPX 自动更新里程与爬升统计", "success")
     except Exception:
         db.session.rollback()
+        if wants_json:
+            return jsonify({"ok": False, "message": "统计更新失败：GPX 解析异常"}), 400
         flash("统计更新失败：GPX 解析异常", "error")
     return redirect(url_for("admin.route_edit_page", route_id=route_id))
 

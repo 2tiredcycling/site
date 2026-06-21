@@ -1102,24 +1102,35 @@ def test_recalculate_route_stats_endpoint_refreshes_saved_values(app_and_client)
         route = Route.query.filter_by(route_name="Recalc Stats Route").first()
         assert route is not None
         route_id = route.id
+        upload_dir = Path(app.config["UPLOAD_FOLDER"])
+        original_path = upload_dir / route.gpx_filename
+        fallback_name = "Recalc_Stats_Route.gpx"
+        (upload_dir / fallback_name).write_bytes(original_path.read_bytes())
+        route.gpx_filename = f"20260101000000_{fallback_name}"
         route.distance_km = 0.0
         route.ascent_m = 0.0
         route.descent_m = 0.0
+        route.suggested_duration_hours = 99.0
         db.session.commit()
 
     csrf_token = get_manage_csrf(client)
     resp = client.post(
         f"/manage/routes/{route_id}/recalculate-stats",
         data={"csrf_token": csrf_token},
-        follow_redirects=True,
+        headers={"Accept": "application/json"},
     )
     assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["ok"] is True
+    assert payload["stats"]["distance_km"] > 0
 
     with app.app_context():
         route = db.session.get(Route, route_id)
         assert route is not None
         assert route.distance_km > 0
         assert route.ascent_m is not None
+        expected_duration = round((route.distance_km / 15 + (route.ascent_m or 0) / 600) * 1.15, 1)
+        assert route.suggested_duration_hours == expected_duration
 
 
 def test_route_preview_returns_waypoints_from_gpx(app_and_client):

@@ -62,14 +62,63 @@
           </section>
 
           <section class="form-card-subsection manage-route-form-section">
-            <h2>路线数据</h2>
-            <div class="manage-route-form-grid manage-route-form-data-grid">
-              <label>里程 (km)<input type="number" name="distance_km" min="0" step="0.1" value="{{ route.distance_km if route else '' }}" readonly disabled></label>
-              <label>累计爬升 (m)<input type="number" name="ascent_m" min="0" step="0.1" value="{{ route.ascent_m if route and route.ascent_m is not none else '' }}" readonly disabled></label>
-              <label>累计下降 (m)<input type="number" name="descent_m" min="0" step="0.1" value="{{ route.descent_m if route and route.descent_m is not none else '' }}" readonly disabled></label>
-              <label>最低海拔 (m)<input type="number" name="min_ele_m" step="0.1" value="{{ route.min_ele_m if route and route.min_ele_m is not none else '' }}" readonly disabled></label>
-              <label>最高海拔 (m)<input type="number" name="max_ele_m" step="0.1" value="{{ route.max_ele_m if route and route.max_ele_m is not none else '' }}" readonly disabled></label>
-              <label>建议用时(h)<input type="number" name="suggested_duration_hours" min="0" step="0.1" value="{{ route.suggested_duration_hours if route else 3 }}" {% if not can_edit %}disabled{% endif %}></label>
+            <h2>GPX 与统计</h2>
+            <div class="manage-route-gpx-stats-grid">
+              <div>
+                <label class="route-gpx-field">
+                  {{ '替换 GPX' if route else 'GPX 文件' }}
+                  <div class="route-gpx-inline">
+                    <input type="file" name="gpx_file" accept=".gpx" {% if not route %}required{% endif %} {% if not can_edit %}disabled{% endif %}>
+                    {% if route and can_edit %}
+                      <button
+                        class="btn route-gpx-refresh-btn"
+                        type="button"
+                        title="自动更新统计"
+                        aria-label="自动更新统计"
+                        data-recalc-url="{{ url_for('admin.recalculate_route_stats', route_id=route.id) }}"
+                      ><span class="spin-icon" aria-hidden="true">↻</span></button>
+                    {% else %}
+                      <button
+                        class="btn route-gpx-refresh-btn route-gpx-refresh-btn-disabled"
+                        type="button"
+                        title="新建路线保存时会自动计算统计"
+                        aria-label="新建路线保存时会自动计算统计"
+                        disabled
+                      ><span class="spin-icon" aria-hidden="true">↻</span></button>
+                    {% endif %}
+                  </div>
+                </label>
+                <p class="hint">{{ '里程与海拔统计将根据 GPX 自动计算；替换 GPX 或点击“自动更新统计”后会刷新。' if route else '新建路线保存时会根据上传的 GPX 自动计算里程与海拔统计。' }}</p>
+                {% if route %}
+                  <p class="hint route-gpx-refresh-status" aria-live="polite"></p>
+                {% endif %}
+              </div>
+              <div class="manage-route-stat-grid">
+                <div class="manage-route-stat-chip" data-route-stat="distance_km">
+                  <span>里程</span>
+                  <strong>{{ '%.1f km'|format(route.distance_km or 0) if route else '保存后计算' }}</strong>
+                </div>
+                <div class="manage-route-stat-chip" data-route-stat="ascent_m">
+                  <span>累计爬升</span>
+                  <strong>{{ '%.0f m'|format(route.ascent_m) if route and route.ascent_m is not none else '保存后计算' }}</strong>
+                </div>
+                <div class="manage-route-stat-chip" data-route-stat="descent_m">
+                  <span>累计下降</span>
+                  <strong>{{ '%.0f m'|format(route.descent_m) if route and route.descent_m is not none else '保存后计算' }}</strong>
+                </div>
+                <div class="manage-route-stat-chip" data-route-stat="min_ele_m">
+                  <span>最低海拔</span>
+                  <strong>{{ '%.0f m'|format(route.min_ele_m) if route and route.min_ele_m is not none else '保存后计算' }}</strong>
+                </div>
+                <div class="manage-route-stat-chip" data-route-stat="max_ele_m">
+                  <span>最高海拔</span>
+                  <strong>{{ '%.0f m'|format(route.max_ele_m) if route and route.max_ele_m is not none else '保存后计算' }}</strong>
+                </div>
+                <div class="manage-route-stat-chip" data-route-stat="suggested_duration_hours">
+                  <span>建议用时</span>
+                  <strong>{{ '%.1f h'|format(route.suggested_duration_hours or 0) if route else '保存后计算' }}</strong>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -77,36 +126,8 @@
             <h2>补给与风险</h2>
             <div class="manage-route-form-grid manage-route-form-risk-grid">
               <label>补给点<input type="text" name="supply_points" value="{{ route.supply_points if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
-              <label>风险提示<input type="text" name="risk_warning" value="{{ route.risk_warning if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+              <label>风险提示<textarea name="risk_warning" rows="2" {% if not can_edit %}disabled{% endif %}>{{ route.risk_warning if route else '' }}</textarea></label>
             </div>
-          </section>
-
-          <section class="form-card-subsection manage-route-form-section">
-            <h2>GPX 文件</h2>
-            <label class="route-gpx-field">
-              {{ '替换 GPX' if route else 'GPX 文件' }}
-              <div class="route-gpx-inline">
-                <input type="file" name="gpx_file" accept=".gpx" {% if not route %}required{% endif %} {% if not can_edit %}disabled{% endif %}>
-                {% if route and can_edit %}
-                  <button
-                    class="btn route-gpx-refresh-btn"
-                    type="button"
-                    title="自动更新统计"
-                    aria-label="自动更新统计"
-                    onclick="document.getElementById('recalc-route-stats-form').submit(); return false;"
-                  ><span class="spin-icon" aria-hidden="true">↻</span></button>
-                {% else %}
-                  <button
-                    class="btn route-gpx-refresh-btn route-gpx-refresh-btn-disabled"
-                    type="button"
-                    title="新建路线保存时会自动计算统计"
-                    aria-label="新建路线保存时会自动计算统计"
-                    disabled
-                  ><span class="spin-icon" aria-hidden="true">↻</span></button>
-                {% endif %}
-              </div>
-            </label>
-            <p class="hint">{{ '里程与海拔统计将根据 GPX 自动计算；替换 GPX 或点击“自动更新统计”后会刷新。' if route else '新建路线保存时会根据上传的 GPX 自动计算里程与海拔统计。' }}</p>
           </section>
         </div>
         {% if can_edit %}
@@ -144,6 +165,75 @@
       </section>
     {% endif %}
   </main>
+  {% if route and can_edit %}
+    <script>
+      (() => {
+        const button = document.querySelector('.route-gpx-refresh-btn[data-recalc-url]');
+        const status = document.querySelector('.route-gpx-refresh-status');
+        const csrfInput = document.querySelector('#recalc-route-stats-form input[name="csrf_token"]');
+        const statUnits = {
+          distance_km: {unit: ' km', digits: 1},
+          ascent_m: {unit: ' m', digits: 0},
+          descent_m: {unit: ' m', digits: 0},
+          min_ele_m: {unit: ' m', digits: 0},
+          max_ele_m: {unit: ' m', digits: 0},
+          suggested_duration_hours: {unit: ' h', digits: 1},
+        };
+
+        const setStatus = (message, isError = false) => {
+          if (!status) return;
+          status.textContent = message || '';
+          status.classList.toggle('route-gpx-refresh-status-error', Boolean(isError));
+        };
+
+        const formatStat = (key, value) => {
+          const config = statUnits[key];
+          const number = Number(value || 0);
+          return `${number.toFixed(config.digits)}${config.unit}`;
+        };
+
+        const updateStats = (stats) => {
+          Object.entries(stats || {}).forEach(([key, value]) => {
+            const target = document.querySelector(`[data-route-stat="${key}"] strong`);
+            if (target && statUnits[key]) {
+              target.textContent = formatStat(key, value);
+            }
+          });
+        };
+
+        if (!button || !csrfInput) return;
+        button.addEventListener('click', async () => {
+          const scrollX = window.scrollX;
+          const scrollY = window.scrollY;
+          button.disabled = true;
+          button.classList.add('route-gpx-refresh-btn-loading');
+          setStatus('正在更新统计...');
+
+          try {
+            const body = new FormData();
+            body.append('csrf_token', csrfInput.value);
+            const response = await fetch(button.dataset.recalcUrl, {
+              method: 'POST',
+              headers: {'Accept': 'application/json'},
+              body,
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+              throw new Error(payload.message || '统计更新失败');
+            }
+            updateStats(payload.stats);
+            setStatus(payload.message || '统计已更新');
+          } catch (error) {
+            setStatus(error.message || '统计更新失败', true);
+          } finally {
+            button.disabled = false;
+            button.classList.remove('route-gpx-refresh-btn-loading');
+            window.scrollTo(scrollX, scrollY);
+          }
+        });
+      })();
+    </script>
+  {% endif %}
 </body>
 </html>
 
