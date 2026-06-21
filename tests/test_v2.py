@@ -1116,7 +1116,7 @@ def test_recalculate_route_stats_endpoint_refreshes_saved_values(app_and_client)
     csrf_token = get_manage_csrf(client)
     resp = client.post(
         f"/manage/routes/{route_id}/recalculate-stats",
-        data={"csrf_token": csrf_token},
+        data={"csrf_token": csrf_token, "difficulty": "5"},
         headers={"Accept": "application/json"},
     )
     assert resp.status_code == 200
@@ -1129,7 +1129,7 @@ def test_recalculate_route_stats_endpoint_refreshes_saved_values(app_and_client)
         assert route is not None
         assert route.distance_km > 0
         assert route.ascent_m is not None
-        expected_duration = round((route.distance_km / 15 + (route.ascent_m or 0) / 600) * 1.15, 1)
+        expected_duration = round((route.distance_km / 25 + (route.ascent_m or 0) / 600) * 1.15, 1)
         assert route.suggested_duration_hours == expected_duration
 
 

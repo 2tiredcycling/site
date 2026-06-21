@@ -2543,10 +2543,11 @@ def recalculate_route_stats(route_id: int):
     before = route_snapshot(route)
     try:
         stats = _apply_route_stats(route, gpx_path)
+        difficulty_for_duration = request.form.get("difficulty") or route.difficulty
         route.suggested_duration_hours = _calculate_suggested_duration_hours(
             stats["distance_km"],
             stats["ascent_m"],
-            route.difficulty,
+            difficulty_for_duration,
         )
         route.updated_by = g.current_user.id
         route.updated_at = utcnow()

@@ -66,57 +66,60 @@
             <div class="manage-route-gpx-stats-grid">
               <div>
                 <label class="route-gpx-field">
-                  {{ '替换 GPX' if route else 'GPX 文件' }}
+                  GPX 文件
+                  {% if route and route.gpx_filename %}
+                    <span class="route-gpx-current">当前文件：{{ route.gpx_filename }}</span>
+                  {% endif %}
                   <div class="route-gpx-inline">
                     <input type="file" name="gpx_file" accept=".gpx" {% if not route %}required{% endif %} {% if not can_edit %}disabled{% endif %}>
-                    {% if route and can_edit %}
-                      <button
-                        class="btn route-gpx-refresh-btn"
-                        type="button"
-                        title="根据 GPX 重新计算统计数据"
-                        aria-label="根据 GPX 重新计算统计数据"
-                        data-recalc-url="{{ url_for('admin.recalculate_route_stats', route_id=route.id) }}"
-                      ><span class="spin-icon" aria-hidden="true">↻</span><span>根据 GPX 重新计算</span></button>
-                    {% else %}
-                      <button
-                        class="btn route-gpx-refresh-btn route-gpx-refresh-btn-disabled"
-                        type="button"
-                        title="新建路线保存时会自动计算统计"
-                        aria-label="新建路线保存时会自动计算统计"
-                        disabled
-                      ><span class="spin-icon" aria-hidden="true">↻</span><span>保存后自动计算</span></button>
-                    {% endif %}
                   </div>
                 </label>
-                <p class="hint">{{ '里程与海拔统计将根据 GPX 自动计算；替换 GPX 或点击“自动更新统计”后会刷新。' if route else '新建路线保存时会根据上传的 GPX 自动计算里程与海拔统计。' }}</p>
+                <p class="hint">{{ '上传新 GPX 并保存后会替换当前文件。' if route else '新建路线保存时会根据上传的 GPX 自动计算里程与海拔统计。' }}</p>
                 {% if route %}
                   <p class="hint route-gpx-refresh-status" aria-live="polite"></p>
                 {% endif %}
               </div>
-              <div class="manage-route-stat-grid">
-                <div class="manage-route-stat-chip" data-route-stat="distance_km">
-                  <span>里程</span>
-                  <strong>{{ '%.1f km'|format(route.distance_km or 0) if route else '保存后计算' }}</strong>
+              <div class="manage-route-stat-panel">
+                <div class="manage-route-stat-header">
+                  <div>
+                    <h3>统计数据</h3>
+                    <p class="hint">{{ '重新计算会使用当前 GPX 文件和当前难度。' if route else '保存后生成统计数据。' }}</p>
+                  </div>
+                  {% if route and can_edit %}
+                    <button
+                      class="btn route-gpx-refresh-btn"
+                      type="button"
+                      title="根据 GPX 重新计算统计数据"
+                      aria-label="根据 GPX 重新计算统计数据"
+                      data-recalc-url="{{ url_for('admin.recalculate_route_stats', route_id=route.id) }}"
+                    ><span class="spin-icon" aria-hidden="true">↻</span><span>根据 GPX 重新计算</span></button>
+                  {% endif %}
                 </div>
-                <div class="manage-route-stat-chip" data-route-stat="ascent_m">
-                  <span>累计爬升</span>
-                  <strong>{{ '%.0f m'|format(route.ascent_m) if route and route.ascent_m is not none else '保存后计算' }}</strong>
-                </div>
-                <div class="manage-route-stat-chip" data-route-stat="descent_m">
-                  <span>累计下降</span>
-                  <strong>{{ '%.0f m'|format(route.descent_m) if route and route.descent_m is not none else '保存后计算' }}</strong>
-                </div>
-                <div class="manage-route-stat-chip" data-route-stat="min_ele_m">
-                  <span>最低海拔</span>
-                  <strong>{{ '%.0f m'|format(route.min_ele_m) if route and route.min_ele_m is not none else '保存后计算' }}</strong>
-                </div>
-                <div class="manage-route-stat-chip" data-route-stat="max_ele_m">
-                  <span>最高海拔</span>
-                  <strong>{{ '%.0f m'|format(route.max_ele_m) if route and route.max_ele_m is not none else '保存后计算' }}</strong>
-                </div>
-                <div class="manage-route-stat-chip" data-route-stat="suggested_duration_hours">
-                  <span>建议用时</span>
-                  <strong>{{ '%.1f h'|format(route.suggested_duration_hours or 0) if route else '保存后计算' }}</strong>
+                <div class="manage-route-stat-grid">
+                  <div class="manage-route-stat-chip" data-route-stat="distance_km">
+                    <span>里程</span>
+                    <strong>{{ '%.1f km'|format(route.distance_km or 0) if route else '保存后计算' }}</strong>
+                  </div>
+                  <div class="manage-route-stat-chip" data-route-stat="ascent_m">
+                    <span>累计爬升</span>
+                    <strong>{{ '%.0f m'|format(route.ascent_m) if route and route.ascent_m is not none else '保存后计算' }}</strong>
+                  </div>
+                  <div class="manage-route-stat-chip" data-route-stat="descent_m">
+                    <span>累计下降</span>
+                    <strong>{{ '%.0f m'|format(route.descent_m) if route and route.descent_m is not none else '保存后计算' }}</strong>
+                  </div>
+                  <div class="manage-route-stat-chip" data-route-stat="min_ele_m">
+                    <span>最低海拔</span>
+                    <strong>{{ '%.0f m'|format(route.min_ele_m) if route and route.min_ele_m is not none else '保存后计算' }}</strong>
+                  </div>
+                  <div class="manage-route-stat-chip" data-route-stat="max_ele_m">
+                    <span>最高海拔</span>
+                    <strong>{{ '%.0f m'|format(route.max_ele_m) if route and route.max_ele_m is not none else '保存后计算' }}</strong>
+                  </div>
+                  <div class="manage-route-stat-chip" data-route-stat="suggested_duration_hours">
+                    <span>建议用时</span>
+                    <strong>{{ '%.1f h'|format(route.suggested_duration_hours or 0) if route else '保存后计算' }}</strong>
+                  </div>
                 </div>
               </div>
             </div>
@@ -171,6 +174,7 @@
         const button = document.querySelector('.route-gpx-refresh-btn[data-recalc-url]');
         const status = document.querySelector('.route-gpx-refresh-status');
         const csrfInput = document.querySelector('#recalc-route-stats-form input[name="csrf_token"]');
+        const difficultyInput = document.querySelector('select[name="difficulty"]');
         const statUnits = {
           distance_km: {unit: ' km', digits: 1},
           ascent_m: {unit: ' m', digits: 0},
@@ -215,6 +219,9 @@
           try {
             const body = new FormData();
             body.append('csrf_token', csrfInput.value);
+            if (difficultyInput) {
+              body.append('difficulty', difficultyInput.value);
+            }
             const response = await fetch(button.dataset.recalcUrl, {
               method: 'POST',
               headers: {'Accept': 'application/json'},

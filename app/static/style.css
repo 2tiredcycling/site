@@ -1582,6 +1582,15 @@ textarea {
   gap: 8px;
 }
 
+.route-gpx-current {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  word-break: break-all;
+}
+
 .route-gpx-field .route-gpx-inline input[type="file"] {
   margin-top: 0;
   border: 0;
@@ -1687,6 +1696,24 @@ textarea {
   grid-template-columns: minmax(280px, 420px) 1fr;
   gap: 14px;
   align-items: start;
+}
+
+.manage-route-stat-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.manage-route-stat-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.manage-route-stat-header h3 {
+  margin: 0;
+  color: var(--brand-primary);
+  font-size: 15px;
 }
 
 .manage-route-stat-grid {
@@ -2319,6 +2346,11 @@ td {
   .manage-route-form-risk-grid,
   .manage-route-gpx-stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .manage-route-stat-header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .manage-filter-actions {
