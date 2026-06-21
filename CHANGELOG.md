@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [v4.6.0]
+
+### Added
+
+- Added manual route statistic overrides so maintainers can preserve curated distance, elevation, and suggested-duration values across GPX recalculations.
+- Added a database migration and startup compatibility column for route manual statistic override metadata.
+
+### Changed
+
+- Refined the route create/edit management form with clearer GPX file status, separated GPX recalculation controls, compact statistic display, and a collapsible manual-statistics panel.
+- Updated route suggested-duration recalculation to use the currently selected difficulty when recalculating from the edit page.
+- Split route maintenance controls into version maintenance and a separate danger zone, and changed supply/risk fields to support longer textarea content.
+
+### Fixed
+
+- Made route GPX recalculation work with legacy uploaded GPX filenames and refresh route statistics in place without jumping to the top of the page.
+
 ## [v4.5.4]
 
 ### Changed
