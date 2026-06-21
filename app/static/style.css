@@ -1680,7 +1680,7 @@ textarea {
 }
 
 .manage-route-form-risk-grid {
-  grid-template-columns: minmax(220px, 320px) minmax(260px, 520px);
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
 }
 
 .manage-route-form-name {
@@ -1775,6 +1775,47 @@ textarea {
 .manage-route-submit-btn {
   width: auto;
   min-width: 116px;
+}
+
+.manage-route-maintenance-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.manage-route-maintenance-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 70%, #ffffff 30%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%);
+}
+
+.manage-route-maintenance-panel h3 {
+  margin: 0;
+  color: var(--brand-primary);
+  font-size: 16px;
+}
+
+.manage-route-version-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.manage-route-version-form input[type="number"] {
+  width: 160px;
+  margin-top: 0;
+}
+
+.manage-route-danger-zone {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.manage-route-danger-zone h3 {
+  color: #991b1b;
 }
 
 .manage-route-form-actions {
@@ -2379,6 +2420,15 @@ td {
   .manage-route-stat-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .manage-route-version-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .manage-route-version-form input[type="number"] {
+    width: 100%;
   }
 
   .manage-filter-actions {

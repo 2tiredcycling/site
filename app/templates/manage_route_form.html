@@ -141,7 +141,7 @@
           <section class="form-card-subsection manage-route-form-section">
             <h2>补给与风险</h2>
             <div class="manage-route-form-grid manage-route-form-risk-grid">
-              <label>补给点<input type="text" name="supply_points" value="{{ route.supply_points if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+              <label>补给点<textarea name="supply_points" rows="2" {% if not can_edit %}disabled{% endif %}>{{ route.supply_points if route else '' }}</textarea></label>
               <label>风险提示<textarea name="risk_warning" rows="2" {% if not can_edit %}disabled{% endif %}>{{ route.risk_warning if route else '' }}</textarea></label>
             </div>
           </section>
@@ -164,20 +164,27 @@
     {% if route and can_edit %}
       <section class="card form-card">
         <h2>维护操作</h2>
-        <div class="row-actions">
-          <form method="post" action="{{ url_for('admin.delete_route', route_id=route.id) }}" onsubmit="return confirm('确认移入回收站吗？');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-danger" type="submit">移入回收站</button>
-          </form>
-          <form method="post" action="{{ url_for('admin.rollback_route', route_id=route.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="number" name="version_no" min="1" placeholder="版本号" required>
-            <button class="btn btn-muted" type="submit">回滚版本</button>
-          </form>
+        <div class="manage-route-maintenance-grid">
+          <section class="manage-route-maintenance-panel">
+            <h3>版本维护</h3>
+            <form class="manage-route-version-form" method="post" action="{{ url_for('admin.rollback_route', route_id=route.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="number" name="version_no" min="1" placeholder="版本号" required>
+              <button class="btn btn-muted" type="submit">回滚版本</button>
+            </form>
+            {% if versions %}
+              <p class="hint">最近版本：{% for version in versions %}v{{ version.version_no }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
+            {% endif %}
+          </section>
+          <section class="manage-route-maintenance-panel manage-route-danger-zone">
+            <h3>危险操作</h3>
+            <p class="hint">移入回收站后，路线不会在普通列表中显示。</p>
+            <form method="post" action="{{ url_for('admin.delete_route', route_id=route.id) }}" onsubmit="return confirm('确认移入回收站吗？');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-danger" type="submit">移入回收站</button>
+            </form>
+          </section>
         </div>
-        {% if versions %}
-          <p class="hint">最近版本：{% for version in versions %}v{{ version.version_no }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
-        {% endif %}
       </section>
     {% endif %}
   </main>
