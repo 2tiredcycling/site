@@ -94,6 +94,14 @@
                       data-recalc-url="{{ url_for('admin.recalculate_route_stats', route_id=route.id) }}"
                       data-manual-summary="{{ manual_stat_summary }}"
                     ><span class="spin-icon" aria-hidden="true">↻</span><span>根据 GPX 重新计算</span></button>
+                  {% elif not route %}
+                    <button
+                      class="btn route-gpx-refresh-btn route-gpx-refresh-btn-disabled"
+                      type="button"
+                      title="新建路线保存时会自动计算统计数据"
+                      aria-label="新建路线保存时会自动计算统计数据"
+                      disabled
+                    ><span class="spin-icon" aria-hidden="true">↻</span><span>保存后自动计算</span></button>
                   {% endif %}
                 </div>
                 <div class="manage-route-stat-grid">
