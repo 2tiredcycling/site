@@ -73,7 +73,7 @@
       </form>
     </section>
 
-    <section class="card form-card">
+    <section class="card form-card manage-route-list-card">
       <h2>路线列表</h2>
       <table>
         <thead>
@@ -85,7 +85,6 @@
               <td>
                 <div class="manage-route-name-cell">
                   <strong>{{ route.route_name }}</strong>
-                  <span>#{{ route.id }}</span>
                 </div>
               </td>
               <td>{{ '%.1f'|format(route.distance_km or 0) }} km</td>

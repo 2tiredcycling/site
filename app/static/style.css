@@ -459,10 +459,14 @@ body {
   white-space: nowrap;
 }
 
+.manage-page .manage-route-list-card {
+  overflow: visible;
+}
+
 .manage-route-actions {
   display: flex;
   gap: 8px;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
 }
 
@@ -482,12 +486,15 @@ body {
   display: grid;
   gap: 5px;
   min-width: 148px;
-  margin-top: 6px;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
   padding: 8px;
   border: 1px solid color-mix(in srgb, var(--brand-border) 78%, #ffffff 22%);
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
 }
 
 .manage-row-more-menu form {
