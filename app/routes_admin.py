@@ -2319,6 +2319,7 @@ def _sync_activity_route_options(activity: Activity, option_items: list[dict]) -
 def create_route():
     payload = _route_from_form()
     gpx_file = request.files.get("gpx_file")
+    submit_action = (request.form.get("submit_action") or "save").strip()
 
     if not payload["route_name"] or not gpx_file:
         flash("参数错误：请填写路线名并上传 GPX 文件", "error")
@@ -2375,6 +2376,9 @@ def create_route():
         create_route_version(route, g.current_user.id, change_note="create")
         db.session.commit()
         write_audit_log(g.current_user.id, "route.create", "route", str(route.id), route.route_name)
+        if submit_action == "save_view":
+            flash("路线创建成功", "success")
+            return redirect(url_for("admin.route_detail_manage", route_id=route.id))
         flash("路线创建成功", "success")
     except Exception:
         if path and path.exists():
@@ -2393,6 +2397,7 @@ def update_route(route_id: int):
         flash("路线不存在", "error")
         return redirect(url_for("admin.routes_page"))
 
+    submit_action = (request.form.get("submit_action") or "save").strip()
     payload = _route_from_form(route)
     if not payload["route_name"] or payload["status"] not in ROUTE_STATUSES:
         flash("参数错误：请检查必填项", "error")
@@ -2442,6 +2447,9 @@ def update_route(route_id: int):
 
         write_field_audit_log(g.current_user.id, "route", str(route.id), before, route_snapshot(route))
         write_audit_log(g.current_user.id, "route.update", "route", str(route.id), route.route_name)
+        if submit_action == "save_view":
+            flash("路线更新成功", "success")
+            return redirect(url_for("admin.route_detail_manage", route_id=route.id))
         flash("路线更新成功", "success")
     except Exception:
         db.session.rollback()

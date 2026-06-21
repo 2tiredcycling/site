@@ -31,52 +31,85 @@
     <section class="card form-card">
       <form method="post" action="{{ url_for('admin.update_route', route_id=route.id) if route else url_for('admin.create_route') }}" enctype="multipart/form-data" class="single-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="filter-grid">
-          <label>路线名称<input type="text" name="route_name" value="{{ route.route_name if route else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
-          <label>里程 (km)<input type="number" name="distance_km" min="0" step="0.1" value="{{ route.distance_km if route else '' }}" readonly disabled></label>
-          <label>累计爬升 (m)<input type="number" name="ascent_m" min="0" step="0.1" value="{{ route.ascent_m if route and route.ascent_m is not none else '' }}" readonly disabled></label>
-          <label>累计下降 (m)<input type="number" name="descent_m" min="0" step="0.1" value="{{ route.descent_m if route and route.descent_m is not none else '' }}" readonly disabled></label>
-          <label>最低海拔 (m)<input type="number" name="min_ele_m" step="0.1" value="{{ route.min_ele_m if route and route.min_ele_m is not none else '' }}" readonly disabled></label>
-          <label>最高海拔 (m)<input type="number" name="max_ele_m" step="0.1" value="{{ route.max_ele_m if route and route.max_ele_m is not none else '' }}" readonly disabled></label>
-          <label>难度
-            <select name="difficulty" {% if not can_edit %}disabled{% endif %}>
-              <option value="1" {% if route and route.difficulty == '1' %}selected{% endif %}>★☆☆☆☆</option>
-              <option value="2" {% if route and route.difficulty in ['2', 'easy'] %}selected{% endif %}>★★☆☆☆</option>
-              <option value="3" {% if not route or route.difficulty in ['3', 'medium'] %}selected{% endif %}>★★★☆☆</option>
-              <option value="4" {% if route and route.difficulty in ['4', 'hard'] %}selected{% endif %}>★★★★☆</option>
-              <option value="5" {% if route and route.difficulty == '5' %}selected{% endif %}>★★★★★</option>
-            </select>
-          </label>
-          <label>状态
-            <select name="status" {% if not can_edit %}disabled{% endif %}>
-              {% for st in statuses %}
-                <option value="{{ st }}" {% if route and route.status == st %}selected{% endif %}>{{ st }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label>建议用时(h)<input type="number" name="suggested_duration_hours" min="0" step="0.1" value="{{ route.suggested_duration_hours if route else 3 }}" {% if not can_edit %}disabled{% endif %}></label>
-          <label>补给点<input type="text" name="supply_points" value="{{ route.supply_points if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
-          <label>风险提示<input type="text" name="risk_warning" value="{{ route.risk_warning if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
-          <label class="route-gpx-field">
-            {{ '替换 GPX' if route else 'GPX 文件' }}
-            <div class="route-gpx-inline">
-              <input type="file" name="gpx_file" accept=".gpx" {% if not route %}required{% endif %} {% if not can_edit %}disabled{% endif %}>
-              {% if route and can_edit %}
-                <button
-                  class="btn route-gpx-refresh-btn"
-                  type="button"
-                  title="自动更新统计"
-                  aria-label="自动更新统计"
-                  onclick="document.getElementById('recalc-route-stats-form').submit(); return false;"
-                ><span class="spin-icon" aria-hidden="true">↻</span></button>
-              {% endif %}
+        <div class="manage-route-form-sections">
+          <section class="form-card-subsection manage-route-form-section">
+            <h2>基础信息</h2>
+            <div class="manage-route-form-grid manage-route-form-basic-grid">
+              <label class="manage-route-form-name">路线名称<input type="text" name="route_name" value="{{ route.route_name if route else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
+              <label>状态
+                <select name="status" {% if not can_edit %}disabled{% endif %}>
+                  {% for st in statuses %}
+                    <option value="{{ st }}" {% if route and route.status == st %}selected{% endif %}>{{ st }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label>难度
+                <select name="difficulty" {% if not can_edit %}disabled{% endif %}>
+                  <option value="1" {% if route and route.difficulty == '1' %}selected{% endif %}>★☆☆☆☆</option>
+                  <option value="2" {% if route and route.difficulty in ['2', 'easy'] %}selected{% endif %}>★★☆☆☆</option>
+                  <option value="3" {% if not route or route.difficulty in ['3', 'medium'] %}selected{% endif %}>★★★☆☆</option>
+                  <option value="4" {% if route and route.difficulty in ['4', 'hard'] %}selected{% endif %}>★★★★☆</option>
+                  <option value="5" {% if route and route.difficulty == '5' %}selected{% endif %}>★★★★★</option>
+                </select>
+              </label>
+              <label class="manage-route-form-wide">简介<textarea name="description" rows="3" {% if not can_edit %}disabled{% endif %}>{{ route.description if route else '' }}</textarea></label>
             </div>
-          </label>
+          </section>
+
+          <section class="form-card-subsection manage-route-form-section">
+            <h2>路线数据</h2>
+            <div class="manage-route-form-grid manage-route-form-data-grid">
+              <label>里程 (km)<input type="number" name="distance_km" min="0" step="0.1" value="{{ route.distance_km if route else '' }}" readonly disabled></label>
+              <label>累计爬升 (m)<input type="number" name="ascent_m" min="0" step="0.1" value="{{ route.ascent_m if route and route.ascent_m is not none else '' }}" readonly disabled></label>
+              <label>累计下降 (m)<input type="number" name="descent_m" min="0" step="0.1" value="{{ route.descent_m if route and route.descent_m is not none else '' }}" readonly disabled></label>
+              <label>最低海拔 (m)<input type="number" name="min_ele_m" step="0.1" value="{{ route.min_ele_m if route and route.min_ele_m is not none else '' }}" readonly disabled></label>
+              <label>最高海拔 (m)<input type="number" name="max_ele_m" step="0.1" value="{{ route.max_ele_m if route and route.max_ele_m is not none else '' }}" readonly disabled></label>
+              <label>建议用时(h)<input type="number" name="suggested_duration_hours" min="0" step="0.1" value="{{ route.suggested_duration_hours if route else 3 }}" {% if not can_edit %}disabled{% endif %}></label>
+            </div>
+          </section>
+
+          <section class="form-card-subsection manage-route-form-section">
+            <h2>补给与风险</h2>
+            <div class="manage-route-form-grid manage-route-form-risk-grid">
+              <label>补给点<input type="text" name="supply_points" value="{{ route.supply_points if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+              <label>风险提示<input type="text" name="risk_warning" value="{{ route.risk_warning if route else '' }}" {% if not can_edit %}disabled{% endif %}></label>
+            </div>
+          </section>
+
+          <section class="form-card-subsection manage-route-form-section">
+            <h2>GPX 文件</h2>
+            <label class="route-gpx-field">
+              {{ '替换 GPX' if route else 'GPX 文件' }}
+              <div class="route-gpx-inline">
+                <input type="file" name="gpx_file" accept=".gpx" {% if not route %}required{% endif %} {% if not can_edit %}disabled{% endif %}>
+                {% if route and can_edit %}
+                  <button
+                    class="btn route-gpx-refresh-btn"
+                    type="button"
+                    title="自动更新统计"
+                    aria-label="自动更新统计"
+                    onclick="document.getElementById('recalc-route-stats-form').submit(); return false;"
+                  ><span class="spin-icon" aria-hidden="true">↻</span></button>
+                {% else %}
+                  <button
+                    class="btn route-gpx-refresh-btn route-gpx-refresh-btn-disabled"
+                    type="button"
+                    title="新建路线保存时会自动计算统计"
+                    aria-label="新建路线保存时会自动计算统计"
+                    disabled
+                  ><span class="spin-icon" aria-hidden="true">↻</span></button>
+                {% endif %}
+              </div>
+            </label>
+            <p class="hint">{{ '里程与海拔统计将根据 GPX 自动计算；替换 GPX 或点击“自动更新统计”后会刷新。' if route else '新建路线保存时会根据上传的 GPX 自动计算里程与海拔统计。' }}</p>
+          </section>
         </div>
-        <p class="hint">里程与海拔统计将根据 GPX 自动计算；替换 GPX 或点击“自动更新统计”后会刷新。</p>
-        <label>简介<textarea name="description" rows="3" {% if not can_edit %}disabled{% endif %}>{{ route.description if route else '' }}</textarea></label>
         {% if can_edit %}
-          <button class="btn" type="submit">{{ '保存修改' if route else '新增路线' }}</button>
+          <div class="manage-route-form-actions">
+            <a class="btn btn-muted" href="{{ url_for('admin.routes_page') }}">取消</a>
+            <button class="btn manage-route-submit-btn" type="submit" name="submit_action" value="save">{{ '保存修改' if route else '新增路线' }}</button>
+            <button class="btn btn-muted manage-route-submit-btn" type="submit" name="submit_action" value="save_view">保存并查看路线详情</button>
+          </div>
         {% endif %}
       </form>
       {% if route and can_edit %}
