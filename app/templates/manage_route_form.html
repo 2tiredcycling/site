@@ -73,10 +73,10 @@
                       <button
                         class="btn route-gpx-refresh-btn"
                         type="button"
-                        title="自动更新统计"
-                        aria-label="自动更新统计"
+                        title="根据 GPX 重新计算统计数据"
+                        aria-label="根据 GPX 重新计算统计数据"
                         data-recalc-url="{{ url_for('admin.recalculate_route_stats', route_id=route.id) }}"
-                      ><span class="spin-icon" aria-hidden="true">↻</span></button>
+                      ><span class="spin-icon" aria-hidden="true">↻</span><span>根据 GPX 重新计算</span></button>
                     {% else %}
                       <button
                         class="btn route-gpx-refresh-btn route-gpx-refresh-btn-disabled"
@@ -84,7 +84,7 @@
                         title="新建路线保存时会自动计算统计"
                         aria-label="新建路线保存时会自动计算统计"
                         disabled
-                      ><span class="spin-icon" aria-hidden="true">↻</span></button>
+                      ><span class="spin-icon" aria-hidden="true">↻</span><span>保存后自动计算</span></button>
                     {% endif %}
                   </div>
                 </label>
@@ -203,6 +203,9 @@
 
         if (!button || !csrfInput) return;
         button.addEventListener('click', async () => {
+          const confirmed = window.confirm('这将根据 GPX 重新计算并覆盖当前统计数据，是否继续？');
+          if (!confirmed) return;
+
           const scrollX = window.scrollX;
           const scrollY = window.scrollY;
           button.disabled = true;
