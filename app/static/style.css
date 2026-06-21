@@ -442,6 +442,29 @@ body {
   grid-column: 1 / -1;
 }
 
+.manage-route-name-cell {
+  display: grid;
+  gap: 3px;
+}
+
+.manage-route-name-cell strong {
+  color: var(--text-main);
+  font-size: 15px;
+}
+
+.manage-route-name-cell span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.manage-route-difficulty {
+  color: var(--brand-primary);
+  font-weight: 750;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 .manage-top-nav {
   display: flex;
   gap: 6px;
