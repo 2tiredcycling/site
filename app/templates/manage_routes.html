@@ -105,9 +105,36 @@
               </td>
               <td>{{ status_badge(route.status) }}</td>
               <td>{{ route.updated_at.strftime('%Y-%m-%d %H:%M') if route.updated_at else '-' }}</td>
-              <td class="row-actions">
-                <a class="btn btn-muted" href="{{ url_for('admin.route_detail_manage', route_id=route.id) }}">查看</a>
-                <a class="btn" href="{{ url_for('admin.route_edit_page', route_id=route.id) }}">编辑</a>
+              <td>
+                <div class="manage-route-actions">
+                  <a class="btn btn-muted" href="{{ url_for('admin.route_detail_manage', route_id=route.id) }}">查看</a>
+                  <a class="btn" href="{{ url_for('admin.route_edit_page', route_id=route.id) }}">编辑</a>
+                  <details class="manage-row-more">
+                    <summary class="btn btn-muted">更多</summary>
+                    <div class="manage-row-more-menu">
+                      {% if can_edit %}
+                        <form method="post" action="{{ url_for('admin.update_status', route_id=route.id) }}">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          {% if route.status == 'published' %}
+                            <input type="hidden" name="status" value="offline">
+                            <button class="manage-row-menu-item" type="submit">下线</button>
+                          {% else %}
+                            <input type="hidden" name="status" value="published">
+                            <button class="manage-row-menu-item" type="submit">恢复发布</button>
+                          {% endif %}
+                        </form>
+                        <button class="manage-row-menu-item is-disabled" type="button" disabled>复制路线</button>
+                      {% endif %}
+                      <a class="manage-row-menu-item" href="{{ url_for('admin.download_route_gpx', route_id=route.id) }}">下载 GPX</a>
+                      {% if can_edit %}
+                        <form method="post" action="{{ url_for('admin.delete_route', route_id=route.id) }}" onsubmit="return confirm('确认移入回收站吗？');">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <button class="manage-row-menu-item is-danger" type="submit">移入回收站</button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  </details>
+                </div>
               </td>
             </tr>
           {% else %}
@@ -129,6 +156,8 @@
 
     <section class="card form-card">
       <h2>批量导入（CSV + GPX）</h2>
+      <p class="hint">暂未开启，因为目前路线比较少，也不太需要。</p>
+      {#
       <form method="post" action="{{ url_for('admin.bulk_import') }}" enctype="multipart/form-data" class="single-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="filter-grid">
@@ -139,6 +168,7 @@
           <button class="btn" type="submit">开始导入</button>
         {% endif %}
       </form>
+      #}
     </section>
 
     <section class="card form-card">

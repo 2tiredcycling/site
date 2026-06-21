@@ -1500,6 +1500,28 @@ def route_detail_manage(route_id: int):
 
 
 
+@bp.get("/routes/<int:route_id>/download")
+@login_required
+def download_route_gpx(route_id: int):
+    route = Route.query.filter_by(id=route_id, is_deleted=False).first()
+    if not route:
+        abort(404, description="Route not found")
+
+    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+    file_path = upload_folder / route.gpx_filename
+    if not file_path.exists() or not file_path.is_file():
+        flash("GPX 文件不存在", "error")
+        return redirect(url_for("admin.routes_page"))
+
+    return send_from_directory(
+        upload_folder,
+        route.gpx_filename,
+        as_attachment=True,
+        download_name=route.gpx_filename,
+        mimetype="application/gpx+xml",
+    )
+
+
 @bp.get("/routes/<int:route_id>/preview")
 @login_required
 def route_preview_manage(route_id: int):
