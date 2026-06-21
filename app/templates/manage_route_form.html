@@ -10,7 +10,12 @@
 <body class="manage-page">
   <main class="container">
     <header class="header">
-      <h1>{{ '编辑路线 #' ~ route.id if route else '新增路线' }}</h1>
+      <div>
+        <h1>{{ '编辑路线：' ~ route.route_name if route else '新增路线' }}</h1>
+        {% if route %}
+          <p>路线 ID: {{ route.id }}</p>
+        {% endif %}
+      </div>
       <div class="row-actions">
         <a class="btn btn-muted" href="{{ url_for('admin.routes_page') }}">返回路线列表</a>
         {% if route %}
