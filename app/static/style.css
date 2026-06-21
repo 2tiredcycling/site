@@ -1664,6 +1664,10 @@ textarea {
   padding-top: 12px;
 }
 
+.manage-route-form-section:nth-of-type(2) {
+  border-top: 0;
+}
+
 .manage-route-form-section h2 {
   margin: 0 0 10px;
   color: var(--brand-primary);
