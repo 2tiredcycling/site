@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [v4.5.4]
+
+### Changed
+
+- Refined the management routes page filter layout so advanced filters expand below the basic controls without shifting the toolbar.
+- Improved the management routes table by hiding noisy route IDs, adding difficulty display, and moving low-frequency actions into a floating "more" menu.
+- Moved the route recycle bin to a dedicated management page with a compact entry from the routes list.
+- Marked route bulk import as temporarily unavailable in the UI while keeping the backend endpoint available.
+
 ## [v4.5.3]
 
 ### Changed
