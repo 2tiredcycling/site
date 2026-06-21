@@ -367,18 +367,17 @@ body {
 }
 
 .manage-route-filter-form {
-  gap: 10px;
+  gap: 12px;
 }
 
-.manage-route-filter-main {
+.manage-route-filter-basic {
   display: grid;
-  grid-template-columns: auto minmax(220px, 1.4fr) minmax(150px, 0.7fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 220px) auto;
   gap: 10px;
   align-items: end;
 }
 
 .manage-route-filter-title {
-  align-self: center;
   color: var(--brand-primary);
   white-space: nowrap;
 }
@@ -404,7 +403,6 @@ body {
 }
 
 .manage-filter-advanced {
-  align-self: end;
   min-width: 0;
 }
 
@@ -433,13 +431,9 @@ body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid color-mix(in srgb, var(--card-border) 78%, var(--brand-border) 22%);
-}
-
-.manage-filter-advanced[open] {
-  grid-column: 1 / -1;
 }
 
 .manage-route-name-cell {
@@ -2112,12 +2106,8 @@ td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .manage-route-filter-main {
-    grid-template-columns: auto minmax(0, 1fr) minmax(150px, 0.7fr);
-  }
-
-  .manage-filter-advanced {
-    grid-column: 1 / -1;
+  .manage-route-filter-basic {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 220px) auto;
   }
 }
 
@@ -2195,13 +2185,9 @@ td {
     grid-template-columns: 1fr;
   }
 
-  .manage-route-filter-main,
+  .manage-route-filter-basic,
   .manage-filter-advanced-grid {
     grid-template-columns: 1fr;
-  }
-
-  .manage-route-filter-title {
-    align-self: start;
   }
 
   .manage-filter-actions {
