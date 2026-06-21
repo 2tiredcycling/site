@@ -1,0 +1,17 @@
+{% macro status_badge(value, label=None) -%}
+  {%- set raw = (value|string).strip() -%}
+  {%- set text = (label if label is not none else raw)|string -%}
+  {%- set key = raw|lower -%}
+  {%- if key in ['published', 'active', 'approved', 'confirmed', 'ready', 'success'] or text in ['进行中', '正在进行', '已确认', '待领取'] -%}
+    {%- set tone = 'success' -%}
+  {%- elif key in ['draft', 'pending', 'upcoming'] or text in ['草稿', '待确认', '待处理', '待审核', '即将开始'] -%}
+    {%- set tone = 'warning' -%}
+  {%- elif key in ['offline', 'ended', 'done', 'cancelled', 'picked_up', 'rejected'] or text in ['已经结束', '已结束', '已处理', '已取消', '已领取', '已驳回'] -%}
+    {%- set tone = 'neutral' -%}
+  {%- elif key in ['failed', 'blocked', 'error'] or text in ['失败', '已阻止', '阻塞'] -%}
+    {%- set tone = 'danger' -%}
+  {%- else -%}
+    {%- set tone = 'neutral' -%}
+  {%- endif -%}
+  <span class="status-badge status-badge-{{ tone }}">{{ text }}</span>
+{%- endmacro %}

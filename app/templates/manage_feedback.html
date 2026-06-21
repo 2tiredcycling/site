@@ -7,7 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
   <main class="container">
     <header class="header">
       <h1>反馈评分管理</h1>
@@ -15,6 +16,7 @@
         <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -98,7 +100,7 @@
               <td>{{ feedback.reviewed_at.strftime('%Y-%m-%d %H:%M:%S') if feedback.reviewed_at else '-' }}</td>
               <td>{{ feedback.route.route_name if feedback.route else feedback.route_id }}</td>
               <td>{{ feedback.rating }} / 5</td>
-              <td>{{ feedback.status }}</td>
+              <td>{{ status_badge(feedback.status) }}</td>
               <td>{{ feedback.reviewer.username if feedback.reviewer else '-' }}</td>
               <td>{{ feedback.reviewer_note or '-' }}</td>
               <td class="row-actions">

@@ -18,6 +18,10 @@ def _extract_csrf(html: str) -> str:
     return match.group(1)
 
 
+def _project_version() -> str:
+    return Path("VERSION").read_text(encoding="utf-8-sig").strip()
+
+
 @pytest.fixture()
 def app_and_client(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
@@ -334,7 +338,7 @@ def test_manage_kit_preorder_create_and_registrations_page(app_and_client):
     assert login_admin(client).status_code == 200
     manage_page = client.get("/manage")
     assert manage_page.status_code == 200
-    assert "当前版本：v4.5.2" in manage_page.get_data(as_text=True)
+    assert f"当前版本：{_project_version()}" in manage_page.get_data(as_text=True)
     new_page = client.get("/manage/kit-preorders/new")
     assert new_page.status_code == 200
     new_page_body = new_page.get_data(as_text=True)
@@ -1002,7 +1006,7 @@ def test_manage_dashboard_shows_security_entry(app_and_client):
     assert resp.status_code == 200
     text = resp.get_data(as_text=True)
     assert "安全监控" in text
-    assert "当前版本：v4.5.2" in text
+    assert f"当前版本：{_project_version()}" in text
 
 
 def test_manage_security_page_available_after_login(app_and_client):

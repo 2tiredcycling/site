@@ -7,7 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
   <main class="container">
     <header class="header">
       <h1>骑行服预定管理</h1>
@@ -18,6 +19,7 @@
         {% endif %}
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -38,7 +40,7 @@
             <tr>
               <td>{{ batch.id }}</td>
               <td>{{ batch.title }}</td>
-              <td>{{ status_labels.get(batch.status, batch.status) }}</td>
+              <td>{{ status_badge(batch.status, status_labels.get(batch.status, batch.status)) }}</td>
               <td>{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d') if batch.deadline_at else '-' }}</td>
               <td>{{ count_map.get(batch.id, 0) }}</td>
               <td>{{ '是' if batch.is_visible else '否' }}</td>

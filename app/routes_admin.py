@@ -145,6 +145,37 @@ MERCH_ACTIVE_ORDER_STATUSES = (
     MERCH_ORDER_READY,
     MERCH_ORDER_PICKED_UP,
 )
+AUDIT_ACTION_LABELS = {
+    "auth.login": "登录后台",
+    "auth.logout": "退出后台",
+    "route.create": "创建路线",
+    "route.update": "更新路线",
+    "route.soft_delete": "移入路线回收站",
+    "route.restore": "恢复路线",
+    "route.status": "更新路线状态",
+    "route.rollback": "回滚路线版本",
+    "route.bulk_import": "批量导入路线",
+    "feedback.create": "提交路线反馈",
+    "feedback.review": "审核路线反馈",
+    "feedback.reopen": "重开路线反馈",
+    "feedback.delete": "删除路线反馈",
+    "activity.create": "创建活动",
+    "activity.update": "更新活动",
+    "activity.delete": "删除活动",
+    "activity.media.assign": "绑定活动媒体",
+    "activity.media.delete": "删除活动媒体",
+    "merch_preorder.create": "创建预定批次",
+    "merch_preorder.update": "更新预定批次",
+    "merch_preorder.image.delete": "删除预定图片",
+    "merch_preorder.registration.status": "更新预报名状态",
+    "announcement.create": "创建公告",
+    "announcement.update": "更新公告",
+    "announcement.delete": "删除公告",
+    "site_feedback.status_update": "更新网站反馈",
+    "user.create": "创建账号",
+    "user.update": "更新账号",
+    "user.deactivate": "停用账号",
+}
 
 
 def _parse_registration_notes(raw_notes: str) -> dict[str, str]:
@@ -182,6 +213,13 @@ def _display_app_version() -> str:
     if re.fullmatch(r"\d+\.\d+\.\d+", raw):
         return f"v{raw}"
     return raw
+
+
+def _audit_action_label(action: str | None) -> str:
+    raw = (action or "").strip()
+    if not raw:
+        return "记录操作"
+    return AUDIT_ACTION_LABELS.get(raw, raw)
 
 
 def _to_local_time(value: datetime | None) -> datetime | None:
@@ -660,10 +698,33 @@ def _enforce_permission_matrix():
 
 @bp.app_context_processor
 def _inject_csrf_token():
+    user = getattr(g, "current_user", None)
+    nav_items = []
+    if user:
+        nav_items.append({"label": "总览", "endpoint": "admin.dashboard", "prefix": "/manage"})
+        if can_edit(user):
+            nav_items.extend(
+                [
+                    {"label": "路线", "endpoint": "admin.routes_page", "prefix": "/manage/routes"},
+                    {"label": "活动", "endpoint": "admin.activities_page", "prefix": "/manage/activities"},
+                    {"label": "预定", "endpoint": "admin.merch_preorders_page", "prefix": "/manage/kit-preorders"},
+                    {"label": "公告", "endpoint": "admin.announcements_page", "prefix": "/manage/announcements"},
+                ]
+            )
+        if can_review(user):
+            nav_items.append({"label": "反馈", "endpoint": "admin.feedback_page", "prefix": "/manage/feedback"})
+        if can_view_analytics(user):
+            nav_items.append({"label": "流量", "endpoint": "admin.analytics_page", "prefix": "/manage/analytics"})
+        if can_view_security(user):
+            nav_items.append({"label": "安全", "endpoint": "admin.security_page", "prefix": "/manage/security"})
+        if can_manage_users(user):
+            nav_items.append({"label": "账号", "endpoint": "admin.users_page", "prefix": "/manage/users"})
     return {
         "csrf_token": get_csrf_token,
         "to_local_time": _to_local_time,
         "app_version": _display_app_version(),
+        "manage_nav_items": nav_items,
+        "audit_action_label": _audit_action_label,
     }
 
 
@@ -790,7 +851,7 @@ def dashboard():
     pending_feedback_count = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).count() if can_review_flag else 0
     pending_site_feedback_count = SiteFeedback.query.filter_by(status=SITE_FEEDBACK_PENDING).count() if can_review_flag else 0
     audit_logs_pagination = (
-        AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(page=log_page, per_page=5, error_out=False)
+        AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(page=log_page, per_page=3, error_out=False)
         if can_view_audit_logs_flag
         else None
     )

@@ -7,7 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
   <main class="container">
     <header class="header">
       <h1>路线维护</h1>
@@ -19,6 +20,7 @@
         <a class="btn btn-muted" href="{{ url_for('web.bulk_import_template') }}">下载 CSV 模板</a>
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -65,7 +67,7 @@
               <td>{{ route.id }}</td>
               <td>{{ route.route_name }}</td>
               <td>{{ '%.1f'|format(route.distance_km or 0) }} km</td>
-              <td>{{ route.status }}</td>
+              <td>{{ status_badge(route.status) }}</td>
               <td>{{ route.updated_at.strftime('%Y-%m-%d %H:%M') if route.updated_at else '-' }}</td>
               <td class="row-actions">
                 <a class="btn btn-muted" href="{{ url_for('admin.route_detail_manage', route_id=route.id) }}">查看</a>

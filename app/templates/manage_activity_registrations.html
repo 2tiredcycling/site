@@ -8,7 +8,7 @@
   {% include '_theme_bootstrap.html' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
   <main class="container">
     <header class="header">
       <h1>报名信息：{{ activity.title }}</h1>
@@ -18,6 +18,7 @@
         <a class="btn" href="{{ url_for('admin.export_activity_registrations_excel', activity_id=activity.id) }}">下载 Excel</a>
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}

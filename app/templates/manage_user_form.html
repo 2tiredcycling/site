@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
   <main class="container narrow">
     <header class="header">
       <h1>{{ '编辑账号 #' ~ user.id if user else '新增账号' }}</h1>
@@ -15,6 +15,7 @@
         <a class="btn btn-muted" href="{{ url_for('admin.users_page') }}">返回账号列表</a>
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}

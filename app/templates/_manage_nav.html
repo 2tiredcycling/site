@@ -1,0 +1,9 @@
+{% if manage_nav_items %}
+  <nav class="manage-top-nav" aria-label="管理导航">
+    {% for item in manage_nav_items %}
+      {% set href = url_for(item.endpoint) %}
+      {% set active = request.path == href or (item.prefix != '/manage' and request.path.startswith(item.prefix)) %}
+      <a class="manage-top-nav-link {{ 'is-active' if active else '' }}" href="{{ href }}">{{ item.label }}</a>
+    {% endfor %}
+  </nav>
+{% endif %}

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [v4.5.3]
+
+### Changed
+
+- Reworked the management dashboard into clearer core data, pending work, recent activity, and shortcut sections.
+- Added a lightweight permission-aware top navigation across management pages.
+- Gave management pages a fixed admin color system independent from the public site theme choices.
+- Unified management status displays into colored badge labels for faster scanning.
+- Refined the dashboard header, shortcut cards, pending-work cards, and recent audit log previews for clearer scanning.
+- Updated tests to read the expected management version from the standalone `VERSION` file.
+
 ## [v4.5.2]
 
 ### Fixed

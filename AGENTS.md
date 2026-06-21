@@ -251,7 +251,7 @@ When setup, deployment, maintenance workflow, or handoff instructions change, ch
 
 ## Remote push and tag policy
 
-Before pushing commits to the remote GitHub repository, ask the user whether the push should include a version bump.
+Before pushing commits to the remote GitHub repository, review the pending changes against the versioning rules above and ask the user whether the push should include a version bump. Do not rely only on the user's initial wording. If the user asks to push without mentioning versioning, explicitly state whether the pending changes appear to require a version bump. If a version bump appears appropriate, recommend the smallest suitable version increment and ask for confirmation before changing `VERSION`, updating `CHANGELOG.md`, creating a tag, or pushing.
 
 If the user confirms that a version bump is needed, complete all of the following before pushing:
 

@@ -7,7 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
   <main class="container">
     <header class="header">
       <h1>预报名信息</h1>
@@ -18,6 +19,7 @@
         <a class="btn btn-muted" href="{{ url_for('admin.export_merch_preorder_registrations_excel', batch_id=batch.id) }}">导出 Excel</a>
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -53,7 +55,7 @@
               <td>{{ item.gender }}</td>
               <td>{{ item.size }}</td>
               <td>{{ item.quantity }}</td>
-              <td>{{ status_labels.get(item.status, item.status) }}</td>
+              <td>{{ status_badge(item.status, status_labels.get(item.status, item.status)) }}</td>
               <td>{{ item.notes }}</td>
               <td>{{ to_local_time(item.created_at).strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</td>
               <td>

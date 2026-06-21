@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
   <main class="container analytics-container">
     <header class="header">
       <h1>安全监控</h1>
@@ -19,6 +19,7 @@
         {% endif %}
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     <section class="card form-card">
       <h2>统计区间</h2>

@@ -7,7 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
   <main class="container">
     <header class="header">
       <h1>网站问题反馈管理</h1>
@@ -15,6 +16,7 @@
         <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -75,7 +77,7 @@
               <td>{{ item.content }}</td>
               <td>{{ item.contact or '-' }}</td>
               <td>{{ item.source_page or '-' }}</td>
-              <td>{{ item.status }}</td>
+              <td>{{ status_badge(item.status) }}</td>
               <td class="row-actions">
                 {% if item.status != 'done' %}
                   <form method="post" action="{{ url_for('admin.site_feedback_update_status', feedback_id=item.id) }}">

@@ -7,7 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
   <main class="container">
     <header class="header">
       <h1>{{ '编辑预报名批次' if batch else '新增预报名批次' }}</h1>
@@ -19,6 +20,7 @@
         {% endif %}
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -51,7 +53,7 @@
           </label>
           <div class="manage-kit-status-preview">
             <span>自动状态</span>
-            <strong>{{ status_labels.get(batch.status, batch.status) if batch else '创建后自动判断' }}</strong>
+            <strong>{% if batch %}{{ status_badge(batch.status, status_labels.get(batch.status, batch.status)) }}{% else %}创建后自动判断{% endif %}</strong>
             <small>开始日按 00:00 计算，截止日按 23:59 计算。</small>
           </div>
         </section>

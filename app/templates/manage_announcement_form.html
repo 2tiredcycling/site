@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="manage-page">
   <main class="container">
     <header class="header">
       <h1>{{ '编辑公告 #' ~ announcement.id if announcement else '新增公告' }}</h1>
@@ -15,6 +15,7 @@
         <a class="btn btn-muted" href="{{ url_for('admin.announcements_page') }}">返回公告列表</a>
       </div>
     </header>
+    {% include "_manage_nav.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
