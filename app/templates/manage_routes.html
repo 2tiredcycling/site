@@ -18,6 +18,7 @@
           <a class="btn" href="{{ url_for('admin.route_new_page') }}">新增路线</a>
         {% endif %}
         <a class="btn btn-muted" href="{{ url_for('web.bulk_import_template') }}">下载 CSV 模板</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.routes_recycle_page') }}">回收站 {{ recycle_count }}</a>
       </div>
     </header>
     {% include "_manage_nav.html" %}
@@ -171,22 +172,6 @@
       #}
     </section>
 
-    <section class="card form-card">
-      <h2>回收站</h2>
-      {% for route in recycle_routes %}
-        <div class="row-actions">
-          <span>{{ route.route_name }}（{{ route.gpx_filename }}）</span>
-          {% if can_edit %}
-            <form method="post" action="{{ url_for('admin.restore_route', route_id=route.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn" type="submit">恢复</button>
-            </form>
-          {% endif %}
-        </div>
-      {% else %}
-        <p>回收站为空</p>
-      {% endfor %}
-    </section>
   </main>
 </body>
 </html>

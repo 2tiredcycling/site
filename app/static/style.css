@@ -546,6 +546,25 @@ body {
   color: var(--text-muted);
 }
 
+.manage-empty-state {
+  display: grid;
+  gap: 6px;
+  padding: 22px;
+  border: 1px dashed color-mix(in srgb, var(--brand-border) 70%, #ffffff 30%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 70%, #ffffff 30%);
+}
+
+.manage-empty-state strong {
+  color: var(--brand-primary);
+  font-size: 16px;
+}
+
+.manage-empty-state span {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
 .manage-top-nav {
   display: flex;
   gap: 6px;

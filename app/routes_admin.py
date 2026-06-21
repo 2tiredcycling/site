@@ -1442,14 +1442,25 @@ def feedback_page():
 def routes_page():
     query, filters = query_routes_from_request(include_unpublished=True)
     pagination = query.paginate(page=filters["page"], per_page=filters["per_page"], error_out=False)
-    recycle_routes = Route.query.filter_by(is_deleted=True).order_by(Route.deleted_at.desc()).all()
+    recycle_count = Route.query.filter_by(is_deleted=True).count()
     return render_template(
         "manage_routes.html",
         routes=pagination.items,
-        recycle_routes=recycle_routes,
+        recycle_count=recycle_count,
         pagination=pagination,
         filters=filters,
         statuses=ROUTE_STATUSES,
+        can_edit=can_edit(g.current_user),
+    )
+
+
+@bp.get("/routes/recycle")
+@login_required
+def routes_recycle_page():
+    recycle_routes = Route.query.filter_by(is_deleted=True).order_by(Route.deleted_at.desc()).all()
+    return render_template(
+        "manage_routes_recycle.html",
+        recycle_routes=recycle_routes,
         can_edit=can_edit(g.current_user),
     )
 

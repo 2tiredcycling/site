@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>路线回收站 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="manage-page">
+  <main class="container">
+    <header class="header">
+      <h1>路线回收站</h1>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.routes_page') }}">返回路线列表</a>
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+      </div>
+    </header>
+    {% include "_manage_nav.html" %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card">
+      <h2>已移入回收站的路线</h2>
+      {% if recycle_routes %}
+        <table>
+          <thead>
+            <tr><th>名称</th><th>GPX 文件</th><th>删除时间</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            {% for route in recycle_routes %}
+              <tr>
+                <td>
+                  <div class="manage-route-name-cell">
+                    <strong>{{ route.route_name }}</strong>
+                    <span>#{{ route.id }}</span>
+                  </div>
+                </td>
+                <td>{{ route.gpx_filename or '-' }}</td>
+                <td>{{ route.deleted_at.strftime('%Y-%m-%d %H:%M') if route.deleted_at else '-' }}</td>
+                <td>
+                  {% if can_edit %}
+                    <form method="post" action="{{ url_for('admin.restore_route', route_id=route.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button class="btn" type="submit">恢复</button>
+                    </form>
+                  {% else %}
+                    <span class="hint">无编辑权限</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="manage-empty-state">
+          <strong>回收站为空</strong>
+          <span>被移入回收站的路线会显示在这里。</span>
+        </div>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>
