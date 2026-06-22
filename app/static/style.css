@@ -1090,6 +1090,12 @@ body {
   line-height: 1.8;
 }
 
+.announcement-inline-link {
+  display: inline-flex;
+  margin: 0 4px;
+  vertical-align: baseline;
+}
+
 .team-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2551,7 +2557,8 @@ td {
   .manage-kit-text-grid,
   .manage-kit-upload-grid,
   .manage-announcement-basic-grid,
-  .manage-announcement-time-grid {
+  .manage-announcement-time-grid,
+  .announcement-link-tool-grid {
     grid-template-columns: 1fr;
   }
 
@@ -4165,6 +4172,38 @@ td {
 .manage-announcement-content-field textarea {
   min-height: 260px;
   resize: vertical;
+}
+
+.announcement-link-tool {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 75%, #ffffff 25%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 68%, #ffffff 32%);
+}
+
+.announcement-link-tool-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.announcement-link-tool-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 260px) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.announcement-link-tool .hint {
+  margin: 0;
+}
+
+.announcement-link-tool code {
+  font-size: 13px;
 }
 
 .kit-compact-section h2 {

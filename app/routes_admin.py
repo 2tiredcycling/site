@@ -1957,6 +1957,30 @@ def announcements_page():
     )
 
 
+def _announcement_link_targets() -> list[dict]:
+    activities = Activity.query.order_by(Activity.activity_time.desc(), Activity.id.desc()).limit(80).all()
+    routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc(), Route.id.desc()).limit(80).all()
+    batches = MerchPreorderBatch.query.order_by(
+        MerchPreorderBatch.deadline_at.desc(),
+        MerchPreorderBatch.updated_at.desc(),
+        MerchPreorderBatch.id.desc(),
+    ).limit(80).all()
+    return [
+        *[
+            {"type": "活动", "label": item.title, "path": f"/events/{item.id}"}
+            for item in activities
+        ],
+        *[
+            {"type": "路线", "label": item.route_name, "path": f"/routes/{item.id}"}
+            for item in routes
+        ],
+        *[
+            {"type": "预定", "label": item.title, "path": f"/kit/{item.id}"}
+            for item in batches
+        ],
+    ]
+
+
 @bp.get("/announcements/new")
 @login_required
 def announcement_new_page():
@@ -1967,6 +1991,7 @@ def announcement_new_page():
         announcement=None,
         routes=routes,
         activities=activities,
+        announcement_link_targets=_announcement_link_targets(),
         default_published_at=_next_local_hour(),
         can_edit=can_edit(g.current_user),
     )
@@ -1984,6 +2009,7 @@ def announcement_edit_page(announcement_id: int):
         announcement=announcement,
         routes=Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all(),
         activities=Activity.query.order_by(Activity.activity_time.desc()).all(),
+        announcement_link_targets=_announcement_link_targets(),
         default_published_at=_next_local_hour(),
         can_edit=can_edit(g.current_user),
     )

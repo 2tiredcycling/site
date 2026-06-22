@@ -21,33 +21,8 @@
           | 下线时间：{{ to_local_time(announcement.offline_at).strftime('%Y-%m-%d %H:%M') }}
         {% endif %}
       </p>
-      <div class="rich-text">{{ announcement.content | replace('\n', '<br>') | safe }}</div>
+      <div class="rich-text">{{ announcement_content_html }}</div>
     </section>
-
-    {% if announcement.activities %}
-      <section class="card form-card">
-        <h2>关联活动</h2>
-        <ul>
-          {% for item in announcement.activities %}
-            <li>
-              <a href="{{ url_for('web.events_detail', event_id=item.id) }}">{{ item.title }}</a>
-              （{{ to_local_time(item.activity_time).strftime('%Y-%m-%d') if item.activity_time else '-' }}）
-            </li>
-          {% endfor %}
-        </ul>
-      </section>
-    {% endif %}
-
-    {% if linked_routes %}
-      <section class="card form-card">
-        <h2>关联路线</h2>
-        <ul>
-          {% for item in linked_routes %}
-            <li><a href="{{ url_for('web.route_detail', route_id=item.id) }}">{{ item.route_name }}</a></li>
-          {% endfor %}
-        </ul>
-      </section>
-    {% endif %}
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
 </body>

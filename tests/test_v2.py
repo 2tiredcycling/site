@@ -596,6 +596,10 @@ def test_manage_announcements_crud(app_and_client):
 
     edit_page = client.get(f"/manage/announcements/{announcement_id}/edit")
     assert edit_page.status_code == 200
+    edit_body = edit_page.get_data(as_text=True)
+    assert "添加关联" in edit_body
+    assert f"/events/{linked_activity_id}" in edit_body
+    assert f"/routes/{linked_route_id}" in edit_body
 
     update_resp = client.post(
         f"/manage/announcements/{announcement_id}/update",
@@ -646,7 +650,7 @@ def test_announcement_detail_visibility_and_associations(app_and_client):
         activity = Activity(title="Ann Detail Activity")
         announcement = Announcement(
             title="Ann Detail",
-            content="公告详情正文",
+            content="公告详情正文\n[[/events/1|本次活动]]\n[[javascript:alert(1)|危险链接]]",
             status="published",
             published_at=now - timedelta(hours=1),
             offline_at=now + timedelta(days=1),
@@ -661,8 +665,12 @@ def test_announcement_detail_visibility_and_associations(app_and_client):
     body = detail.get_data(as_text=True)
     assert detail.status_code == 200
     assert "Ann Detail" in body
-    assert "Ann Detail Route" in body
-    assert "Ann Detail Activity" in body
+    assert "Ann Detail Route" not in body
+    assert "Ann Detail Activity" not in body
+    assert 'href="/events/1"' in body
+    assert "本次活动" in body
+    assert "javascript:alert" in body
+    assert 'href="javascript:alert(1)"' not in body
 
 
 def test_announcement_schedule_blocks_future_or_expired(app_and_client):

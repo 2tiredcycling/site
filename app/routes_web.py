@@ -6,6 +6,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, send_from_directory, url_for as flask_url_for
+from markupsafe import Markup, escape as html_escape
 
 from app.auth import client_ip
 from app.models import (
@@ -53,6 +54,8 @@ MERCH_ACTIVE_ORDER_STATUSES = (
 )
 MERCH_SIZE_OPTIONS = ("XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL")
 MERCH_GENDER_OPTIONS = ("男", "女", "其他/不便填写")
+ANNOUNCEMENT_LINK_PATTERN = re.compile(r"\[\[([^\]|]{1,180})\|([^\]]{1,120})\]\]")
+ANNOUNCEMENT_LINK_PREFIXES = ("/events/", "/routes/", "/kit/", "/announcements/")
 
 
 def _url_for(endpoint: str, **values):
@@ -64,6 +67,40 @@ def _url_for(endpoint: str, **values):
 
 def _is_beta_request() -> bool:
     return (request.blueprint or "") == "web_beta"
+
+
+def _announcement_link_path_allowed(path: str) -> bool:
+    return path.startswith("/") and not path.startswith("//") and any(
+        path.startswith(prefix) for prefix in ANNOUNCEMENT_LINK_PREFIXES
+    )
+
+
+def _announcement_text_html(text: str) -> Markup:
+    return Markup(str(html_escape(text)).replace("\n", "<br>"))
+
+
+def _render_announcement_content(content: str | None) -> Markup:
+    if not content:
+        return Markup("")
+
+    parts: list[Markup] = []
+    cursor = 0
+    for match in ANNOUNCEMENT_LINK_PATTERN.finditer(content):
+        parts.append(_announcement_text_html(content[cursor : match.start()]))
+        path = match.group(1).strip()
+        label = match.group(2).strip()
+        if path and label and _announcement_link_path_allowed(path):
+            parts.append(
+                Markup('<a class="announcement-inline-link btn btn-muted" href="{href}">{label}</a>').format(
+                    href=html_escape(path),
+                    label=html_escape(label),
+                )
+            )
+        else:
+            parts.append(_announcement_text_html(match.group(0)))
+        cursor = match.end()
+    parts.append(_announcement_text_html(content[cursor:]))
+    return Markup("").join(parts)
 
 
 def _palette_presets() -> list[dict]:
@@ -635,6 +672,7 @@ def announcement_detail(announcement_id: int) -> str:
         "announcement_detail.html",
         announcement=announcement,
         linked_routes=visible_routes,
+        announcement_content_html=_render_announcement_content(announcement.content),
         meta_description=(announcement.content[:120] if announcement.content else f"{announcement.title} | 2Tired 骑行社公告"),
     )
 

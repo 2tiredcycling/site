@@ -78,8 +78,30 @@
           <section class="form-card-subsection manage-announcement-form-section">
             <h2>公告内容</h2>
             <label class="manage-announcement-content-field">内容
-              <textarea name="content" rows="10" {% if not can_edit %}disabled{% endif %}>{{ announcement.content if announcement else '' }}</textarea>
+              <textarea id="announcement-content" name="content" rows="10" {% if not can_edit %}disabled{% endif %}>{{ announcement.content if announcement else '' }}</textarea>
             </label>
+            {% if can_edit %}
+              <div class="announcement-link-tool">
+                <div class="announcement-link-tool-head">
+                  <strong>添加关联</strong>
+                  <span class="hint">选择站内页面并填写按钮文字，会插入到公告正文中。</span>
+                </div>
+                <div class="announcement-link-tool-grid">
+                  <label>关联页面
+                    <select id="announcement-link-target">
+                      {% for target in announcement_link_targets | default([]) %}
+                        <option value="{{ target.path }}" data-label="{{ target.label }}">{{ target.type }} · {{ target.label }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>显示文字
+                    <input id="announcement-link-label" type="text" placeholder="默认使用所选页面名称">
+                  </label>
+                  <button class="btn btn-muted" type="button" id="announcement-link-insert" {% if not announcement_link_targets %}disabled{% endif %}>添加关联</button>
+                </div>
+                <p class="hint">正文格式：<code>[[/events/5|本次活动]]</code>。前台会自动显示为按钮。</p>
+              </div>
+            {% endif %}
           </section>
         </div>
 
@@ -104,5 +126,51 @@
       </section>
     {% endif %}
   </main>
+  <script>
+    (function () {
+      const textarea = document.getElementById("announcement-content");
+      const targetSelect = document.getElementById("announcement-link-target");
+      const labelInput = document.getElementById("announcement-link-label");
+      const insertButton = document.getElementById("announcement-link-insert");
+      if (!textarea || !targetSelect || !labelInput || !insertButton) {
+        return;
+      }
+
+      function selectedDefaultLabel() {
+        const option = targetSelect.options[targetSelect.selectedIndex];
+        return option ? (option.dataset.label || option.textContent || "").trim() : "";
+      }
+
+      function cleanMarkerLabel(value) {
+        return value.replace(/[\]]/g, "").trim();
+      }
+
+      targetSelect.addEventListener("change", function () {
+        if (!labelInput.value.trim()) {
+          labelInput.placeholder = selectedDefaultLabel() || "默认使用所选页面名称";
+        }
+      });
+
+      insertButton.addEventListener("click", function () {
+        const path = targetSelect.value;
+        const label = cleanMarkerLabel(labelInput.value || selectedDefaultLabel());
+        if (!path || !label) {
+          return;
+        }
+        const marker = `[[${path}|${label}]]`;
+        const start = textarea.selectionStart ?? textarea.value.length;
+        const end = textarea.selectionEnd ?? textarea.value.length;
+        const prefix = textarea.value.slice(0, start);
+        const suffix = textarea.value.slice(end);
+        const spacerAfter = suffix && !suffix.startsWith("\n") ? "\n" : "";
+        textarea.value = `${prefix}${marker}${spacerAfter}${suffix}`;
+        const cursor = prefix.length + marker.length;
+        textarea.focus();
+        textarea.setSelectionRange(cursor, cursor);
+      });
+
+      labelInput.placeholder = selectedDefaultLabel() || "默认使用所选页面名称";
+    })();
+  </script>
 </body>
 </html>
