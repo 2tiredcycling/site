@@ -2446,10 +2446,32 @@ td {
 }
 
 .manage-account-active-toggle > span:last-child {
-  display: inline-flex;
-  align-items: center;
-  min-height: 42px;
-  gap: 8px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    gap: 8px;
+}
+
+.manage-permission-custom-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 42px;
+    color: #173d33;
+    font-weight: 700;
+}
+
+.manage-permission-custom-toggle input {
+    width: auto;
+}
+
+.manage-page-permission-grid.is-disabled {
+    opacity: 0.72;
+}
+
+.manage-page-permission-grid.is-disabled select {
+    background: #f2f6f4;
+    cursor: not-allowed;
 }
 
 .manage-danger-zone {

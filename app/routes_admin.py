@@ -313,6 +313,8 @@ def _default_page_permissions_for_role(role: str) -> dict[str, str]:
 
 def _page_permissions_from_form(role: str) -> dict[str, str]:
     defaults = _default_page_permissions_for_role(role)
+    if (request.form.get("custom_page_permissions") or "").strip() != "1":
+        return defaults
     result: dict[str, str] = {}
     for page_key in PAGE_KEYS:
         raw = (request.form.get(f"page_perm_{page_key}") or defaults.get(page_key) or PERMISSION_NONE).strip()
@@ -323,6 +325,10 @@ def _page_permissions_from_form(role: str) -> dict[str, str]:
 def _user_page_permissions(user: User) -> dict[str, str]:
     existing = {item.page_key: item.permission_level for item in user.page_permissions}
     return {page_key: existing.get(page_key, PERMISSION_NONE) for page_key in PAGE_KEYS}
+
+
+def _uses_custom_page_permissions(role: str, permissions: dict[str, str]) -> bool:
+    return permissions != _default_page_permissions_for_role(role)
 
 
 def _apply_user_page_permissions(user: User, permissions: dict[str, str]) -> None:
@@ -2152,16 +2158,21 @@ def users_page():
 @bp.get("/users/new")
 @login_required
 def user_new_page():
+    default_role = ROLE_VIEWER
+    default_permissions = _default_page_permissions_for_role(default_role)
     return render_template(
         "manage_user_form.html",
         user=None,
         roles=ROLES,
+        default_role=default_role,
         role_labels=ROLE_LABELS,
         page_labels=PAGE_PERMISSION_LABELS,
         permission_level_labels=PERMISSION_LEVEL_LABELS,
         permission_levels=PAGE_PERMISSION_LEVELS,
         page_keys=PAGE_KEYS,
-        page_permissions=_default_page_permissions_for_role(ROLE_CONTENT_ADMIN),
+        page_permissions=default_permissions,
+        role_permission_presets={role: _default_page_permissions_for_role(role) for role in ROLES},
+        custom_page_permissions=False,
     )
 
 
@@ -2174,16 +2185,20 @@ def user_edit_page(user_id: int):
         return redirect(url_for("admin.users_page"))
     ensure_user_page_permissions(user)
     db.session.commit()
+    page_permissions = _user_page_permissions(user)
     return render_template(
         "manage_user_form.html",
         user=user,
         roles=ROLES,
+        default_role=ROLE_VIEWER,
         role_labels=ROLE_LABELS,
         page_labels=PAGE_PERMISSION_LABELS,
         permission_level_labels=PERMISSION_LEVEL_LABELS,
         permission_levels=PAGE_PERMISSION_LEVELS,
         page_keys=PAGE_KEYS,
-        page_permissions=_user_page_permissions(user),
+        page_permissions=page_permissions,
+        role_permission_presets={role: _default_page_permissions_for_role(role) for role in ROLES},
+        custom_page_permissions=_uses_custom_page_permissions(user.role, page_permissions),
     )
 
 

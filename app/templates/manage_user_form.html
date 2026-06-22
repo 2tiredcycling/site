@@ -40,9 +40,9 @@
         <div class="manage-account-basic-grid">
           <label>用户名<input type="text" name="username" value="{{ user.username if user else '' }}" required></label>
           <label>管理员类型
-            <select name="role">
+            <select name="role" id="account-role-select">
               {% for role in roles %}
-                <option value="{{ role }}" {% if (user and user.role == role) or (not user and role == 'content_admin') %}selected{% endif %}>{{ role_labels.get(role, role) }}</option>
+                <option value="{{ role }}" {% if (user and user.role == role) or (not user and role == default_role) %}selected{% endif %}>{{ role_labels.get(role, role) }}</option>
               {% endfor %}
             </select>
           </label>
@@ -62,12 +62,17 @@
             <span>无权限会隐藏入口；可读只显示数据；可修改允许普通维护；完全管理启用危险操作。</span>
           </div>
         </div>
-        <div class="manage-page-permission-grid">
+        <label class="manage-permission-custom-toggle">
+          <input type="checkbox" name="custom_page_permissions" value="1" id="custom-page-permissions" {% if custom_page_permissions %}checked{% endif %}>
+          <span>启用自定义页面权限</span>
+        </label>
+        <p class="hint" id="page-permission-mode-hint"></p>
+        <div class="manage-page-permission-grid" id="page-permission-grid">
           {% for page_key in page_keys %}
             {% set current_level = page_permissions.get(page_key, 'none') %}
             <label>
               <span>{{ page_labels.get(page_key, page_key) }}</span>
-              <select name="page_perm_{{ page_key }}">
+              <select name="page_perm_{{ page_key }}" data-page-key="{{ page_key }}">
                 {% for level in permission_levels %}
                   <option value="{{ level }}" {% if current_level == level %}selected{% endif %}>{{ permission_level_labels.get(level, level) }}</option>
                 {% endfor %}
@@ -105,5 +110,50 @@
       </section>
     {% endif %}
   </main>
+  <script>
+    (() => {
+      const roleSelect = document.getElementById("account-role-select");
+      const customToggle = document.getElementById("custom-page-permissions");
+      const permissionGrid = document.getElementById("page-permission-grid");
+      const hint = document.getElementById("page-permission-mode-hint");
+      const presets = {{ role_permission_presets|tojson }};
+      const roleLabels = {{ role_labels|tojson }};
+
+      function applyRolePreset() {
+        const role = roleSelect ? roleSelect.value : "";
+        const preset = presets[role] || {};
+        permissionGrid.querySelectorAll("select[data-page-key]").forEach((select) => {
+          const pageKey = select.dataset.pageKey;
+          if (preset[pageKey]) {
+            select.value = preset[pageKey];
+          }
+        });
+      }
+
+      function syncPermissionMode() {
+        if (!roleSelect || !customToggle || !permissionGrid || !hint) {
+          return;
+        }
+        const custom = customToggle.checked;
+        permissionGrid.classList.toggle("is-disabled", !custom);
+        permissionGrid.querySelectorAll("select[data-page-key]").forEach((select) => {
+          select.disabled = !custom;
+        });
+        if (!custom) {
+          applyRolePreset();
+        }
+        const roleName = roleLabels[roleSelect.value] || roleSelect.value;
+        hint.textContent = custom
+          ? "当前启用自定义页面权限，保存时将按下方逐项设置写入。"
+          : `当前未启用自定义页面权限，保存时将自动使用“${roleName}”的预设权限。`;
+      }
+
+      if (roleSelect && customToggle && permissionGrid) {
+        roleSelect.addEventListener("change", syncPermissionMode);
+        customToggle.addEventListener("change", syncPermissionMode);
+        syncPermissionMode();
+      }
+    })();
+  </script>
 </body>
 </html>

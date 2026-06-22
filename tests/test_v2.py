@@ -1263,6 +1263,32 @@ def test_user_with_manage_users_permission_can_open_users_page(app_and_client):
     assert "账号列表" in resp.get_data(as_text=True)
 
 
+def test_user_create_without_custom_permissions_uses_role_preset(app_and_client):
+    app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    csrf_token = get_manage_csrf(client)
+
+    resp = client.post(
+        "/manage/users/create",
+        data={
+            "csrf_token": csrf_token,
+            "username": "preset_viewer",
+            "password": "viewer123456789",
+            "role": ROLE_VIEWER,
+            "page_perm_routes": PERMISSION_ADMIN,
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+
+    with app.app_context():
+        user = User.query.filter_by(username="preset_viewer").first()
+        assert user is not None
+        route_permission = UserPagePermission.query.filter_by(user_id=user.id, page_key=PAGE_ROUTES).first()
+        assert route_permission is not None
+        assert route_permission.permission_level == PERMISSION_READ
+
+
 def test_user_without_analytics_permission_forbidden(app_and_client):
     app, client = app_and_client
     with app.app_context():
