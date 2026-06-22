@@ -3393,6 +3393,8 @@ def create_announcement():
     db.session.commit()
     write_audit_log(g.current_user.id, "announcement.create", "announcement", str(announcement.id), announcement.title)
     flash("公告创建成功", "success")
+    if (request.form.get("submit_action") or "").strip() == "save_view":
+        return redirect(url_for("web.announcement_detail", announcement_id=announcement.id))
     return redirect(url_for("admin.announcements_page"))
 
 
@@ -3436,6 +3438,8 @@ def update_announcement(announcement_id: int):
     db.session.commit()
     write_audit_log(g.current_user.id, "announcement.update", "announcement", str(announcement.id), announcement.title)
     flash("公告更新成功", "success")
+    if (request.form.get("submit_action") or "").strip() == "save_view":
+        return redirect(url_for("web.announcement_detail", announcement_id=announcement.id))
     return redirect(url_for("admin.announcements_page"))
 
 
