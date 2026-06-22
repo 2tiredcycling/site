@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [v4.7.3]
+
+### Changed
+
+- Refined the management security page to match the analytics dashboard layout with clearer core security metric cards and period switching.
+- Moved security event filters into the recent security events section and collapsed long security tables by default.
+
 ## [v4.7.2]
 
 ### Changed
