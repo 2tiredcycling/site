@@ -169,6 +169,8 @@ AUDIT_ACTION_LABELS = {
     "activity.media.delete": "删除活动媒体",
     "merch_preorder.create": "创建预定批次",
     "merch_preorder.update": "更新预定批次",
+    "merch_preorder.visibility": "更新预定批次展示状态",
+    "merch_preorder.delete": "删除预定批次",
     "merch_preorder.image.delete": "删除预定图片",
     "merch_preorder.registration.status": "更新预报名状态",
     "announcement.create": "创建公告",
@@ -3243,6 +3245,49 @@ def update_merch_preorder(batch_id: int):
     write_audit_log(g.current_user.id, "merch_preorder.update", "merch_preorder_batch", str(batch.id), batch.title)
     flash(f"预报名批次已更新，新增图片 {uploaded_count} 张", "success")
     return redirect(url_for("admin.merch_preorder_edit_page", batch_id=batch.id))
+
+
+@bp.post("/kit-preorders/<int:batch_id>/visibility")
+@login_required
+def toggle_merch_preorder_visibility(batch_id: int):
+    batch = MerchPreorderBatch.query.filter_by(id=batch_id).first()
+    if not batch:
+        flash("预报名批次不存在", "error")
+        return redirect(url_for("admin.merch_preorders_page"))
+    batch.is_visible = (request.form.get("is_visible") or "0").strip() == "1"
+    batch.updated_by = g.current_user.id
+    batch.updated_at = utcnow()
+    db.session.commit()
+    write_audit_log(
+        g.current_user.id,
+        "merch_preorder.visibility",
+        "merch_preorder_batch",
+        str(batch.id),
+        "online" if batch.is_visible else "offline",
+    )
+    flash("预定批次已上线" if batch.is_visible else "预定批次已下线", "success")
+    return redirect(url_for("admin.merch_preorders_page"))
+
+
+@bp.post("/kit-preorders/<int:batch_id>/delete")
+@login_required
+def delete_merch_preorder(batch_id: int):
+    batch = MerchPreorderBatch.query.filter_by(id=batch_id).first()
+    if not batch:
+        flash("预报名批次不存在", "error")
+        return redirect(url_for("admin.merch_preorders_page"))
+    title = batch.title
+    image_paths = [
+        Path(current_app.config["MEDIA_UPLOAD_FOLDER"]) / (image.storage_path or "")
+        for image in batch.images
+        if image.storage_path
+    ]
+    db.session.delete(batch)
+    db.session.commit()
+    _cleanup_paths(image_paths)
+    write_audit_log(g.current_user.id, "merch_preorder.delete", "merch_preorder_batch", str(batch_id), title)
+    flash("预定批次已删除", "success")
+    return redirect(url_for("admin.merch_preorders_page"))
 
 
 @bp.post("/kit-preorders/<int:batch_id>/images/<int:image_id>/delete")

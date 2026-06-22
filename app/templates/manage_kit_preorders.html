@@ -33,25 +33,53 @@
       <h2>预报名批次</h2>
       <table>
         <thead>
-          <tr><th>ID</th><th>标题</th><th>状态</th><th>截止时间</th><th>人数</th><th>展示</th><th>操作</th></tr>
+          <tr><th>标题</th><th>状态</th><th>截止时间</th><th>人数</th><th>展示</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for batch in batches %}
             <tr>
-              <td>{{ batch.id }}</td>
-              <td>{{ batch.title }}</td>
+              <td>
+                <div class="manage-route-name-cell">
+                  <strong>{{ batch.title }}</strong>
+                </div>
+              </td>
               <td>{{ status_badge(batch.status, status_labels.get(batch.status, batch.status)) }}</td>
               <td>{{ to_local_time(batch.deadline_at).strftime('%Y-%m-%d') if batch.deadline_at else '-' }}</td>
               <td>{{ count_map.get(batch.id, 0) }}</td>
               <td>{{ '是' if batch.is_visible else '否' }}</td>
-              <td class="row-actions">
-                <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">查看</a>
-                <a class="btn" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">编辑</a>
-                <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_registrations_page', batch_id=batch.id) }}">预报名信息</a>
+              <td>
+                <div class="manage-route-actions">
+                  <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">查看</a>
+                  <a class="btn" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">编辑</a>
+                  <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_registrations_page', batch_id=batch.id) }}">预报名信息</a>
+                  <details class="manage-row-more">
+                    <summary class="btn btn-muted">更多</summary>
+                    <div class="manage-row-more-menu">
+                      {% if can_edit %}
+                        <form method="post" action="{{ url_for('admin.toggle_merch_preorder_visibility', batch_id=batch.id) }}">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          {% if batch.is_visible %}
+                            <input type="hidden" name="is_visible" value="0">
+                            <button class="manage-row-menu-item" type="submit">下线</button>
+                          {% else %}
+                            <input type="hidden" name="is_visible" value="1">
+                            <button class="manage-row-menu-item" type="submit">上线</button>
+                          {% endif %}
+                        </form>
+                        <form method="post" action="{{ url_for('admin.delete_merch_preorder', batch_id=batch.id) }}" onsubmit="return confirm('确认删除这个预定批次吗？该批次的图片和预报名记录也会删除。');">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <button class="manage-row-menu-item is-danger" type="submit">删除</button>
+                        </form>
+                      {% else %}
+                        <button class="manage-row-menu-item is-disabled" type="button" disabled>暂无更多操作</button>
+                      {% endif %}
+                    </div>
+                  </details>
+                </div>
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="7">暂无预报名批次</td></tr>
+            <tr><td colspan="6">暂无预报名批次</td></tr>
           {% endfor %}
         </tbody>
       </table>
