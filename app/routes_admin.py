@@ -695,6 +695,7 @@ def _enforce_permission_matrix():
         abort(403)
     if (
         path.startswith("/manage/feedback")
+        or path.startswith("/manage/route-feedback")
         or path.startswith("/manage/site-feedback")
     ) and not can_review(user):
         abort(403)
@@ -718,7 +719,7 @@ def _inject_csrf_token():
                 ]
             )
         if can_review(user):
-            nav_items.append({"label": "反馈", "endpoint": "admin.feedback_page", "prefix": "/manage/feedback"})
+            nav_items.append({"label": "反馈", "endpoint": "admin.site_feedback_page", "prefix": "/manage/site-feedback"})
         if can_view_analytics(user):
             nav_items.append({"label": "流量", "endpoint": "admin.analytics_page", "prefix": "/manage/analytics"})
         if can_view_security(user):
@@ -1336,7 +1337,7 @@ def site_feedback_page():
         except ValueError:
             end_date = ""
 
-    pagination = query.order_by(SiteFeedback.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    pagination = query.order_by(SiteFeedback.created_at.desc()).paginate(page=page, per_page=10, error_out=False)
     return render_template(
         "manage_site_feedback.html",
         feedback_list=pagination.items,
@@ -1356,11 +1357,15 @@ def site_feedback_page():
 def site_feedback_update_status(feedback_id: int):
     target_status = (request.form.get("status") or "").strip()
     if target_status not in {SITE_FEEDBACK_PENDING, SITE_FEEDBACK_DONE}:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"ok": False, "error": "状态无效"}), 400
         flash("状态无效", "error")
         return redirect(url_for("admin.site_feedback_page"))
 
     feedback = SiteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"ok": False, "error": "反馈不存在"}), 404
         flash("反馈不存在", "error")
         return redirect(url_for("admin.site_feedback_page"))
 
@@ -1375,7 +1380,8 @@ def site_feedback_update_status(feedback_id: int):
         str(feedback.id),
         f"{old_status}->{target_status}",
     )
-    flash("反馈状态已更新", "success")
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "status": feedback.status})
 
     next_url = (request.form.get("next") or "").strip()
     if next_url.startswith(url_for("admin.site_feedback_page")):
@@ -1386,6 +1392,12 @@ def site_feedback_update_status(feedback_id: int):
 @bp.get("/feedback")
 @login_required
 def feedback_page():
+    return redirect(url_for("admin.site_feedback_page", **request.args.to_dict(flat=True)))
+
+
+@bp.get("/route-feedback")
+@login_required
+def route_feedback_page():
     keyword = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "all").strip()
     start_date = (request.args.get("start_date") or "").strip()

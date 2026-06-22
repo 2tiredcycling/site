@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>网站问题反馈管理 {{ app_version }}</title>
+  <title>反馈管理 {{ app_version }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,7 +11,10 @@
   {% from "_status_badge.html" import status_badge %}
   <main class="container">
     <header class="header">
-      <h1>网站问题反馈管理</h1>
+      <div>
+        <h1>反馈管理</h1>
+        <p>用户页提交的网站问题、体验建议与数据纠错。</p>
+      </div>
       <div class="row-actions">
         <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
       </div>
@@ -26,10 +29,10 @@
       {% endif %}
     {% endwith %}
 
-    <section class="card form-card">
+    <section class="card form-card manage-site-feedback-filter-card">
       <h2>筛选</h2>
-      <form method="get" action="{{ url_for('admin.site_feedback_page') }}" class="single-form">
-        <div class="filter-grid">
+      <form method="get" action="{{ url_for('admin.site_feedback_page') }}" class="manage-site-feedback-filter-form">
+        <div class="manage-site-feedback-filter-grid">
           <label>关键词
             <input type="text" name="q" value="{{ filters.q }}" placeholder="内容/联系方式/来源页">
           </label>
@@ -55,39 +58,55 @@
           <label>结束日期
             <input type="date" name="end_date" value="{{ filters.end_date }}">
           </label>
-        </div>
-        <div class="row-actions">
-          <button class="btn" type="submit">应用筛选</button>
-          <a class="btn btn-muted" href="{{ url_for('admin.site_feedback_page') }}">重置</a>
+          <div class="row-actions manage-site-feedback-filter-actions">
+            <button class="btn" type="submit">筛选</button>
+            <a class="btn btn-muted" href="{{ url_for('admin.site_feedback_page') }}">重置</a>
+          </div>
         </div>
       </form>
     </section>
 
-    <section class="card form-card">
-      <h2>反馈列表（{{ pagination.total }}）</h2>
+    <section class="card form-card manage-site-feedback-list-card">
+      <div class="manage-section-heading">
+        <h2>反馈列表</h2>
+        <span class="manage-count-badge">{{ pagination.total }}</span>
+      </div>
       <table>
         <thead>
-          <tr><th>提交时间</th><th>类型</th><th>内容</th><th>联系方式</th><th>来源页面</th><th>状态</th><th>操作</th></tr>
+          <tr><th>提交信息</th><th>类型</th><th>反馈内容</th><th>联系方式</th><th>来源页面</th><th>状态</th><th class="manage-site-feedback-actions-col">操作</th></tr>
         </thead>
         <tbody>
           {% for item in feedback_list %}
             <tr>
-              <td>{{ item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else '-' }}</td>
+              <td>
+                <strong>{{ to_local_time(item.created_at).strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</strong>
+                <div class="text-muted">{{ item.ip_address or '-' }}</div>
+              </td>
               <td>{{ item.category }}</td>
-              <td>{{ item.content }}</td>
-              <td>{{ item.contact or '-' }}</td>
-              <td>{{ item.source_page or '-' }}</td>
-              <td>{{ status_badge(item.status) }}</td>
-              <td class="row-actions">
+              <td class="manage-site-feedback-content">
+                <div class="manage-site-feedback-content-scroll">{{ item.content }}</div>
+              </td>
+              <td>
+                {% if item.contact %}
+                  <a href="mailto:{{ item.contact }}">{{ item.contact }}</a>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="manage-site-feedback-source">{{ item.source_page or '-' }}</td>
+              <td class="manage-site-feedback-status-cell" data-status="{{ item.status }}">
+                {{ status_badge(item.status, '已处理' if item.status == 'done' else '待处理') }}
+              </td>
+              <td class="manage-site-feedback-actions-col">
                 {% if item.status != 'done' %}
-                  <form method="post" action="{{ url_for('admin.site_feedback_update_status', feedback_id=item.id) }}">
+                  <form method="post" action="{{ url_for('admin.site_feedback_update_status', feedback_id=item.id) }}" class="manage-site-feedback-status-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="status" value="done">
                     <input type="hidden" name="next" value="{{ request.full_path }}">
                     <button class="btn" type="submit">标记已处理</button>
                   </form>
                 {% else %}
-                  <form method="post" action="{{ url_for('admin.site_feedback_update_status', feedback_id=item.id) }}">
+                  <form method="post" action="{{ url_for('admin.site_feedback_update_status', feedback_id=item.id) }}" class="manage-site-feedback-status-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="status" value="pending">
                     <input type="hidden" name="next" value="{{ request.full_path }}">
@@ -101,16 +120,74 @@
           {% endfor %}
         </tbody>
       </table>
-      <div class="row-actions">
+      <div class="pagination row-actions">
         {% if pagination.has_prev %}
           <a class="btn btn-muted" href="{{ url_for('admin.site_feedback_page', page=pagination.prev_num, q=filters.q, status=filters.status, category=filters.category, start_date=filters.start_date, end_date=filters.end_date) }}">上一页</a>
         {% endif %}
-        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页</span>
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
         {% if pagination.has_next %}
           <a class="btn btn-muted" href="{{ url_for('admin.site_feedback_page', page=pagination.next_num, q=filters.q, status=filters.status, category=filters.category, start_date=filters.start_date, end_date=filters.end_date) }}">下一页</a>
         {% endif %}
       </div>
     </section>
   </main>
+  <script>
+    (function () {
+      const statusLabels = {
+        pending: "待处理",
+        done: "已处理",
+      };
+      const statusClasses = {
+        pending: "status-badge status-badge-warning",
+        done: "status-badge status-badge-neutral",
+      };
+
+      function setStatus(row, status) {
+        const statusCell = row.querySelector(".manage-site-feedback-status-cell");
+        const form = row.querySelector(".manage-site-feedback-status-form");
+        if (!statusCell || !form) {
+          return;
+        }
+        const nextStatus = status === "done" ? "pending" : "done";
+        statusCell.dataset.status = status;
+        statusCell.innerHTML = `<span class="${statusClasses[status] || "status-badge status-badge-neutral"}">${statusLabels[status] || status}</span>`;
+        form.querySelector('input[name="status"]').value = nextStatus;
+        const button = form.querySelector("button");
+        button.textContent = nextStatus === "done" ? "标记已处理" : "改回待处理";
+        button.classList.toggle("btn-muted", nextStatus === "pending");
+      }
+
+      document.querySelectorAll(".manage-site-feedback-status-form").forEach((form) => {
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const button = form.querySelector("button");
+          const row = form.closest("tr");
+          const scrollPosition = {left: window.scrollX, top: window.scrollY};
+          button.disabled = true;
+          try {
+            const response = await fetch(form.action, {
+              method: "POST",
+              body: new FormData(form),
+              headers: {"X-Requested-With": "XMLHttpRequest"},
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.ok) {
+              throw new Error(payload.error || "状态更新失败");
+            }
+            setStatus(row, payload.status);
+          } catch (error) {
+            alert(error.message || "状态更新失败");
+          } finally {
+            button.disabled = false;
+            button.blur();
+            window.scrollTo(scrollPosition.left, scrollPosition.top);
+            requestAnimationFrame(() => window.scrollTo(scrollPosition.left, scrollPosition.top));
+            setTimeout(() => window.scrollTo(scrollPosition.left, scrollPosition.top), 80);
+            setTimeout(() => window.scrollTo(scrollPosition.left, scrollPosition.top), 240);
+          }
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

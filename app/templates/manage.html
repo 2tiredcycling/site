@@ -85,13 +85,13 @@
           <small>公告内容</small>
         {% if can_edit %}</a>{% else %}</div>{% endif %}
         {% if can_review %}
-        <a class="manage-metric-card" href="{{ url_for('admin.feedback_page') }}">
+        <a class="manage-metric-card" href="{{ url_for('admin.site_feedback_page') }}">
         {% else %}
         <div class="manage-metric-card is-muted">
         {% endif %}
           <span>反馈</span>
-          <strong>{{ summary.feedback_pending + summary.site_feedback_pending }}</strong>
-          <small>待处理总数</small>
+          <strong>{{ summary.site_feedback_pending }}</strong>
+          <small>待处理网站反馈</small>
         {% if can_review %}</a>{% else %}</div>{% endif %}
         {% if can_view_security %}
           <a class="manage-metric-card" href="{{ url_for('admin.security_page') }}">
@@ -115,21 +115,13 @@
       </div>
       <div class="manage-alert-grid">
         {% if can_review %}
-          <a class="manage-alert-card {{ 'is-attention' if summary.feedback_pending else 'is-empty' }}" href="{{ url_for('admin.feedback_page') }}">
-            <span>待审核反馈</span>
-            <strong>{{ summary.feedback_pending }}</strong>
-          </a>
           <a class="manage-alert-card {{ 'is-attention' if summary.site_feedback_pending else 'is-empty' }}" href="{{ url_for('admin.site_feedback_page') }}">
-            <span>未处理网站问题</span>
+            <span>未处理网站反馈</span>
             <strong>{{ summary.site_feedback_pending }}</strong>
           </a>
         {% else %}
           <div class="manage-alert-card is-muted">
-            <span>待审核反馈</span>
-            <strong>-</strong>
-          </div>
-          <div class="manage-alert-card is-muted">
-            <span>未处理网站问题</span>
+            <span>未处理网站反馈</span>
             <strong>-</strong>
           </div>
         {% endif %}
