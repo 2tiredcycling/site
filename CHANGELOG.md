@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [v4.6.1]
+
+### Changed
+
+- Refined the management activities list with route names, registration counts, and lower-priority actions under a more menu.
+- Improved the activity edit form with a shared activity date, per-route time fields, route enable states, compact registration settings, and collapsible uploaded media.
+- Added default activity form behavior for route start time and registration deadline suggestions.
+
+### Fixed
+
+- Kept activity route time parsing compatible with legacy datetime-local form submissions while supporting the new shared-date time-only inputs.
+
 ## [v4.6.0]
 
 ### Added
