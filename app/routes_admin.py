@@ -2386,8 +2386,13 @@ def _announcement_from_form(announcement: Announcement | None = None) -> dict:
     offline_at = _parse_activity_time(request.form.get("offline_at"))
     if published_at and offline_at and offline_at <= published_at:
         offline_at = published_at + timedelta(minutes=1)
-    activity_ids = [item for item in request.form.getlist("activity_ids") if str(item).strip()]
-    route_ids = [item for item in request.form.getlist("route_ids") if str(item).strip()]
+    preserve_associations = (request.form.get("association_mode") or "").strip() == "preserve"
+    activity_ids = None if preserve_associations and "activity_ids" not in request.form else [
+        item for item in request.form.getlist("activity_ids") if str(item).strip()
+    ]
+    route_ids = None if preserve_associations and "route_ids" not in request.form else [
+        item for item in request.form.getlist("route_ids") if str(item).strip()
+    ]
     return {
         "title": title,
         "content": content,
@@ -3399,16 +3404,18 @@ def update_announcement(announcement_id: int):
     announcement.is_pinned = payload["is_pinned"]
     announcement.sort_order = payload["sort_order"]
     announcement.updated_by = g.current_user.id
-    announcement.activities = (
-        Activity.query.filter(Activity.id.in_(payload["activity_ids"])).all()
-        if payload["activity_ids"]
-        else []
-    )
-    announcement.routes = (
-        Route.query.filter(Route.id.in_(payload["route_ids"]), Route.is_deleted.is_(False)).all()
-        if payload["route_ids"]
-        else []
-    )
+    if payload["activity_ids"] is not None:
+        announcement.activities = (
+            Activity.query.filter(Activity.id.in_(payload["activity_ids"])).all()
+            if payload["activity_ids"]
+            else []
+        )
+    if payload["route_ids"] is not None:
+        announcement.routes = (
+            Route.query.filter(Route.id.in_(payload["route_ids"]), Route.is_deleted.is_(False)).all()
+            if payload["route_ids"]
+            else []
+        )
     if payload["status"] == CONTENT_STATUS_PUBLISHED:
         announcement.published_at = payload["published_at"] or announcement.published_at or utcnow()
     else:

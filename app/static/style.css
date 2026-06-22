@@ -2549,7 +2549,9 @@ td {
   .manage-kit-date-grid,
   .manage-kit-price-grid,
   .manage-kit-text-grid,
-  .manage-kit-upload-grid {
+  .manage-kit-upload-grid,
+  .manage-announcement-basic-grid,
+  .manage-announcement-time-grid {
     grid-template-columns: 1fr;
   }
 
@@ -4110,6 +4112,55 @@ td {
 
 .manage-kit-registration-status-submit {
   display: none;
+}
+
+.manage-announcement-form {
+  display: grid;
+  gap: 18px;
+}
+
+.manage-announcement-form-sections {
+  display: grid;
+  gap: 18px;
+}
+
+.manage-announcement-form-section {
+  padding: 0 0 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+}
+
+.manage-announcement-form-section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.manage-announcement-form-section h2 {
+  margin: 0 0 12px;
+  color: var(--brand-primary);
+  font-size: 21px;
+}
+
+.manage-announcement-basic-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 180px) minmax(120px, 150px) minmax(120px, 150px);
+  gap: 14px;
+  align-items: start;
+}
+
+.manage-announcement-title-field {
+  min-width: 0;
+}
+
+.manage-announcement-time-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 260px));
+  gap: 14px;
+  align-items: start;
+}
+
+.manage-announcement-content-field textarea {
+  min-height: 260px;
+  resize: vertical;
 }
 
 .kit-compact-section h2 {
