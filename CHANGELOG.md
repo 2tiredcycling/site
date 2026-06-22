@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [v4.7.0]
+
+### Added
+
+- Added an inline internal-link tool for announcement editing, allowing maintainers to insert route, activity, kit preorder, and announcement links into announcement content.
+- Rendered safe announcement inline link markers as front-end buttons while keeping announcement content stored as plain text.
+
+### Changed
+
+- Removed the old separate linked activity and route blocks from announcement detail pages in favor of inline announcement content links.
+
 ## [v4.6.3]
 
 ### Changed
