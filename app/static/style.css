@@ -1158,6 +1158,8 @@ body {
 }
 
 .activity-level-row {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--brand-border);
   border-radius: 12px;
   padding: 12px;
@@ -1169,10 +1171,45 @@ body {
   font-size: 16px;
 }
 
+.activity-level-inactive {
+  display: grid;
+  gap: 10px;
+  flex: 1;
+  min-height: 126px;
+  align-content: center;
+  justify-items: center;
+  padding: 14px;
+  border: 1px dashed color-mix(in srgb, var(--brand-border) 76%, #ffffff 24%);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.56);
+  text-align: center;
+}
+
+.activity-level-inactive[hidden] {
+  display: none;
+}
+
+.activity-level-inactive span {
+  color: var(--text-muted);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.activity-level-inactive .btn {
+  width: auto;
+  min-height: 36px;
+  padding: 9px 14px;
+  font-size: 15px;
+}
+
 .activity-level-fields {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
+}
+
+.activity-level-fields[hidden] {
+  display: none;
 }
 
 .activity-level-detail-fields {
@@ -1181,8 +1218,62 @@ body {
   gap: 10px;
 }
 
+.activity-level-detail-fields[hidden] {
+  display: none;
+}
+
 .activity-level-row-empty {
   background: linear-gradient(180deg, #fbfdff, #f8fafc);
+}
+
+.activity-media-collapse {
+  padding: 0;
+  overflow: hidden;
+}
+
+.activity-media-collapse summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 14px 16px;
+  color: var(--brand-primary);
+  font-size: 16px;
+  font-weight: 750;
+  cursor: pointer;
+  list-style: none;
+}
+
+.activity-media-collapse summary::-webkit-details-marker {
+  display: none;
+}
+
+.activity-media-collapse summary::after {
+  content: "展开";
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.activity-media-collapse[open] summary {
+  border-bottom: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+}
+
+.activity-media-collapse[open] summary::after {
+  content: "收起";
+}
+
+.activity-media-collapse summary small {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.activity-media-collapse-body {
+  padding: 14px;
 }
 
 .media-grid {
@@ -4502,13 +4593,13 @@ td {
 .insurance-qr-preview {
   display: grid;
   gap: 6px;
-  flex: 0 0 132px;
+  flex: 0 0 150px;
   justify-items: start;
 }
 
 .insurance-qr-preview .hint {
   margin: 0;
-  max-width: 132px;
+  max-width: 150px;
   font-size: 12px;
   line-height: 1.35;
 }
@@ -4570,8 +4661,8 @@ td {
 }
 
 .wechat-qr-preview-grid img {
-  width: 132px;
-  height: 132px;
+  width: 150px;
+  height: 150px;
   max-width: 100%;
   object-fit: contain;
   border-radius: 12px;
@@ -4581,8 +4672,8 @@ td {
 }
 
 .insurance-qr-preview img {
-  width: 132px;
-  height: 132px;
+  width: 150px;
+  height: 150px;
   max-width: 100%;
   object-fit: contain;
   border-radius: 12px;

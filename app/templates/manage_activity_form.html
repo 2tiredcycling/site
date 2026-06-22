@@ -115,7 +115,11 @@
         <section class="activity-level-rows">
           <article class="activity-level-row">
             <h3>初级路线</h3>
-            <div class="activity-level-fields">
+            <div class="activity-level-inactive" data-route-inactive>
+              <span>未启用</span>
+              <button class="btn btn-muted" type="button" data-route-enable {% if not can_edit %}disabled{% endif %}>启用初级路线</button>
+            </div>
+            <div class="activity-level-fields" data-route-config>
               <label>关联路线
                 <select name="route_option_beginner" data-route-select {% if not can_edit %}disabled{% endif %}>
                   <option value="">未设置</option>
@@ -140,7 +144,11 @@
 
           <article class="activity-level-row">
             <h3>中级路线</h3>
-            <div class="activity-level-fields">
+            <div class="activity-level-inactive" data-route-inactive>
+              <span>未启用</span>
+              <button class="btn btn-muted" type="button" data-route-enable {% if not can_edit %}disabled{% endif %}>启用中级路线</button>
+            </div>
+            <div class="activity-level-fields" data-route-config>
               <label>关联路线
                 <select name="route_option_intermediate" data-route-select {% if not can_edit %}disabled{% endif %}>
                   <option value="">未设置</option>
@@ -165,7 +173,11 @@
 
           <article class="activity-level-row">
             <h3>高级路线</h3>
-            <div class="activity-level-fields">
+            <div class="activity-level-inactive" data-route-inactive>
+              <span>未启用</span>
+              <button class="btn btn-muted" type="button" data-route-enable {% if not can_edit %}disabled{% endif %}>启用高级路线</button>
+            </div>
+            <div class="activity-level-fields" data-route-config>
               <label>关联路线
                 <select name="route_option_advanced" data-route-select {% if not can_edit %}disabled{% endif %}>
                   <option value="">未设置</option>
@@ -199,69 +211,74 @@
     </section>
 
     {% if activity %}
-      <section class="card form-card">
-        <h2>已上传媒体</h2>
-        {% if media_assets %}
-          <div class="media-grid">
-            {% for media in media_assets %}
-              <article class="edit-item media-item">
-              <p class="hint">
-                当前归属：
-                {% if media.activity_route_option %}
-                  {{ media.activity_route_option.level_label }}路线 / {{ media.activity_route_option.route.route_name if media.activity_route_option.route else '未命名路线' }}
+      <details class="card form-card activity-media-collapse">
+        <summary>
+          <span>已上传媒体</span>
+          <small>{{ media_assets|length if media_assets else 0 }} 个</small>
+        </summary>
+        <div class="activity-media-collapse-body">
+          {% if media_assets %}
+            <div class="media-grid">
+              {% for media in media_assets %}
+                <article class="edit-item media-item">
+                <p class="hint">
+                  当前归属：
+                  {% if media.activity_route_option %}
+                    {{ media.activity_route_option.level_label }}路线 / {{ media.activity_route_option.route.route_name if media.activity_route_option.route else '未命名路线' }}
+                  {% else %}
+                    未分配路线
+                  {% endif %}
+                </p>
+                {% if media.mime_type.startswith('image/') %}
+                  <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}" loading="lazy" decoding="async" fetchpriority="low">
+                  <div class="media-actions">
+                    <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载图片</a>
+                  </div>
+                {% elif media.mime_type.startswith('video/') %}
+                  <video controls preload="metadata">
+                    <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
+                  </video>
+                  <div class="media-actions">
+                    <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载视频</a>
+                  </div>
                 {% else %}
-                  未分配路线
+                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank">查看文件</a>
+                  <div class="media-actions">
+                    <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载附件</a>
+                  </div>
                 {% endif %}
-              </p>
-              {% if media.mime_type.startswith('image/') %}
-                <img src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" alt="{{ media.original_filename }}" loading="lazy" decoding="async" fetchpriority="low">
-                <div class="media-actions">
-                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载图片</a>
-                </div>
-              {% elif media.mime_type.startswith('video/') %}
-                <video controls preload="metadata">
-                  <source src="{{ url_for('web.media_asset_file', asset_id=media.id) }}" type="{{ media.mime_type }}">
-                </video>
-                <div class="media-actions">
-                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载视频</a>
-                </div>
-              {% else %}
-                <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" target="_blank">查看文件</a>
-                <div class="media-actions">
-                  <a class="btn btn-muted" href="{{ url_for('web.media_asset_file', asset_id=media.id) }}" download>下载附件</a>
-                </div>
-              {% endif %}
-              {% if can_edit and activity %}
-                <div class="media-actions">
-                  <form method="post" action="{{ url_for('admin.assign_activity_media', activity_id=activity.id, asset_id=media.id) }}" class="single-form">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <label>分配到路线
-                      <select name="activity_route_option_id">
-                        <option value="" {% if not media.activity_route_option_id %}selected{% endif %}>未分配路线</option>
-                        {% for option in route_option_items %}
-                          <option value="{{ option.id }}" {% if media.activity_route_option_id == option.id %}selected{% endif %}>
-                            {{ option.level_label }}路线 / {{ option.route.route_name if option.route else ('路线#' ~ option.route_id) }}
-                          </option>
-                        {% endfor %}
-                      </select>
-                    </label>
-                    <button class="btn" type="submit">保存分配</button>
-                  </form>
-                </div>
-                <div class="media-actions">
-                  <form method="post" action="{{ url_for('admin.delete_activity_media', activity_id=activity.id, asset_id=media.id) }}" onsubmit="return confirm('确认删除这个媒体文件吗？');">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="btn btn-danger" type="submit">删除媒体</button>
-                  </form>
-                </div>
-              {% endif %}
-            </article>
-          {% endfor %}
+                {% if can_edit and activity %}
+                  <div class="media-actions">
+                    <form method="post" action="{{ url_for('admin.assign_activity_media', activity_id=activity.id, asset_id=media.id) }}" class="single-form">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <label>分配到路线
+                        <select name="activity_route_option_id">
+                          <option value="" {% if not media.activity_route_option_id %}selected{% endif %}>未分配路线</option>
+                          {% for option in route_option_items %}
+                            <option value="{{ option.id }}" {% if media.activity_route_option_id == option.id %}selected{% endif %}>
+                              {{ option.level_label }}路线 / {{ option.route.route_name if option.route else ('路线#' ~ option.route_id) }}
+                            </option>
+                          {% endfor %}
+                        </select>
+                      </label>
+                      <button class="btn" type="submit">保存分配</button>
+                    </form>
+                  </div>
+                  <div class="media-actions">
+                    <form method="post" action="{{ url_for('admin.delete_activity_media', activity_id=activity.id, asset_id=media.id) }}" onsubmit="return confirm('确认删除这个媒体文件吗？');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button class="btn btn-danger" type="submit">删除媒体</button>
+                    </form>
+                  </div>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+          {% else %}
+            <p class="hint">当前活动还没有上传媒体文件。</p>
+          {% endif %}
         </div>
-        {% else %}
-          <p class="hint">当前活动还没有上传媒体文件。</p>
-        {% endif %}
-      </section>
+      </details>
     {% endif %}
 
     {% if activity and can_edit %}
@@ -281,6 +298,9 @@
       rows.forEach((row) => {
         const routeSelect = row.querySelector("[data-route-select]");
         const details = row.querySelector("[data-route-details]");
+        const config = row.querySelector("[data-route-config]");
+        const inactive = row.querySelector("[data-route-inactive]");
+        const enableButton = row.querySelector("[data-route-enable]");
         if (!routeSelect || !details) {
           return;
         }
@@ -289,6 +309,13 @@
 
         const sync = () => {
           const hasRoute = Boolean((routeSelect.value || "").trim());
+          const configOpen = hasRoute || row.dataset.configOpen === "1";
+          if (config) {
+            config.hidden = !configOpen;
+          }
+          if (inactive) {
+            inactive.hidden = configOpen;
+          }
           details.hidden = !hasRoute;
           row.classList.toggle("activity-level-row-empty", !hasRoute);
           detailInputs.forEach((input) => {
@@ -312,7 +339,17 @@
           }
         };
 
-        routeSelect.addEventListener("change", sync);
+        if (enableButton && editable) {
+          enableButton.addEventListener("click", () => {
+            row.dataset.configOpen = "1";
+            sync();
+            routeSelect.focus();
+          });
+        }
+        routeSelect.addEventListener("change", () => {
+          row.dataset.configOpen = routeSelect.value ? "1" : "";
+          sync();
+        });
         sync();
       });
 
