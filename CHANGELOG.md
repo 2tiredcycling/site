@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [v4.7.2]
+
+### Changed
+
+- Refined the management analytics page with a lighter period switch, clearer core metric cards, and collapsible traffic tables.
+- Moved long traffic tables behind default-collapsed sections while keeping full data available on demand.
+
 ## [v4.7.1]
 
 ### Changed
