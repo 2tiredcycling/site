@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [v4.8.0]
+
+### Added
+
+- Added page-level administrator permissions with `none`, `read`, `write`, and `admin` levels.
+- Added a normalized `user_page_permissions` table and migration for per-page permission storage.
+- Added account maintenance UI for configuring page permission levels.
+
+### Changed
+
+- Reworked management page access, navigation visibility, dashboard cards, and action buttons to use the new page permission table.
+- Separated write actions from admin-only dangerous operations such as delete, rollback, recycle, and restore.
+- Kept legacy `perm_*` columns only for compatibility/bootstrap migration and stopped using them for current runtime permission decisions.
+
 ## [v4.7.3]
 
 ### Changed

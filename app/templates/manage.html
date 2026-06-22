@@ -48,63 +48,47 @@
         <h2>核心数据</h2>
       </div>
       <div class="manage-metric-grid">
-        {% if can_edit %}
-        <a class="manage-metric-card" href="{{ url_for('admin.routes_page') }}">
-        {% else %}
-        <div class="manage-metric-card is-muted">
+        {% if can_view_routes %}
+          <a class="manage-metric-card" href="{{ url_for('admin.routes_page') }}">
+            <span>路线</span>
+            <strong>{{ summary.route_total }}</strong>
+            <small>回收站 {{ summary.route_deleted }}</small>
+          </a>
         {% endif %}
-          <span>路线</span>
-          <strong>{{ summary.route_total }}</strong>
-          <small>回收站 {{ summary.route_deleted }}</small>
-        {% if can_edit %}</a>{% else %}</div>{% endif %}
-        {% if can_edit %}
-        <a class="manage-metric-card" href="{{ url_for('admin.activities_page') }}">
-        {% else %}
-        <div class="manage-metric-card is-muted">
+        {% if can_view_activities %}
+          <a class="manage-metric-card" href="{{ url_for('admin.activities_page') }}">
+            <span>活动</span>
+            <strong>{{ summary.activity_total }}</strong>
+            <small>活动记录</small>
+          </a>
         {% endif %}
-          <span>活动</span>
-          <strong>{{ summary.activity_total }}</strong>
-          <small>活动记录</small>
-        {% if can_edit %}</a>{% else %}</div>{% endif %}
-        {% if can_edit %}
-        <a class="manage-metric-card" href="{{ url_for('admin.merch_preorders_page') }}">
-        {% else %}
-        <div class="manage-metric-card is-muted">
+        {% if can_view_kit_preorders %}
+          <a class="manage-metric-card" href="{{ url_for('admin.merch_preorders_page') }}">
+            <span>预约</span>
+            <strong>{{ summary.merch_batch_total }}</strong>
+            <small>骑行服批次</small>
+          </a>
         {% endif %}
-          <span>预约</span>
-          <strong>{{ summary.merch_batch_total }}</strong>
-          <small>骑行服批次</small>
-        {% if can_edit %}</a>{% else %}</div>{% endif %}
-        {% if can_edit %}
-        <a class="manage-metric-card" href="{{ url_for('admin.announcements_page') }}">
-        {% else %}
-        <div class="manage-metric-card is-muted">
+        {% if can_view_announcements %}
+          <a class="manage-metric-card" href="{{ url_for('admin.announcements_page') }}">
+            <span>公告</span>
+            <strong>{{ summary.announcement_total }}</strong>
+            <small>公告内容</small>
+          </a>
         {% endif %}
-          <span>公告</span>
-          <strong>{{ summary.announcement_total }}</strong>
-          <small>公告内容</small>
-        {% if can_edit %}</a>{% else %}</div>{% endif %}
         {% if can_review %}
         <a class="manage-metric-card" href="{{ url_for('admin.site_feedback_page') }}">
-        {% else %}
-        <div class="manage-metric-card is-muted">
-        {% endif %}
           <span>反馈</span>
           <strong>{{ summary.site_feedback_pending }}</strong>
           <small>待处理网站反馈</small>
-        {% if can_review %}</a>{% else %}</div>{% endif %}
+        </a>
+        {% endif %}
         {% if can_view_security %}
           <a class="manage-metric-card" href="{{ url_for('admin.security_page') }}">
             <span>安全</span>
             <strong>{{ security_summary.probe_24h }}</strong>
             <small>24h Probe</small>
           </a>
-        {% else %}
-          <div class="manage-metric-card is-muted">
-            <span>安全</span>
-            <strong>-</strong>
-            <small>无查看权限</small>
-          </div>
         {% endif %}
       </div>
     </section>
@@ -119,11 +103,6 @@
             <span>未处理网站反馈</span>
             <strong>{{ summary.site_feedback_pending }}</strong>
           </a>
-        {% else %}
-          <div class="manage-alert-card is-muted">
-            <span>未处理网站反馈</span>
-            <strong>-</strong>
-          </div>
         {% endif %}
         {% if can_view_security %}
           <a class="manage-alert-card {{ 'is-attention' if security_summary.probe_ip_24h else 'is-empty' }}" href="{{ url_for('admin.security_page') }}">
@@ -143,11 +122,11 @@
         <h2>最近动态</h2>
       </div>
       <div class="manage-dashboard-grid">
-        {% if can_edit %}
+        {% if can_view_routes %}
           <section class="card form-card card-link manage-compact-card" data-href="{{ url_for('admin.routes_page') }}">
             <h3>最近路线</h3>
             {% for route in latest_routes %}
-              <a class="quick-link" href="{{ url_for('admin.route_edit_page', route_id=route.id) }}">
+              <a class="quick-link" href="{{ url_for('admin.route_edit_page', route_id=route.id) if can_write_routes else url_for('admin.routes_page') }}">
                 <article class="edit-item compact-item">
                   <div><strong>{{ route.route_name }}</strong></div>
                   <div class="hint">状态：{{ status_badge(route.status) }}，更新：{{ route.updated_at.strftime('%Y-%m-%d %H:%M') if route.updated_at else '-' }}</div>
@@ -158,10 +137,12 @@
             {% endfor %}
           </section>
 
+        {% endif %}
+        {% if can_view_activities %}
           <section class="card form-card card-link manage-compact-card" data-href="{{ url_for('admin.activities_page') }}">
             <h3>最近活动</h3>
             {% for activity in latest_activities %}
-              <a class="quick-link" href="{{ url_for('admin.activity_edit_page', activity_id=activity.id) }}">
+              <a class="quick-link" href="{{ url_for('admin.activity_edit_page', activity_id=activity.id) if can_write_activities else url_for('admin.activities_page') }}">
                 <article class="edit-item compact-item">
                   <div><strong>{{ activity.title }}</strong></div>
                   <div class="hint">时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</div>

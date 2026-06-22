@@ -64,15 +64,17 @@
           <p><strong>评论：</strong>{{ feedback.comment or '无' }}</p>
           <p><strong>路况更新：</strong>{{ feedback.road_condition_update or '无' }}</p>
           <p><strong>提交时间：</strong>{{ feedback.created_at.strftime('%Y-%m-%d %H:%M:%S') if feedback.created_at else '-' }}</p>
-          <form method="post" action="{{ url_for('admin.review_feedback', feedback_id=feedback.id) }}" class="single-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="next" value="feedback">
-            <div class="row-actions">
-              <input type="text" name="reviewer_note" placeholder="审核备注（可选）">
-              <button class="btn" type="submit" name="status" value="approved">通过</button>
-              <button class="btn btn-danger" type="submit" name="status" value="rejected">驳回</button>
-            </div>
-          </form>
+          {% if can_edit %}
+            <form method="post" action="{{ url_for('admin.review_feedback', feedback_id=feedback.id) }}" class="single-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="next" value="feedback">
+              <div class="row-actions">
+                <input type="text" name="reviewer_note" placeholder="审核备注（可选）">
+                <button class="btn" type="submit" name="status" value="approved">通过</button>
+                <button class="btn btn-danger" type="submit" name="status" value="rejected">驳回</button>
+              </div>
+            </form>
+          {% endif %}
         </article>
       {% else %}
         <p>暂无未审核反馈</p>
@@ -104,15 +106,20 @@
               <td>{{ feedback.reviewer.username if feedback.reviewer else '-' }}</td>
               <td>{{ feedback.reviewer_note or '-' }}</td>
               <td class="row-actions">
-                <form method="post" action="{{ url_for('admin.reopen_feedback', feedback_id=feedback.id) }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-muted" type="submit">撤销审核</button>
-                </form>
-                {% if g.current_user.role == 'super_admin' %}
+                {% if can_edit %}
+                  <form method="post" action="{{ url_for('admin.reopen_feedback', feedback_id=feedback.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-muted" type="submit">撤销审核</button>
+                  </form>
+                {% endif %}
+                {% if can_admin %}
                   <form method="post" action="{{ url_for('admin.delete_feedback', feedback_id=feedback.id) }}" onsubmit="return confirm('确认删除该反馈吗？');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-danger" type="submit">删除</button>
                   </form>
+                {% endif %}
+                {% if not can_edit and not can_admin %}
+                  <span class="text-muted">只读</span>
                 {% endif %}
               </td>
             </tr>

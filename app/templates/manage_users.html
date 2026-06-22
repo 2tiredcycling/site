@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -8,14 +8,18 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
   <main class="container">
-    <header class="header">
-      <h1>账号维护</h1>
+    <header class="header manage-dashboard-header">
+      <div class="manage-dashboard-title">
+        <h1>账号维护</h1>
+        <p>管理员类型与页面级权限配置</p>
+      </div>
       <div class="row-actions">
-        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
-        <a class="btn" href="{{ url_for('admin.routes_page') }}">路线维护</a>
-        <a class="btn" href="{{ url_for('admin.activities_page') }}">活动维护</a>
-        <a class="btn" href="{{ url_for('admin.user_new_page') }}">新增账号</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        {% if can_admin_accounts %}
+          <a class="btn" href="{{ url_for('admin.user_new_page') }}">新增账号</a>
+        {% endif %}
       </div>
     </header>
     {% include "_manage_nav.html" %}
@@ -28,38 +32,48 @@
       {% endif %}
     {% endwith %}
 
-    <section class="card form-card">
-      <h2>账号列表</h2>
+    <section class="card form-card manage-account-list-card">
+      <div class="manage-section-heading">
+        <div>
+          <h2>账号列表</h2>
+          <span>页面权限等级只认新权限表，旧 perm_* 字段不参与当前权限判断。</span>
+        </div>
+      </div>
       <table>
         <thead>
-          <tr><th>ID</th><th>用户名</th><th>角色</th><th>权限摘要</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+          <tr><th>用户名</th><th>管理员类型</th><th>状态</th><th>页面权限</th><th>创建时间</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for user in users %}
+            {% set perms = user_page_permissions(user) %}
             <tr>
-              <td>{{ user.id }}</td>
-              <td>{{ user.username }}</td>
-              <td>{{ role_labels.get(user.role, user.role) }}</td>
               <td>
-                {% if user.role == 'super_admin' %}
-                  全部
+                <strong>{{ user.username }}</strong>
+                <div class="hint">ID: {{ user.id }}</div>
+              </td>
+              <td>{{ role_labels.get(user.role, user.role) }}</td>
+              <td>{{ status_badge('active' if user.is_active else 'offline', '启用' if user.is_active else '停用') }}</td>
+              <td>
+                <div class="manage-permission-summary">
+                  {% for page_key in page_keys %}
+                    {% set level = perms.get(page_key, 'none') %}
+                    {% if level != 'none' %}
+                      <span>{{ page_labels.get(page_key, page_key) }}：{{ permission_level_labels.get(level, level) }}</span>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </td>
+              <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '-' }}</td>
+              <td>
+                {% if can_admin_accounts %}
+                  <a class="btn" href="{{ url_for('admin.user_edit_page', user_id=user.id) }}">编辑</a>
                 {% else %}
-                  {% set perms = [] %}
-                  {% if user.perm_view_analytics %}{% set _ = perms.append('统计') %}{% endif %}
-                  {% if user.perm_view_security %}{% set _ = perms.append('安全') %}{% endif %}
-                  {% if user.perm_review %}{% set _ = perms.append('审核') %}{% endif %}
-                  {% if user.perm_edit_content %}{% set _ = perms.append('编辑') %}{% endif %}
-                  {% if user.perm_manage_users %}{% set _ = perms.append('账号管理') %}{% endif %}
-                  {% if user.perm_view_audit_logs %}{% set _ = perms.append('审计日志') %}{% endif %}
-                  {{ perms|join(' / ') if perms else '无' }}
+                  <span class="hint">只读</span>
                 {% endif %}
               </td>
-              <td>{{ 'active' if user.is_active else 'inactive' }}</td>
-              <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '-' }}</td>
-              <td><a class="btn" href="{{ url_for('admin.user_edit_page', user_id=user.id) }}">编辑</a></td>
             </tr>
           {% else %}
-            <tr><td colspan="7">暂无账号</td></tr>
+            <tr><td colspan="6">暂无账号</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -77,4 +91,3 @@
   </main>
 </body>
 </html>
-

@@ -2401,6 +2401,62 @@ td {
   background: color-mix(in srgb, var(--brand-surface-soft) 70%, #ffffff 30%);
 }
 
+.manage-account-list-card table {
+  min-width: 900px;
+}
+
+.manage-permission-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.manage-permission-summary span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 76%, #ffffff 24%);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.manage-account-form {
+  display: grid;
+  gap: 18px;
+}
+
+.manage-account-basic-grid,
+.manage-page-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.manage-account-basic-grid label,
+.manage-page-permission-grid label,
+.manage-account-active-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.manage-account-active-toggle > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  gap: 8px;
+}
+
+.manage-danger-zone {
+  border-color: #efb4b4;
+  background: #fff8f8;
+}
+
 .compact-item {
   margin-bottom: 10px;
 }
@@ -2728,6 +2784,11 @@ td {
   .security-filter-form label:nth-of-type(3),
   .security-filter-form .row-actions {
     grid-column: auto;
+  }
+
+  .manage-account-basic-grid,
+  .manage-page-permission-grid {
+    grid-template-columns: 1fr;
   }
 
   .analytics-primary-metrics {

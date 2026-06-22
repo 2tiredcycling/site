@@ -123,7 +123,9 @@
                           <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
                           <div class="manage-kit-thumb-meta">
                             <span>展示图片</span>
-                            <button class="btn btn-danger" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
+                            {% if can_admin %}
+                              <button class="btn btn-danger" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
+                            {% endif %}
                           </div>
                         </article>
                       {% endfor %}
@@ -132,7 +134,9 @@
                           <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
                           <div class="manage-kit-thumb-meta">
                             <span>尺码表图片</span>
-                            <button class="btn btn-danger" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
+                            {% if can_admin %}
+                              <button class="btn btn-danger" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
+                            {% endif %}
                           </div>
                         </article>
                       {% endfor %}
@@ -154,7 +158,7 @@
       </form>
     </section>
 
-    {% if batch %}
+    {% if batch and can_admin %}
       {% for image in gallery_images + size_images %}
         <form id="deleteMerchImage{{ image.id }}" method="post" action="{{ url_for('admin.delete_merch_preorder_image', batch_id=batch.id, image_id=image.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

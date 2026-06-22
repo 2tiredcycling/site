@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Index
+from sqlalchemy import Index, UniqueConstraint
 
 db = SQLAlchemy()
 
@@ -14,6 +14,77 @@ LEGACY_ROLE_MIGRATIONS = {
     "admin": ROLE_SUPER_ADMIN,
     "editor": ROLE_CONTENT_ADMIN,
     "reviewer": ROLE_OPS_ADMIN,
+}
+
+PERMISSION_NONE = "none"
+PERMISSION_READ = "read"
+PERMISSION_WRITE = "write"
+PERMISSION_ADMIN = "admin"
+PAGE_PERMISSION_LEVELS = (PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, PERMISSION_ADMIN)
+PAGE_PERMISSION_RANKS = {
+    PERMISSION_NONE: 0,
+    PERMISSION_READ: 1,
+    PERMISSION_WRITE: 2,
+    PERMISSION_ADMIN: 3,
+}
+
+PAGE_OVERVIEW = "overview"
+PAGE_ROUTES = "routes"
+PAGE_ACTIVITIES = "activities"
+PAGE_KIT_PREORDERS = "kit_preorders"
+PAGE_ANNOUNCEMENTS = "announcements"
+PAGE_FEEDBACK = "feedback"
+PAGE_ANALYTICS = "analytics"
+PAGE_SECURITY = "security"
+PAGE_ACCOUNTS = "accounts"
+PAGE_AUDIT_LOGS = "audit_logs"
+PAGE_KEYS = (
+    PAGE_ROUTES,
+    PAGE_ACTIVITIES,
+    PAGE_KIT_PREORDERS,
+    PAGE_ANNOUNCEMENTS,
+    PAGE_FEEDBACK,
+    PAGE_ANALYTICS,
+    PAGE_SECURITY,
+    PAGE_ACCOUNTS,
+    PAGE_AUDIT_LOGS,
+)
+
+ROLE_PAGE_PERMISSION_PRESETS = {
+    ROLE_SUPER_ADMIN: {page_key: PERMISSION_ADMIN for page_key in PAGE_KEYS},
+    ROLE_CONTENT_ADMIN: {
+        PAGE_ROUTES: PERMISSION_WRITE,
+        PAGE_ACTIVITIES: PERMISSION_WRITE,
+        PAGE_KIT_PREORDERS: PERMISSION_WRITE,
+        PAGE_ANNOUNCEMENTS: PERMISSION_WRITE,
+        PAGE_FEEDBACK: PERMISSION_WRITE,
+        PAGE_ANALYTICS: PERMISSION_READ,
+        PAGE_SECURITY: PERMISSION_NONE,
+        PAGE_ACCOUNTS: PERMISSION_NONE,
+        PAGE_AUDIT_LOGS: PERMISSION_NONE,
+    },
+    ROLE_OPS_ADMIN: {
+        PAGE_ROUTES: PERMISSION_READ,
+        PAGE_ACTIVITIES: PERMISSION_READ,
+        PAGE_KIT_PREORDERS: PERMISSION_READ,
+        PAGE_ANNOUNCEMENTS: PERMISSION_READ,
+        PAGE_FEEDBACK: PERMISSION_READ,
+        PAGE_ANALYTICS: PERMISSION_READ,
+        PAGE_SECURITY: PERMISSION_READ,
+        PAGE_ACCOUNTS: PERMISSION_NONE,
+        PAGE_AUDIT_LOGS: PERMISSION_READ,
+    },
+    ROLE_VIEWER: {
+        PAGE_ROUTES: PERMISSION_READ,
+        PAGE_ACTIVITIES: PERMISSION_READ,
+        PAGE_KIT_PREORDERS: PERMISSION_READ,
+        PAGE_ANNOUNCEMENTS: PERMISSION_READ,
+        PAGE_FEEDBACK: PERMISSION_READ,
+        PAGE_ANALYTICS: PERMISSION_READ,
+        PAGE_SECURITY: PERMISSION_NONE,
+        PAGE_ACCOUNTS: PERMISSION_NONE,
+        PAGE_AUDIT_LOGS: PERMISSION_NONE,
+    },
 }
 
 STATUS_DRAFT = "draft"
@@ -109,6 +180,12 @@ class User(db.Model):
     perm_view_audit_logs = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    page_permissions = db.relationship(
+        "UserPagePermission",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     def as_dict(self) -> dict:
         return {
@@ -580,6 +657,34 @@ class RouteVersion(db.Model):
             "change_note": self.change_note,
             "changed_by": self.changed_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class UserPagePermission(db.Model):
+    __tablename__ = "user_page_permissions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "page_key", name="uq_user_page_permission_user_page"),
+        Index("idx_user_page_permissions_user_id", "user_id"),
+        Index("idx_user_page_permissions_page_key", "page_key"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    page_key = db.Column(db.String(64), nullable=False)
+    permission_level = db.Column(db.String(16), nullable=False, default=PERMISSION_NONE)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    user = db.relationship("User", back_populates="page_permissions")
+
+    def as_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "page_key": self.page_key,
+            "permission_level": self.permission_level,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 

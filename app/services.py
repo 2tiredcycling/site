@@ -11,6 +11,21 @@ from werkzeug.security import generate_password_hash
 from app.models import (
     FEEDBACK_APPROVED,
     LEGACY_ROLE_MIGRATIONS,
+    PAGE_ACCOUNTS,
+    PAGE_ACTIVITIES,
+    PAGE_ANALYTICS,
+    PAGE_ANNOUNCEMENTS,
+    PAGE_AUDIT_LOGS,
+    PAGE_FEEDBACK,
+    PAGE_KEYS,
+    PAGE_KIT_PREORDERS,
+    PAGE_ROUTES,
+    PAGE_SECURITY,
+    PERMISSION_ADMIN,
+    PERMISSION_NONE,
+    PERMISSION_READ,
+    PERMISSION_WRITE,
+    ROLE_PAGE_PERMISSION_PRESETS,
     ROLE_SUPER_ADMIN,
     STATUS_PUBLISHED,
     Activity,
@@ -20,6 +35,7 @@ from app.models import (
     RouteFeedback,
     RouteVersion,
     User,
+    UserPagePermission,
     db,
     utcnow,
 )
@@ -42,6 +58,57 @@ def _add_column_if_missing(table: str, column: str, ddl: str) -> None:
         return
     with db.engine.begin() as conn:
         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+
+
+def _legacy_page_permissions_for_user(user: User) -> dict[str, str]:
+    preset = ROLE_PAGE_PERMISSION_PRESETS.get(user.role)
+    if preset:
+        return dict(preset)
+
+    result = {page_key: PERMISSION_NONE for page_key in PAGE_KEYS}
+    if bool(user.perm_edit_content):
+        for page_key in (PAGE_ROUTES, PAGE_ACTIVITIES, PAGE_KIT_PREORDERS, PAGE_ANNOUNCEMENTS):
+            result[page_key] = PERMISSION_WRITE
+    if bool(user.perm_review):
+        result[PAGE_FEEDBACK] = PERMISSION_WRITE
+    if bool(user.perm_view_analytics):
+        result[PAGE_ANALYTICS] = PERMISSION_READ
+    if bool(user.perm_view_security):
+        result[PAGE_SECURITY] = PERMISSION_READ
+    if bool(user.perm_manage_users):
+        result[PAGE_ACCOUNTS] = PERMISSION_ADMIN
+    if bool(user.perm_view_audit_logs):
+        result[PAGE_AUDIT_LOGS] = PERMISSION_READ
+    return result
+
+
+def ensure_user_page_permissions(user: User, overwrite: bool = False) -> None:
+    existing = {item.page_key: item for item in user.page_permissions}
+    desired = _legacy_page_permissions_for_user(user)
+    changed = False
+    for page_key in PAGE_KEYS:
+        level = desired.get(page_key, PERMISSION_NONE)
+        record = existing.get(page_key)
+        if record is None:
+            db.session.add(
+                UserPagePermission(
+                    user=user,
+                    page_key=page_key,
+                    permission_level=level,
+                )
+            )
+            changed = True
+        elif overwrite and record.permission_level != level:
+            record.permission_level = level
+            changed = True
+    if changed:
+        db.session.flush()
+
+
+def ensure_all_user_page_permissions() -> None:
+    for user in User.query.all():
+        ensure_user_page_permissions(user)
+    db.session.commit()
 
 
 def ensure_schema_compat() -> None:
@@ -285,6 +352,9 @@ def ensure_schema_compat() -> None:
         conn.execute(text("UPDATE activity_route_options SET participant_count = 0 WHERE participant_count IS NULL"))
         conn.execute(text(f"UPDATE activities SET needs_registration = {false_literal} WHERE needs_registration IS NULL"))
 
+    db.session.expire_all()
+    ensure_all_user_page_permissions()
+
 
 def ensure_default_admin(username: str, password: str) -> None:
     if not username or not password:
@@ -294,6 +364,10 @@ def ensure_default_admin(username: str, password: str) -> None:
     if user:
         if user.role != ROLE_SUPER_ADMIN:
             user.role = ROLE_SUPER_ADMIN
+            ensure_user_page_permissions(user, overwrite=True)
+            db.session.commit()
+        else:
+            ensure_user_page_permissions(user)
             db.session.commit()
         return
 
@@ -304,6 +378,7 @@ def ensure_default_admin(username: str, password: str) -> None:
         is_active=True,
     )
     db.session.add(user)
+    ensure_user_page_permissions(user)
     db.session.commit()
 
 

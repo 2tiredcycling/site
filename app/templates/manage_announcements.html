@@ -51,7 +51,9 @@
               <td>
                 <div class="manage-route-actions">
                   <a class="btn btn-muted" href="{{ url_for('web.announcement_detail', announcement_id=item.id) }}">查看</a>
-                  <a class="btn" href="{{ url_for('admin.announcement_edit_page', announcement_id=item.id) }}">编辑</a>
+                  {% if can_edit %}
+                    <a class="btn" href="{{ url_for('admin.announcement_edit_page', announcement_id=item.id) }}">编辑</a>
+                  {% endif %}
                   <details class="manage-row-more">
                     <summary class="btn btn-muted">更多</summary>
                     <div class="manage-row-more-menu">
@@ -66,10 +68,12 @@
                             <button class="manage-row-menu-item" type="submit">上线</button>
                           {% endif %}
                         </form>
-                        <form method="post" action="{{ url_for('admin.delete_announcement', announcement_id=item.id) }}" onsubmit="return confirm('确认删除该公告吗？');">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                          <button class="manage-row-menu-item is-danger" type="submit">删除</button>
-                        </form>
+                        {% if can_admin %}
+                          <form method="post" action="{{ url_for('admin.delete_announcement', announcement_id=item.id) }}" onsubmit="return confirm('确认删除该公告吗？');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="manage-row-menu-item is-danger" type="submit">删除</button>
+                          </form>
+                        {% endif %}
                       {% else %}
                         <button class="manage-row-menu-item is-disabled" type="button" disabled>暂无更多操作</button>
                       {% endif %}

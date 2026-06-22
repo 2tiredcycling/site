@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -8,9 +8,16 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="manage-page">
-  <main class="container narrow">
-    <header class="header">
-      <h1>{{ '编辑账号 #' ~ user.id if user else '新增账号' }}</h1>
+  <main class="container">
+    <header class="header manage-dashboard-header">
+      <div class="manage-dashboard-title">
+        <h1>{{ '编辑账号：' ~ user.username if user else '新增账号' }}</h1>
+        {% if user %}
+          <p>账号 ID: {{ user.id }}</p>
+        {% else %}
+          <p>创建新的后台管理员账号</p>
+        {% endif %}
+      </div>
       <div class="row-actions">
         <a class="btn btn-muted" href="{{ url_for('admin.users_page') }}">返回账号列表</a>
       </div>
@@ -25,52 +32,78 @@
       {% endif %}
     {% endwith %}
 
-    <section class="card form-card">
-      <form method="post" action="{{ url_for('admin.update_user', user_id=user.id) if user else url_for('admin.create_user') }}" class="single-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label>用户名<input type="text" name="username" value="{{ user.username if user else '' }}" required></label>
-        <label>角色
-          <select name="role">
-            {% for role in roles %}
-              <option value="{{ role }}" {% if (user and user.role == role) or (not user and role == 'content_admin') %}selected{% endif %}>{{ role_labels.get(role, role) }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <fieldset class="edit-item">
-          <legend>权限配置（super_admin 默认全部开启）</legend>
-          <label><input type="checkbox" name="perm_view_analytics" value="1" {% if permission_defaults.perm_view_analytics %}checked{% endif %}> 可查看流量统计</label>
-          <label><input type="checkbox" name="perm_view_security" value="1" {% if permission_defaults.perm_view_security %}checked{% endif %}> 可查看安全监控</label>
-          <label><input type="checkbox" name="perm_review" value="1" {% if permission_defaults.perm_review %}checked{% endif %}> 可审核反馈/站点问题</label>
-          <label><input type="checkbox" name="perm_edit_content" value="1" {% if permission_defaults.perm_edit_content %}checked{% endif %}> 可维护路线与活动</label>
-          <label><input type="checkbox" name="perm_manage_users" value="1" {% if permission_defaults.perm_manage_users %}checked{% endif %}> 可管理管理员账号</label>
-          <label><input type="checkbox" name="perm_view_audit_logs" value="1" {% if permission_defaults.perm_view_audit_logs %}checked{% endif %}> 可查看审计日志</label>
-        </fieldset>
-        {% if user %}
-          <label>
-            <input type="checkbox" name="is_active" value="1" {% if user.is_active %}checked{% endif %}>
-            保持为启用状态
+    <form method="post" action="{{ url_for('admin.update_user', user_id=user.id) if user else url_for('admin.create_user') }}" class="manage-account-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <section class="card form-card">
+        <h2>基础信息</h2>
+        <div class="manage-account-basic-grid">
+          <label>用户名<input type="text" name="username" value="{{ user.username if user else '' }}" required></label>
+          <label>管理员类型
+            <select name="role">
+              {% for role in roles %}
+                <option value="{{ role }}" {% if (user and user.role == role) or (not user and role == 'content_admin') %}selected{% endif %}>{{ role_labels.get(role, role) }}</option>
+              {% endfor %}
+            </select>
           </label>
+          {% if user %}
+            <label class="manage-account-active-toggle">
+              <span>账号状态</span>
+              <span><input type="checkbox" name="is_active" value="1" {% if user.is_active %}checked{% endif %}> 启用</span>
+            </label>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="card form-card">
+        <div class="manage-section-heading">
+          <div>
+            <h2>页面权限</h2>
+            <span>无权限会隐藏入口；可读只显示数据；可修改允许普通维护；完全管理启用危险操作。</span>
+          </div>
+        </div>
+        <div class="manage-page-permission-grid">
+          {% for page_key in page_keys %}
+            {% set current_level = page_permissions.get(page_key, 'none') %}
+            <label>
+              <span>{{ page_labels.get(page_key, page_key) }}</span>
+              <select name="page_perm_{{ page_key }}">
+                {% for level in permission_levels %}
+                  <option value="{{ level }}" {% if current_level == level %}selected{% endif %}>{{ permission_level_labels.get(level, level) }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="card form-card">
+        <h2>密码设置</h2>
+        {% if user %}
           <label>重置密码（可留空）<input type="password" name="password" placeholder="留空表示不修改"></label>
           <p class="hint">如需修改密码，长度至少 6 位。</p>
         {% else %}
           <label>密码<input type="password" name="password" required></label>
           <p class="hint">初始密码长度至少 6 位。</p>
         {% endif %}
+      </section>
+
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.users_page') }}">取消</a>
         <button class="btn" type="submit">{{ '保存账号' if user else '创建账号' }}</button>
-      </form>
-    </section>
+      </div>
+    </form>
 
     {% if user %}
-      <section class="card form-card">
-        <h2>删除账号</h2>
-        <p class="hint">删除会将账号停用，不会删除历史审计记录。</p>
+      <section class="card form-card manage-danger-zone">
+        <h2>危险操作</h2>
+        <p class="hint">停用账号后，该账号不能继续登录；历史审计记录会保留。</p>
         <form method="post" action="{{ url_for('admin.delete_user', user_id=user.id) }}" onsubmit="return confirm('确认停用该账号吗？');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-danger" type="submit">删除账号（停用）</button>
+          <button class="btn btn-danger" type="submit">停用账号</button>
         </form>
       </section>
     {% endif %}
   </main>
 </body>
 </html>
-

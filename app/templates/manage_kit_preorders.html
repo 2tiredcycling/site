@@ -50,7 +50,9 @@
               <td>
                 <div class="manage-route-actions">
                   <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">查看</a>
-                  <a class="btn" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">编辑</a>
+                  {% if can_edit %}
+                    <a class="btn" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">编辑</a>
+                  {% endif %}
                   <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_registrations_page', batch_id=batch.id) }}">预报名信息</a>
                   <details class="manage-row-more">
                     <summary class="btn btn-muted">更多</summary>
@@ -66,10 +68,12 @@
                             <button class="manage-row-menu-item" type="submit">上线</button>
                           {% endif %}
                         </form>
-                        <form method="post" action="{{ url_for('admin.delete_merch_preorder', batch_id=batch.id) }}" onsubmit="return confirm('确认删除这个预定批次吗？该批次的图片和预报名记录也会删除。');">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                          <button class="manage-row-menu-item is-danger" type="submit">删除</button>
-                        </form>
+                        {% if can_admin %}
+                          <form method="post" action="{{ url_for('admin.delete_merch_preorder', batch_id=batch.id) }}" onsubmit="return confirm('确认删除这个预定批次吗？该批次的图片和预报名记录也会删除。');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="manage-row-menu-item is-danger" type="submit">删除</button>
+                          </form>
+                        {% endif %}
                       {% else %}
                         <button class="manage-row-menu-item is-disabled" type="button" disabled>暂无更多操作</button>
                       {% endif %}

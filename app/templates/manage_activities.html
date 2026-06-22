@@ -67,10 +67,12 @@
                           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                           <button class="manage-row-menu-item" type="submit">复制活动</button>
                         </form>
-                        <form method="post" action="{{ url_for('admin.delete_activity', activity_id=activity.id) }}" onsubmit="return confirm('确认删除这个活动吗？');">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                          <button class="manage-row-menu-item is-danger" type="submit">删除</button>
-                        </form>
+                        {% if can_admin %}
+                          <form method="post" action="{{ url_for('admin.delete_activity', activity_id=activity.id) }}" onsubmit="return confirm('确认删除这个活动吗？');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="manage-row-menu-item is-danger" type="submit">删除</button>
+                          </form>
+                        {% endif %}
                       {% else %}
                         <button class="manage-row-menu-item is-disabled" type="button" disabled>暂无更多操作</button>
                       {% endif %}

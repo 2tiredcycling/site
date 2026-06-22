@@ -15,7 +15,9 @@
       <p>{{ batch.title }} · 当前统计 {{ registration_count }} 件</p>
       <div class="row-actions">
         <a class="btn" href="{{ url_for('admin.merch_preorders_page') }}">返回批次</a>
-        <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">编辑批次</a>
+        {% if can_edit %}
+          <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_edit_page', batch_id=batch.id) }}">编辑批次</a>
+        {% endif %}
         <a class="btn btn-muted" href="{{ url_for('admin.export_merch_preorder_registrations_excel', batch_id=batch.id) }}">导出 Excel</a>
       </div>
     </header>
@@ -58,15 +60,19 @@
               <td>{{ item.notes }}</td>
               <td>{{ to_local_time(item.created_at).strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</td>
               <td>
-                <form class="manage-kit-registration-status-form" method="post" action="{{ url_for('admin.update_merch_preorder_registration_status', batch_id=batch.id, registration_id=item.id) }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <select name="status" data-autosubmit-status>
-                    {% for status in order_statuses %}
-                      <option value="{{ status }}" {% if item.status == status %}selected{% endif %}>{{ status_labels.get(status, status) }}</option>
-                    {% endfor %}
-                  </select>
-                  <button class="btn btn-muted manage-kit-registration-status-submit" type="submit">更新</button>
-                </form>
+                {% if can_edit %}
+                  <form class="manage-kit-registration-status-form" method="post" action="{{ url_for('admin.update_merch_preorder_registration_status', batch_id=batch.id, registration_id=item.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="status" data-autosubmit-status>
+                      {% for status in order_statuses %}
+                        <option value="{{ status }}" {% if item.status == status %}selected{% endif %}>{{ status_labels.get(status, status) }}</option>
+                      {% endfor %}
+                    </select>
+                    <button class="btn btn-muted manage-kit-registration-status-submit" type="submit">更新</button>
+                  </form>
+                {% else %}
+                  <span class="text-muted">只读</span>
+                {% endif %}
               </td>
             </tr>
           {% else %}

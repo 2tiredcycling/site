@@ -98,7 +98,9 @@
                 {{ status_badge(item.status, '已处理' if item.status == 'done' else '待处理') }}
               </td>
               <td class="manage-site-feedback-actions-col">
-                {% if item.status != 'done' %}
+                {% if not can_edit %}
+                  <span class="text-muted">只读</span>
+                {% elif item.status != 'done' %}
                   <form method="post" action="{{ url_for('admin.site_feedback_update_status', feedback_id=item.id) }}" class="manage-site-feedback-status-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="status" value="done">

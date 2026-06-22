@@ -18,7 +18,9 @@
           <a class="btn" href="{{ url_for('admin.route_new_page') }}">新增路线</a>
         {% endif %}
         <a class="btn btn-muted" href="{{ url_for('web.bulk_import_template') }}">下载 CSV 模板</a>
-        <a class="btn btn-muted" href="{{ url_for('admin.routes_recycle_page') }}">回收站 {{ recycle_count }}</a>
+        {% if can_admin %}
+          <a class="btn btn-muted" href="{{ url_for('admin.routes_recycle_page') }}">回收站 {{ recycle_count }}</a>
+        {% endif %}
       </div>
     </header>
     {% include "_manage_nav.html" %}
@@ -108,7 +110,9 @@
               <td>
                 <div class="manage-route-actions">
                   <a class="btn btn-muted" href="{{ url_for('admin.route_detail_manage', route_id=route.id) }}">查看</a>
-                  <a class="btn" href="{{ url_for('admin.route_edit_page', route_id=route.id) }}">编辑</a>
+                  {% if can_edit %}
+                    <a class="btn" href="{{ url_for('admin.route_edit_page', route_id=route.id) }}">编辑</a>
+                  {% endif %}
                   <details class="manage-row-more">
                     <summary class="btn btn-muted">更多</summary>
                     <div class="manage-row-more-menu">
@@ -126,7 +130,7 @@
                         <button class="manage-row-menu-item is-disabled" type="button" disabled>复制路线</button>
                       {% endif %}
                       <a class="manage-row-menu-item" href="{{ url_for('admin.download_route_gpx', route_id=route.id) }}">下载 GPX</a>
-                      {% if can_edit %}
+                      {% if can_admin %}
                         <form method="post" action="{{ url_for('admin.delete_route', route_id=route.id) }}" onsubmit="return confirm('确认移入回收站吗？');">
                           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                           <button class="manage-row-menu-item is-danger" type="submit">移入回收站</button>

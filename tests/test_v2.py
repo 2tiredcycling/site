@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, db
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -20,6 +20,10 @@ def _extract_csrf(html: str) -> str:
 
 def _project_version() -> str:
     return Path("VERSION").read_text(encoding="utf-8-sig").strip()
+
+
+def grant_page_permission(user: User, page_key: str, level: str) -> None:
+    db.session.add(UserPagePermission(user=user, page_key=page_key, permission_level=level))
 
 
 @pytest.fixture()
@@ -1033,7 +1037,7 @@ def test_manage_security_page_available_after_login(app_and_client):
     resp = client.get("/manage/security")
     assert resp.status_code == 200
     text = resp.get_data(as_text=True)
-    assert "核心安全指标" in text
+    assert "核心指标" in text
     assert "最近安全事件" in text
 
 
@@ -1043,7 +1047,8 @@ def test_manage_security_supports_post_deploy_scope(app_and_client):
     resp = client.get("/manage/security?scope=post_deploy")
     text = resp.get_data(as_text=True)
     assert resp.status_code == 200
-    assert "核心安全指标（上线后（" in text
+    assert "核心指标" in text
+    assert "上线后" in text
 
 
 def test_manage_security_events_filter_and_pagination(app_and_client):
@@ -1246,10 +1251,10 @@ def test_user_with_manage_users_permission_can_open_users_page(app_and_client):
             password=generate_password_hash("manager123456789"),
             role=ROLE_VIEWER,
             is_active=True,
-            perm_manage_users=True,
-            perm_view_analytics=True,
         )
         db.session.add(manager)
+        grant_page_permission(manager, PAGE_ACCOUNTS, PERMISSION_READ)
+        grant_page_permission(manager, PAGE_ANALYTICS, PERMISSION_READ)
         db.session.commit()
 
     login(client, "manager", "manager123456789")
@@ -1266,9 +1271,9 @@ def test_user_without_analytics_permission_forbidden(app_and_client):
             password=generate_password_hash("blocked123456789"),
             role=ROLE_VIEWER,
             is_active=True,
-            perm_view_analytics=False,
         )
         db.session.add(blocked)
+        grant_page_permission(blocked, PAGE_ANALYTICS, PERMISSION_NONE)
         db.session.commit()
 
     login(client, "blocked_user", "blocked123456789")
@@ -1285,14 +1290,13 @@ def test_dashboard_hides_sections_without_permissions(app_and_client):
             password=generate_password_hash("viewer123456789"),
             role=ROLE_VIEWER,
             is_active=True,
-            perm_view_analytics=False,
-            perm_view_security=False,
-            perm_review=False,
-            perm_edit_content=False,
-            perm_manage_users=False,
-            perm_view_audit_logs=False,
         )
         db.session.add(viewer)
+        grant_page_permission(viewer, PAGE_ANALYTICS, PERMISSION_NONE)
+        grant_page_permission(viewer, PAGE_SECURITY, PERMISSION_NONE)
+        grant_page_permission(viewer, PAGE_FEEDBACK, PERMISSION_NONE)
+        grant_page_permission(viewer, PAGE_ACCOUNTS, PERMISSION_NONE)
+        grant_page_permission(viewer, PAGE_AUDIT_LOGS, PERMISSION_NONE)
         db.session.commit()
 
     login(client, "limited_viewer", "viewer123456789")
@@ -1313,10 +1317,10 @@ def test_user_without_edit_or_review_cannot_download_import_report(app_and_clien
             password=generate_password_hash("viewer123456789"),
             role=ROLE_VIEWER,
             is_active=True,
-            perm_edit_content=False,
-            perm_review=False,
         )
         db.session.add(viewer)
+        grant_page_permission(viewer, PAGE_ROUTES, PERMISSION_NONE)
+        grant_page_permission(viewer, PAGE_FEEDBACK, PERMISSION_NONE)
         db.session.commit()
 
     login(client, "report_blocked", "viewer123456789")
@@ -1377,9 +1381,9 @@ def test_feedback_review_flow(app_and_client):
             password=generate_password_hash("reviewer123456789"),
             role=ROLE_OPS_ADMIN,
             is_active=True,
-            perm_review=True,
         )
         db.session.add(reviewer)
+        grant_page_permission(reviewer, PAGE_FEEDBACK, PERMISSION_WRITE)
         db.session.commit()
     admin_csrf = get_manage_csrf(client)
     forged_resp = client.post(

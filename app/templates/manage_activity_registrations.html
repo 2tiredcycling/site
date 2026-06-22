@@ -14,7 +14,9 @@
       <h1>报名信息：{{ activity.title }}</h1>
       <div class="row-actions">
         <a class="btn btn-muted" href="{{ url_for('admin.activities_page') }}">返回活动维护</a>
-        <a class="btn btn-muted" href="{{ url_for('admin.activity_edit_page', activity_id=activity.id) }}">编辑活动</a>
+        {% if can_edit %}
+          <a class="btn btn-muted" href="{{ url_for('admin.activity_edit_page', activity_id=activity.id) }}">编辑活动</a>
+        {% endif %}
         <a class="btn" href="{{ url_for('admin.export_activity_registrations_excel', activity_id=activity.id) }}">下载 Excel</a>
       </div>
     </header>

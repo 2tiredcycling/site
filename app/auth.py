@@ -6,7 +6,24 @@ import secrets
 
 from flask import abort, g, redirect, request, session, url_for
 
-from app.models import ROLE_SUPER_ADMIN, User
+from app.models import (
+    PAGE_ACCOUNTS,
+    PAGE_ACTIVITIES,
+    PAGE_ANALYTICS,
+    PAGE_ANNOUNCEMENTS,
+    PAGE_AUDIT_LOGS,
+    PAGE_FEEDBACK,
+    PAGE_KEYS,
+    PAGE_KIT_PREORDERS,
+    PAGE_PERMISSION_RANKS,
+    PAGE_ROUTES,
+    PAGE_SECURITY,
+    PERMISSION_ADMIN,
+    PERMISSION_NONE,
+    PERMISSION_READ,
+    PERMISSION_WRITE,
+    User,
+)
 from app.services import write_audit_log
 
 
@@ -105,52 +122,72 @@ def role_required(*roles: str):
     return decorator
 
 
+def get_page_permission(user: User | None, page_key: str) -> str:
+    if not user or not user.is_active or page_key not in PAGE_KEYS:
+        return PERMISSION_NONE
+    for item in user.page_permissions:
+        if item.page_key == page_key:
+            if item.permission_level in PAGE_PERMISSION_RANKS:
+                return item.permission_level
+            return PERMISSION_NONE
+    return PERMISSION_NONE
+
+
+def has_page_permission(user: User | None, page_key: str, required_level: str) -> bool:
+    required_rank = PAGE_PERMISSION_RANKS.get(required_level, 0)
+    actual_rank = PAGE_PERMISSION_RANKS.get(get_page_permission(user, page_key), 0)
+    return actual_rank >= required_rank
+
+
+def can_read_page(user: User | None, page_key: str) -> bool:
+    return has_page_permission(user, page_key, PERMISSION_READ)
+
+
+def can_write_page(user: User | None, page_key: str) -> bool:
+    return has_page_permission(user, page_key, PERMISSION_WRITE)
+
+
+def can_admin_page(user: User | None, page_key: str) -> bool:
+    return has_page_permission(user, page_key, PERMISSION_ADMIN)
+
+
 def can_edit(user: User | None) -> bool:
     if not user:
         return False
-    if user.role == ROLE_SUPER_ADMIN:
-        return True
-    return bool(user.perm_edit_content)
+    return any(
+        can_write_page(user, page_key)
+        for page_key in (PAGE_ROUTES, PAGE_ACTIVITIES, PAGE_KIT_PREORDERS, PAGE_ANNOUNCEMENTS)
+    )
 
 
 def can_review(user: User | None) -> bool:
     if not user:
         return False
-    if user.role == ROLE_SUPER_ADMIN:
-        return True
-    return bool(user.perm_review)
+    return can_write_page(user, PAGE_FEEDBACK)
 
 
 def can_manage_users(user: User | None) -> bool:
     if not user:
         return False
-    if user.role == ROLE_SUPER_ADMIN:
-        return True
-    return bool(user.perm_manage_users)
+    return can_read_page(user, PAGE_ACCOUNTS)
 
 
 def can_view_analytics(user: User | None) -> bool:
     if not user:
         return False
-    if user.role == ROLE_SUPER_ADMIN:
-        return True
-    return bool(user.perm_view_analytics)
+    return can_read_page(user, PAGE_ANALYTICS)
 
 
 def can_view_security(user: User | None) -> bool:
     if not user:
         return False
-    if user.role == ROLE_SUPER_ADMIN:
-        return True
-    return bool(user.perm_view_security)
+    return can_read_page(user, PAGE_SECURITY)
 
 
 def can_view_audit_logs(user: User | None) -> bool:
     if not user:
         return False
-    if user.role == ROLE_SUPER_ADMIN:
-        return True
-    return bool(user.perm_view_audit_logs)
+    return can_read_page(user, PAGE_AUDIT_LOGS)
 
 
 def get_csrf_token() -> str:

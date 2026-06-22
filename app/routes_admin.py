@@ -30,13 +30,17 @@ from werkzeug.utils import secure_filename
 
 from app.auth import (
     attach_current_user,
+    can_admin_page,
     can_edit,
     can_manage_users,
+    can_read_page,
     can_review,
     can_view_analytics,
     can_view_audit_logs,
     can_view_security,
+    can_write_page,
     client_ip,
+    get_page_permission,
     get_csrf_token,
     login_required,
     validate_csrf_token,
@@ -57,10 +61,26 @@ from app.models import (
     MERCH_ORDER_PICKED_UP,
     MERCH_ORDER_READY,
     MERCH_ORDER_STATUSES,
+    PAGE_ACCOUNTS,
+    PAGE_ACTIVITIES,
+    PAGE_ANALYTICS,
+    PAGE_ANNOUNCEMENTS,
+    PAGE_AUDIT_LOGS,
+    PAGE_FEEDBACK,
+    PAGE_KEYS,
+    PAGE_KIT_PREORDERS,
+    PAGE_PERMISSION_LEVELS,
+    PAGE_ROUTES,
+    PAGE_SECURITY,
+    PERMISSION_ADMIN,
+    PERMISSION_NONE,
+    PERMISSION_READ,
+    PERMISSION_WRITE,
     REGISTRATION_CONFIRMED,
     REGISTRATION_PENDING,
     ROLE_CONTENT_ADMIN,
     ROLE_OPS_ADMIN,
+    ROLE_PAGE_PERMISSION_PRESETS,
     ROLE_SUPER_ADMIN,
     ROLE_VIEWER,
     ROLES,
@@ -87,6 +107,7 @@ from app.models import (
     RouteVersion,
     SiteFeedback,
     User,
+    UserPagePermission,
     db,
     merch_batch_status_for_window,
     utcnow,
@@ -99,6 +120,7 @@ from app.security_limits import check_lock, clear_state, register_failure
 from app.services import (
     approved_rating_summary,
     create_route_version,
+    ensure_user_page_permissions,
     rollback_route_to_version,
     route_snapshot,
     save_import_report,
@@ -111,19 +133,28 @@ SH_TZ = timezone(timedelta(hours=8))
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCK_SECONDS = 15 * 60
-PERMISSION_FIELDS = (
-    "perm_view_analytics",
-    "perm_view_security",
-    "perm_review",
-    "perm_edit_content",
-    "perm_manage_users",
-    "perm_view_audit_logs",
-)
 ROLE_LABELS = {
-    ROLE_SUPER_ADMIN: "super_admin（最高权限）",
-    ROLE_OPS_ADMIN: "ops_admin（安全运维）",
-    ROLE_CONTENT_ADMIN: "content_admin（内容维护）",
-    ROLE_VIEWER: "viewer（只读）",
+    ROLE_SUPER_ADMIN: "超级管理员",
+    ROLE_OPS_ADMIN: "安全运维",
+    ROLE_CONTENT_ADMIN: "内容管理员",
+    ROLE_VIEWER: "只读观察员",
+}
+PAGE_PERMISSION_LABELS = {
+    PAGE_ROUTES: "路线",
+    PAGE_ACTIVITIES: "活动",
+    PAGE_KIT_PREORDERS: "预定",
+    PAGE_ANNOUNCEMENTS: "公告",
+    PAGE_FEEDBACK: "反馈",
+    PAGE_ANALYTICS: "流量",
+    PAGE_SECURITY: "安全",
+    PAGE_ACCOUNTS: "账号",
+    PAGE_AUDIT_LOGS: "审计日志",
+}
+PERMISSION_LEVEL_LABELS = {
+    PERMISSION_NONE: "无权限",
+    PERMISSION_READ: "可读",
+    PERMISSION_WRITE: "可修改",
+    PERMISSION_ADMIN: "完全管理",
 }
 ACTIVITY_ROUTE_LEVELS = (
     ("beginner", "初级"),
@@ -274,48 +305,37 @@ def _probe_expression():
     return or_(*conditions)
 
 
-def _default_permissions_for_role(role: str) -> dict[str, bool]:
+def _default_page_permissions_for_role(role: str) -> dict[str, str]:
     role = (role or "").strip()
-    if role == ROLE_SUPER_ADMIN:
-        return {item: True for item in PERMISSION_FIELDS}
-    if role == ROLE_CONTENT_ADMIN:
-        return {
-            "perm_view_analytics": True,
-            "perm_view_security": False,
-            "perm_review": True,
-            "perm_edit_content": True,
-            "perm_manage_users": False,
-            "perm_view_audit_logs": False,
-        }
-    if role == ROLE_OPS_ADMIN:
-        return {
-            "perm_view_analytics": True,
-            "perm_view_security": True,
-            "perm_review": True,
-            "perm_edit_content": False,
-            "perm_manage_users": False,
-            "perm_view_audit_logs": True,
-        }
-    return {
-        "perm_view_analytics": False,
-        "perm_view_security": False,
-        "perm_review": False,
-        "perm_edit_content": False,
-        "perm_manage_users": False,
-        "perm_view_audit_logs": False,
-    }
+    preset = ROLE_PAGE_PERMISSION_PRESETS.get(role, {})
+    return {page_key: preset.get(page_key, PERMISSION_NONE) for page_key in PAGE_KEYS}
 
 
-def _permissions_from_form(role: str) -> dict[str, bool]:
-    defaults = _default_permissions_for_role(role)
-    if role == ROLE_SUPER_ADMIN:
-        return defaults
-    result: dict[str, bool] = {}
-    for field in PERMISSION_FIELDS:
-        result[field] = (request.form.get(field) or "0").strip() == "1"
-    if not any(result.values()):
-        return defaults
+def _page_permissions_from_form(role: str) -> dict[str, str]:
+    defaults = _default_page_permissions_for_role(role)
+    result: dict[str, str] = {}
+    for page_key in PAGE_KEYS:
+        raw = (request.form.get(f"page_perm_{page_key}") or defaults.get(page_key) or PERMISSION_NONE).strip()
+        result[page_key] = raw if raw in PAGE_PERMISSION_LEVELS else PERMISSION_NONE
     return result
+
+
+def _user_page_permissions(user: User) -> dict[str, str]:
+    existing = {item.page_key: item.permission_level for item in user.page_permissions}
+    return {page_key: existing.get(page_key, PERMISSION_NONE) for page_key in PAGE_KEYS}
+
+
+def _apply_user_page_permissions(user: User, permissions: dict[str, str]) -> None:
+    existing = {item.page_key: item for item in user.page_permissions}
+    for page_key in PAGE_KEYS:
+        level = permissions.get(page_key, PERMISSION_NONE)
+        if level not in PAGE_PERMISSION_LEVELS:
+            level = PERMISSION_NONE
+        record = existing.get(page_key)
+        if record is None:
+            db.session.add(UserPagePermission(user=user, page_key=page_key, permission_level=level))
+        else:
+            record.permission_level = level
 
 
 def _save_activity_media(activity_id: int, uploads, activity_route_option_id: int | None = None) -> int:
@@ -655,6 +675,59 @@ def _wechat_qr_upload_error_message(error_code: str) -> str:
     return messages.get(error_code or "", "微信群二维码上传失败：请上传清晰的二维码图片")
 
 
+def _required_page_permission_for_request(path: str, method: str) -> tuple[str, str] | None:
+    if not path.startswith("/manage") or path in {"/manage", "/manage/"}:
+        return None
+    if path.startswith("/manage/login") or path.startswith("/manage/logout"):
+        return None
+
+    normalized = path.rstrip("/")
+    is_post = method.upper() == "POST"
+
+    if normalized.startswith("/manage/analytics"):
+        return PAGE_ANALYTICS, PERMISSION_READ
+    if normalized.startswith("/manage/security"):
+        return PAGE_SECURITY, PERMISSION_READ
+    if normalized.startswith("/manage/audit-logs"):
+        return PAGE_AUDIT_LOGS, PERMISSION_READ
+    if normalized.startswith("/manage/users"):
+        if is_post and ("/delete" in normalized or "/deactivate" in normalized):
+            return PAGE_ACCOUNTS, PERMISSION_ADMIN
+        if is_post:
+            return PAGE_ACCOUNTS, PERMISSION_ADMIN
+        if normalized.endswith("/new") or normalized.endswith("/edit"):
+            return PAGE_ACCOUNTS, PERMISSION_ADMIN
+        return PAGE_ACCOUNTS, PERMISSION_READ
+
+    content_prefixes = (
+        ("/manage/routes", PAGE_ROUTES),
+        ("/manage/activities", PAGE_ACTIVITIES),
+        ("/manage/kit-preorders", PAGE_KIT_PREORDERS),
+        ("/manage/announcements", PAGE_ANNOUNCEMENTS),
+    )
+    for prefix, page_key in content_prefixes:
+        if normalized.startswith(prefix):
+            if any(item in normalized for item in ("/delete", "/rollback", "/restore", "/recycle")):
+                return page_key, PERMISSION_ADMIN
+            if is_post or normalized.endswith("/new") or normalized.endswith("/edit"):
+                return page_key, PERMISSION_WRITE
+            return page_key, PERMISSION_READ
+
+    if normalized.startswith("/manage/bulk-import") or normalized.startswith("/manage/import-report"):
+        return PAGE_ROUTES, PERMISSION_WRITE
+    if (
+        normalized.startswith("/manage/feedback")
+        or normalized.startswith("/manage/route-feedback")
+        or normalized.startswith("/manage/site-feedback")
+    ):
+        if is_post and "/delete" in normalized:
+            return PAGE_FEEDBACK, PERMISSION_ADMIN
+        if is_post:
+            return PAGE_FEEDBACK, PERMISSION_WRITE
+        return PAGE_FEEDBACK, PERMISSION_READ
+    return None
+
+
 @bp.before_app_request
 def _load_user():
     attach_current_user()
@@ -677,29 +750,15 @@ def _enforce_permission_matrix():
     if path in {"/manage/login"}:
         return
     user = g.current_user
-    if path.startswith("/manage/users") and not can_manage_users(user):
+    required = _required_page_permission_for_request(path, request.method)
+    if not required:
+        return
+    page_key, required_level = required
+    if required_level == PERMISSION_ADMIN and not can_admin_page(user, page_key):
         abort(403)
-    if path.startswith("/manage/analytics") and not can_view_analytics(user):
+    if required_level == PERMISSION_WRITE and not can_write_page(user, page_key):
         abort(403)
-    if path.startswith("/manage/security") and not can_view_security(user):
-        abort(403)
-    if path.startswith("/manage/audit-logs") and not can_view_audit_logs(user):
-        abort(403)
-    if (
-        path.startswith("/manage/routes")
-        or path.startswith("/manage/activities")
-        or path.startswith("/manage/kit-preorders")
-        or path.startswith("/manage/announcements")
-        or path.startswith("/manage/bulk-import")
-    ) and not can_edit(user):
-        abort(403)
-    if (
-        path.startswith("/manage/feedback")
-        or path.startswith("/manage/route-feedback")
-        or path.startswith("/manage/site-feedback")
-    ) and not can_review(user):
-        abort(403)
-    if path.startswith("/manage/import-report") and not (can_edit(user) or can_review(user)):
+    if required_level == PERMISSION_READ and not can_read_page(user, page_key):
         abort(403)
 
 
@@ -709,22 +768,21 @@ def _inject_csrf_token():
     nav_items = []
     if user:
         nav_items.append({"label": "总览", "endpoint": "admin.dashboard", "prefix": "/manage"})
-        if can_edit(user):
-            nav_items.extend(
-                [
-                    {"label": "路线", "endpoint": "admin.routes_page", "prefix": "/manage/routes"},
-                    {"label": "活动", "endpoint": "admin.activities_page", "prefix": "/manage/activities"},
-                    {"label": "预定", "endpoint": "admin.merch_preorders_page", "prefix": "/manage/kit-preorders"},
-                    {"label": "公告", "endpoint": "admin.announcements_page", "prefix": "/manage/announcements"},
-                ]
-            )
-        if can_review(user):
+        if can_read_page(user, PAGE_ROUTES):
+            nav_items.append({"label": "路线", "endpoint": "admin.routes_page", "prefix": "/manage/routes"})
+        if can_read_page(user, PAGE_ACTIVITIES):
+            nav_items.append({"label": "活动", "endpoint": "admin.activities_page", "prefix": "/manage/activities"})
+        if can_read_page(user, PAGE_KIT_PREORDERS):
+            nav_items.append({"label": "预定", "endpoint": "admin.merch_preorders_page", "prefix": "/manage/kit-preorders"})
+        if can_read_page(user, PAGE_ANNOUNCEMENTS):
+            nav_items.append({"label": "公告", "endpoint": "admin.announcements_page", "prefix": "/manage/announcements"})
+        if can_read_page(user, PAGE_FEEDBACK):
             nav_items.append({"label": "反馈", "endpoint": "admin.site_feedback_page", "prefix": "/manage/site-feedback"})
-        if can_view_analytics(user):
+        if can_read_page(user, PAGE_ANALYTICS):
             nav_items.append({"label": "流量", "endpoint": "admin.analytics_page", "prefix": "/manage/analytics"})
-        if can_view_security(user):
+        if can_read_page(user, PAGE_SECURITY):
             nav_items.append({"label": "安全", "endpoint": "admin.security_page", "prefix": "/manage/security"})
-        if can_manage_users(user):
+        if can_read_page(user, PAGE_ACCOUNTS):
             nav_items.append({"label": "账号", "endpoint": "admin.users_page", "prefix": "/manage/users"})
     return {
         "csrf_token": get_csrf_token,
@@ -848,25 +906,41 @@ def dashboard():
     log_page = max(1, request.args.get("log_page", default=1, type=int))
     now = utcnow()
     start_24h = now - timedelta(hours=24)
-    can_view_analytics_flag = can_view_analytics(g.current_user)
-    can_view_security_flag = can_view_security(g.current_user)
-    can_review_flag = can_review(g.current_user)
-    can_manage_users_flag = can_manage_users(g.current_user)
-    can_view_audit_logs_flag = can_view_audit_logs(g.current_user)
-    can_edit_flag = can_edit(g.current_user)
+    user = g.current_user
+    can_view_routes_flag = can_read_page(user, PAGE_ROUTES)
+    can_view_activities_flag = can_read_page(user, PAGE_ACTIVITIES)
+    can_view_kit_preorders_flag = can_read_page(user, PAGE_KIT_PREORDERS)
+    can_view_announcements_flag = can_read_page(user, PAGE_ANNOUNCEMENTS)
+    can_view_feedback_flag = can_read_page(user, PAGE_FEEDBACK)
+    can_view_analytics_flag = can_read_page(user, PAGE_ANALYTICS)
+    can_view_security_flag = can_read_page(user, PAGE_SECURITY)
+    can_manage_users_flag = can_read_page(user, PAGE_ACCOUNTS)
+    can_view_audit_logs_flag = can_read_page(user, PAGE_AUDIT_LOGS)
+    can_write_routes_flag = can_write_page(user, PAGE_ROUTES)
+    can_write_activities_flag = can_write_page(user, PAGE_ACTIVITIES)
+    can_edit_flag = any(
+        can_write_page(user, page_key)
+        for page_key in (PAGE_ROUTES, PAGE_ACTIVITIES, PAGE_KIT_PREORDERS, PAGE_ANNOUNCEMENTS)
+    )
 
-    pending_feedback_count = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).count() if can_review_flag else 0
-    pending_site_feedback_count = SiteFeedback.query.filter_by(status=SITE_FEEDBACK_PENDING).count() if can_review_flag else 0
+    pending_feedback_count = RouteFeedback.query.filter_by(status=FEEDBACK_PENDING).count() if can_view_feedback_flag else 0
+    pending_site_feedback_count = SiteFeedback.query.filter_by(status=SITE_FEEDBACK_PENDING).count() if can_view_feedback_flag else 0
     audit_logs_pagination = (
         AuditLog.query.order_by(AuditLog.created_at.desc()).paginate(page=log_page, per_page=3, error_out=False)
         if can_view_audit_logs_flag
         else None
     )
-    latest_routes = Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).limit(3).all() if can_edit_flag else []
-    latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(3).all() if can_edit_flag else []
+    latest_routes = (
+        Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).limit(3).all()
+        if can_view_routes_flag
+        else []
+    )
+    latest_activities = (
+        Activity.query.order_by(Activity.activity_time.desc()).limit(3).all() if can_view_activities_flag else []
+    )
     latest_merch_batches = (
         MerchPreorderBatch.query.order_by(MerchPreorderBatch.updated_at.desc(), MerchPreorderBatch.id.desc()).limit(3).all()
-        if can_edit_flag
+        if can_view_kit_preorders_flag
         else []
     )
     latest_announcements = (
@@ -877,17 +951,21 @@ def dashboard():
         )
         .limit(3)
         .all()
-        if can_edit_flag
+        if can_view_announcements_flag
         else []
     )
-    latest_feedback = RouteFeedback.query.order_by(RouteFeedback.created_at.desc()).limit(3).all() if can_review_flag else []
-    latest_site_feedback = SiteFeedback.query.order_by(SiteFeedback.created_at.desc()).limit(3).all() if can_review_flag else []
+    latest_feedback = (
+        RouteFeedback.query.order_by(RouteFeedback.created_at.desc()).limit(3).all() if can_view_feedback_flag else []
+    )
+    latest_site_feedback = (
+        SiteFeedback.query.order_by(SiteFeedback.created_at.desc()).limit(3).all() if can_view_feedback_flag else []
+    )
     summary = {
-        "route_total": Route.query.filter_by(is_deleted=False).count(),
-        "route_deleted": Route.query.filter_by(is_deleted=True).count(),
-        "activity_total": Activity.query.count(),
-        "merch_batch_total": MerchPreorderBatch.query.count(),
-        "announcement_total": Announcement.query.count(),
+        "route_total": Route.query.filter_by(is_deleted=False).count() if can_view_routes_flag else 0,
+        "route_deleted": Route.query.filter_by(is_deleted=True).count() if can_view_routes_flag else 0,
+        "activity_total": Activity.query.count() if can_view_activities_flag else 0,
+        "merch_batch_total": MerchPreorderBatch.query.count() if can_view_kit_preorders_flag else 0,
+        "announcement_total": Announcement.query.count() if can_view_announcements_flag else 0,
         "feedback_pending": pending_feedback_count,
         "site_feedback_pending": pending_site_feedback_count,
     }
@@ -957,11 +1035,17 @@ def dashboard():
         latest_feedback=latest_feedback,
         latest_site_feedback=latest_site_feedback,
         security_summary=security_summary,
-        can_review=can_review_flag,
+        can_view_routes=can_view_routes_flag,
+        can_view_activities=can_view_activities_flag,
+        can_view_kit_preorders=can_view_kit_preorders_flag,
+        can_view_announcements=can_view_announcements_flag,
+        can_review=can_view_feedback_flag,
         can_manage_users=can_manage_users_flag,
         can_view_analytics=can_view_analytics_flag,
         can_view_security=can_view_security_flag,
         can_view_audit_logs=can_view_audit_logs_flag,
+        can_write_routes=can_write_routes_flag,
+        can_write_activities=can_write_activities_flag,
         can_edit=can_edit_flag,
     )
 
@@ -1349,6 +1433,7 @@ def site_feedback_page():
             "start_date": start_date,
             "end_date": end_date,
         },
+        can_edit=can_write_page(g.current_user, PAGE_FEEDBACK),
     )
 
 
@@ -1452,6 +1537,8 @@ def route_feedback_page():
         pending_pagination=pending_pagination,
         reviewed_pagination=reviewed_pagination,
         filters={"q": keyword, "status": status_filter, "start_date": start_date, "end_date": end_date},
+        can_edit=can_write_page(g.current_user, PAGE_FEEDBACK),
+        can_admin=can_admin_page(g.current_user, PAGE_FEEDBACK),
     )
 
 
@@ -1468,7 +1555,8 @@ def routes_page():
         pagination=pagination,
         filters=filters,
         statuses=ROUTE_STATUSES,
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_ROUTES),
+        can_admin=can_admin_page(g.current_user, PAGE_ROUTES),
     )
 
 
@@ -1479,7 +1567,7 @@ def routes_recycle_page():
     return render_template(
         "manage_routes_recycle.html",
         recycle_routes=recycle_routes,
-        can_edit=can_edit(g.current_user),
+        can_edit=can_admin_page(g.current_user, PAGE_ROUTES),
     )
 
 
@@ -1490,7 +1578,8 @@ def route_new_page():
         "manage_route_form.html",
         route=None,
         statuses=ROUTE_STATUSES,
-        can_edit=True,
+        can_edit=can_write_page(g.current_user, PAGE_ROUTES),
+        can_admin=can_admin_page(g.current_user, PAGE_ROUTES),
         manual_stats={},
         manual_stat_summary="",
     )
@@ -1514,7 +1603,8 @@ def route_edit_page(route_id: int):
         route=route,
         statuses=ROUTE_STATUSES,
         versions=versions,
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_ROUTES),
+        can_admin=can_admin_page(g.current_user, PAGE_ROUTES),
         manual_stats=_route_manual_stat_overrides(route),
         manual_stat_summary=_manual_stat_summary(_route_manual_stat_overrides(route)),
     )
@@ -1630,7 +1720,8 @@ def activities_page():
         "manage_activities.html",
         activities=activities_pagination.items,
         pagination=activities_pagination,
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_ACTIVITIES),
+        can_admin=can_admin_page(g.current_user, PAGE_ACTIVITIES),
         registration_counts=registration_counts,
     )
 
@@ -1647,7 +1738,8 @@ def activity_new_page():
         route_option_items=[],
         route_option_map={},
         legacy_selected_ids=[],
-        can_edit=True,
+        can_edit=can_write_page(g.current_user, PAGE_ACTIVITIES),
+        can_admin=can_admin_page(g.current_user, PAGE_ACTIVITIES),
     )
 
 
@@ -1689,7 +1781,8 @@ def activity_edit_page(activity_id: int):
         route_option_items=route_option_items,
         route_option_map=route_option_map,
         legacy_selected_ids=[route.id for route in activity.routes],
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_ACTIVITIES),
+        can_admin=can_admin_page(g.current_user, PAGE_ACTIVITIES),
     )
 
 
@@ -1735,6 +1828,7 @@ def activity_registrations_page(activity_id: int):
         activity=activity,
         registrations=registration_rows,
         pagination=pagination,
+        can_edit=can_write_page(g.current_user, PAGE_ACTIVITIES),
     )
 
 
@@ -1830,7 +1924,8 @@ def merch_preorders_page():
         pagination=pagination,
         count_map=count_map,
         status_labels=MERCH_BATCH_STATUS_LABELS,
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_KIT_PREORDERS),
+        can_admin=can_admin_page(g.current_user, PAGE_KIT_PREORDERS),
     )
 
 
@@ -1846,7 +1941,8 @@ def merch_preorder_new_page():
         default_start_date=default_start_date,
         default_deadline_date=default_deadline_date,
         status_labels=MERCH_BATCH_STATUS_LABELS,
-        can_edit=True,
+        can_edit=can_write_page(g.current_user, PAGE_KIT_PREORDERS),
+        can_admin=can_admin_page(g.current_user, PAGE_KIT_PREORDERS),
     )
 
 
@@ -1867,7 +1963,8 @@ def merch_preorder_edit_page(batch_id: int):
         default_start_date=default_start_date,
         default_deadline_date=default_deadline_date,
         status_labels=MERCH_BATCH_STATUS_LABELS,
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_KIT_PREORDERS),
+        can_admin=can_admin_page(g.current_user, PAGE_KIT_PREORDERS),
     )
 
 
@@ -1896,6 +1993,7 @@ def merch_preorder_registrations_page(batch_id: int):
         order_statuses=MERCH_ORDER_STATUSES,
         status_labels=MERCH_ORDER_STATUS_LABELS,
         registration_count=_merch_registration_count(batch.id),
+        can_edit=can_write_page(g.current_user, PAGE_KIT_PREORDERS),
     )
 
 
@@ -1965,7 +2063,8 @@ def announcements_page():
         "manage_announcements.html",
         announcements=pagination.items,
         pagination=pagination,
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_ANNOUNCEMENTS),
+        can_admin=can_admin_page(g.current_user, PAGE_ANNOUNCEMENTS),
     )
 
 
@@ -2005,7 +2104,8 @@ def announcement_new_page():
         activities=activities,
         announcement_link_targets=_announcement_link_targets(),
         default_published_at=_next_local_hour(),
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_ANNOUNCEMENTS),
+        can_admin=can_admin_page(g.current_user, PAGE_ANNOUNCEMENTS),
     )
 
 
@@ -2023,7 +2123,8 @@ def announcement_edit_page(announcement_id: int):
         activities=Activity.query.order_by(Activity.activity_time.desc()).all(),
         announcement_link_targets=_announcement_link_targets(),
         default_published_at=_next_local_hour(),
-        can_edit=can_edit(g.current_user),
+        can_edit=can_write_page(g.current_user, PAGE_ANNOUNCEMENTS),
+        can_admin=can_admin_page(g.current_user, PAGE_ANNOUNCEMENTS),
     )
 
 
@@ -2032,11 +2133,19 @@ def announcement_edit_page(announcement_id: int):
 def users_page():
     page = max(1, request.args.get("page", default=1, type=int))
     pagination = User.query.order_by(User.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    for user in pagination.items:
+        ensure_user_page_permissions(user)
+    db.session.commit()
     return render_template(
         "manage_users.html",
         users=pagination.items,
         pagination=pagination,
         role_labels=ROLE_LABELS,
+        page_labels=PAGE_PERMISSION_LABELS,
+        permission_level_labels=PERMISSION_LEVEL_LABELS,
+        page_keys=PAGE_KEYS,
+        user_page_permissions=_user_page_permissions,
+        can_admin_accounts=can_admin_page(g.current_user, PAGE_ACCOUNTS),
     )
 
 
@@ -2048,7 +2157,11 @@ def user_new_page():
         user=None,
         roles=ROLES,
         role_labels=ROLE_LABELS,
-        permission_defaults=_default_permissions_for_role(ROLE_CONTENT_ADMIN),
+        page_labels=PAGE_PERMISSION_LABELS,
+        permission_level_labels=PERMISSION_LEVEL_LABELS,
+        permission_levels=PAGE_PERMISSION_LEVELS,
+        page_keys=PAGE_KEYS,
+        page_permissions=_default_page_permissions_for_role(ROLE_CONTENT_ADMIN),
     )
 
 
@@ -2059,19 +2172,18 @@ def user_edit_page(user_id: int):
     if not user:
         flash("管理员不存在", "error")
         return redirect(url_for("admin.users_page"))
+    ensure_user_page_permissions(user)
+    db.session.commit()
     return render_template(
         "manage_user_form.html",
         user=user,
         roles=ROLES,
         role_labels=ROLE_LABELS,
-        permission_defaults={
-            "perm_view_analytics": bool(user.perm_view_analytics),
-            "perm_view_security": bool(user.perm_view_security),
-            "perm_review": bool(user.perm_review),
-            "perm_edit_content": bool(user.perm_edit_content),
-            "perm_manage_users": bool(user.perm_manage_users),
-            "perm_view_audit_logs": bool(user.perm_view_audit_logs),
-        },
+        page_labels=PAGE_PERMISSION_LABELS,
+        permission_level_labels=PERMISSION_LEVEL_LABELS,
+        permission_levels=PAGE_PERMISSION_LEVELS,
+        page_keys=PAGE_KEYS,
+        page_permissions=_user_page_permissions(user),
     )
 
 
@@ -2928,7 +3040,7 @@ def reopen_feedback(feedback_id: int):
 @bp.post("/feedback/<int:feedback_id>/delete")
 @login_required
 def delete_feedback(feedback_id: int):
-    if g.current_user.role != ROLE_SUPER_ADMIN:
+    if not can_admin_page(g.current_user, PAGE_FEEDBACK):
         abort(403)
     feedback = RouteFeedback.query.filter_by(id=feedback_id).first()
     if not feedback:
@@ -3540,20 +3652,14 @@ def create_user():
         flash("参数错误：用户名已存在", "error")
         return redirect(url_for("admin.users_page"))
 
-    perms = _permissions_from_form(role)
     user = User(
         username=username,
         password=generate_password_hash(password),
         role=role,
         is_active=True,
-        perm_view_analytics=perms["perm_view_analytics"],
-        perm_view_security=perms["perm_view_security"],
-        perm_review=perms["perm_review"],
-        perm_edit_content=perms["perm_edit_content"],
-        perm_manage_users=perms["perm_manage_users"],
-        perm_view_audit_logs=perms["perm_view_audit_logs"],
     )
     db.session.add(user)
+    _apply_user_page_permissions(user, _page_permissions_from_form(role))
     db.session.commit()
     write_audit_log(g.current_user.id, "user.create", "user", str(user.id), username)
     flash("管理员创建成功", "success")
@@ -3589,13 +3695,7 @@ def update_user(user_id: int):
     user.username = username
     user.role = role
     user.is_active = is_active
-    perms = _permissions_from_form(role)
-    user.perm_view_analytics = perms["perm_view_analytics"]
-    user.perm_view_security = perms["perm_view_security"]
-    user.perm_review = perms["perm_review"]
-    user.perm_edit_content = perms["perm_edit_content"]
-    user.perm_manage_users = perms["perm_manage_users"]
-    user.perm_view_audit_logs = perms["perm_view_audit_logs"]
+    _apply_user_page_permissions(user, _page_permissions_from_form(role))
     if password:
         user.password = generate_password_hash(password)
 
