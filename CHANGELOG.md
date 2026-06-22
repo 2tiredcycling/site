@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.6.3]
+
+### Changed
+
+- Refined announcement management list actions by moving low-frequency operations into a more menu and adding direct public-view actions.
+- Unified the announcement create/edit form layout with clearer sections, scheduling defaults, and a save-and-view action.
+- Added shared management row-menu behavior so more menus close when clicking elsewhere or pressing Escape.
+
 ## [v4.6.2]
 
 ### Changed
