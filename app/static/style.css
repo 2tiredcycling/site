@@ -4409,6 +4409,43 @@ td {
   background: color-mix(in srgb, var(--brand-surface) 88%, #ffffff 12%);
 }
 
+.activity-registration-fields {
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) minmax(280px, 1fr);
+  gap: 12px 16px;
+  align-items: start;
+}
+
+.activity-registration-fields[hidden],
+.activity-registration-disabled-hint[hidden] {
+  display: none;
+}
+
+.activity-registration-disabled-hint {
+  margin: 0;
+}
+
+.activity-registration-controls,
+.activity-registration-preview-column {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.activity-registration-controls label .hint {
+  display: block;
+  margin-top: 4px;
+}
+
+.activity-registration-controls input[type="datetime-local"],
+.activity-registration-controls input[type="number"] {
+  max-width: 220px;
+}
+
+.activity-registration-controls input[type="file"] {
+  max-width: 320px;
+}
+
 .checkbox-inline {
   display: inline-flex;
   align-items: center;
@@ -4418,17 +4455,36 @@ td {
 
 .insurance-qr-preview {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  flex: 0 0 132px;
   justify-items: start;
+}
+
+.insurance-qr-preview .hint {
+  margin: 0;
+  max-width: 132px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.activity-registration-qr-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.wechat-qr-preview-status {
+  margin: 0;
 }
 
 .wechat-qr-detect-preview {
   display: grid;
-  gap: 8px;
+  flex: 0 0 auto;
   justify-items: start;
   border: 1px dashed color-mix(in srgb, var(--brand-border-strong) 56%, #ffffff 44%);
   border-radius: 12px;
-  padding: 10px;
+  padding: 8px;
   background: color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%);
 }
 
@@ -4436,22 +4492,22 @@ td {
   display: none;
 }
 
-.wechat-qr-detect-preview .hint {
+.wechat-qr-preview-status {
   margin: 0;
 }
 
-.wechat-qr-detect-preview[data-state="ok"] .hint {
+.wechat-qr-preview-status[data-state="ok"] {
   color: #166534;
 }
 
-.wechat-qr-detect-preview[data-state="error"] .hint {
+.wechat-qr-preview-status[data-state="error"] {
   color: #9a3412;
 }
 
 .wechat-qr-preview-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .wechat-qr-preview-grid figure {
@@ -4468,24 +4524,38 @@ td {
 }
 
 .wechat-qr-preview-grid img {
-  width: 180px;
+  width: 132px;
+  height: 132px;
   max-width: 100%;
+  object-fit: contain;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
   background: #fff;
-  padding: 8px;
+  padding: 6px;
 }
 
 .insurance-qr-preview img {
-  width: 180px;
+  width: 132px;
+  height: 132px;
   max-width: 100%;
+  object-fit: contain;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
   background: #fff;
-  padding: 8px;
+  padding: 6px;
 }
 
 @media (max-width: 760px) {
+  .activity-registration-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-registration-controls input[type="datetime-local"],
+  .activity-registration-controls input[type="number"],
+  .activity-registration-controls input[type="file"] {
+    max-width: none;
+  }
+
   .event-signup-head {
     align-items: flex-start;
     flex-direction: column;

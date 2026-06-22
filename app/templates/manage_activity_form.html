@@ -42,66 +42,70 @@
             <input type="checkbox" name="needs_registration" value="1" {% if activity and activity.needs_registration %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
             <span>需要报名</span>
           </label>
-          <label>
-            报名截止时间
-            <input
-              type="datetime-local"
-              name="registration_deadline"
-              value="{{ to_local_time(activity.registration_deadline).strftime('%Y-%m-%dT%H:%M') if activity and activity.registration_deadline else '' }}"
-              data-registration-deadline
-              {% if not can_edit %}disabled{% endif %}
-            >
-            <span class="hint">需早于活动开始时间（取三条路线中最早时间）。</span>
-          </label>
-          <label>
-            报名人数限制
-            <input
-              type="number"
-              name="registration_limit"
-              min="1"
-              step="1"
-              value="{{ activity.registration_limit if activity and activity.registration_limit else '' }}"
-              data-registration-limit
-              placeholder="不填表示不限人数"
-              {% if not can_edit %}disabled{% endif %}
-            >
-            <span class="hint">仅在“需要报名”开启时生效。</span>
-          </label>
-          <label>
-            微信群二维码（仅 1 张）
-            <input
-              type="file"
-              name="wechat_qr_file"
-              accept="image/*"
-              data-wechat-qr
-              {% if not can_edit %}disabled{% endif %}
-            >
-            <span class="hint">可上传包含二维码的照片，系统会自动识别内容并生成标准黑白群聊二维码。</span>
-          </label>
-          <div class="wechat-qr-detect-preview" data-wechat-qr-preview hidden>
-            <p class="hint" data-wechat-qr-status></p>
-            <div class="wechat-qr-preview-grid">
-              <figure>
-                <img data-wechat-qr-detected-image alt="识别裁切出的二维码预览">
-                <figcaption>识别结果</figcaption>
-              </figure>
-              <figure>
-                <img data-wechat-qr-generated-image alt="重新生成的标准黑白二维码预览">
-                <figcaption>标准黑白结果</figcaption>
-              </figure>
+          <p class="hint activity-registration-disabled-hint" data-registration-disabled-hint {% if activity and activity.needs_registration %}hidden{% endif %}>勾选后显示报名截止时间、人数限制和群聊二维码设置。</p>
+          <div class="activity-registration-fields" data-registration-fields {% if not activity or not activity.needs_registration %}hidden{% endif %}>
+            <div class="activity-registration-controls">
+              <label>
+                报名截止时间
+                <input
+                  type="datetime-local"
+                  name="registration_deadline"
+                  value="{{ to_local_time(activity.registration_deadline).strftime('%Y-%m-%dT%H:%M') if activity and activity.registration_deadline else '' }}"
+                  data-registration-deadline
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                <span class="hint">需早于活动开始时间（取三条路线中最早时间）。</span>
+              </label>
+              <label>
+                报名人数限制
+                <input
+                  type="number"
+                  name="registration_limit"
+                  min="1"
+                  step="1"
+                  value="{{ activity.registration_limit if activity and activity.registration_limit else '' }}"
+                  data-registration-limit
+                  placeholder="不填表示不限人数"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                <span class="hint">仅在“需要报名”开启时生效。</span>
+              </label>
+              <label>
+                微信群二维码（仅 1 张）
+                <input
+                  type="file"
+                  name="wechat_qr_file"
+                  accept="image/*"
+                  data-wechat-qr
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                <span class="hint">可上传包含二维码的照片，系统会自动识别内容并生成标准黑白群聊二维码。</span>
+              </label>
+            </div>
+            <div class="activity-registration-preview-column">
+              <p class="hint wechat-qr-preview-status" data-wechat-qr-status hidden></p>
+              <div class="activity-registration-qr-row">
+                <div class="wechat-qr-detect-preview" data-wechat-qr-preview hidden>
+                  <div class="wechat-qr-preview-grid">
+                    <figure>
+                      <img data-wechat-qr-detected-image alt="识别裁切出的二维码预览">
+                      <figcaption>识别结果</figcaption>
+                    </figure>
+                    <figure>
+                      <img data-wechat-qr-generated-image alt="重新生成的标准黑白二维码预览">
+                      <figcaption>标准黑白结果</figcaption>
+                    </figure>
+                  </div>
+                </div>
+                {% if activity and activity.insurance_qr_path %}
+                  <div class="insurance-qr-preview">
+                    <img src="{{ url_for('web.activity_wechat_qr', event_id=activity.id) }}" alt="微信群二维码预览" loading="lazy">
+                    <p class="hint">当前二维码，上传新二维码后会自动替换。</p>
+                  </div>
+                {% endif %}
+              </div>
             </div>
           </div>
-          {% if activity and activity.insurance_qr_path %}
-            <div class="insurance-qr-preview">
-              <img src="{{ url_for('web.activity_wechat_qr', event_id=activity.id) }}" alt="微信群二维码预览" loading="lazy">
-              {% if can_edit %}
-                <label class="checkbox-inline">
-                  <input type="checkbox" name="clear_wechat_qr" value="1">
-                  <span>删除当前二维码</span>
-                </label>
-              {% endif %}
-            </div>
-          {% endif %}
         </section>
 
         <section class="activity-level-rows">
@@ -305,6 +309,8 @@
       const needsRegistration = document.querySelector("input[name='needs_registration']");
       const registrationDeadline = document.querySelector("[data-registration-deadline]");
       const registrationLimit = document.querySelector("[data-registration-limit]");
+      const registrationFields = document.querySelector("[data-registration-fields]");
+      const registrationDisabledHint = document.querySelector("[data-registration-disabled-hint]");
       const wechatQrInput = document.querySelector("[data-wechat-qr]");
       const wechatQrPreview = document.querySelector("[data-wechat-qr-preview]");
       const wechatQrStatus = document.querySelector("[data-wechat-qr-status]");
@@ -319,6 +325,8 @@
         wechatQrPreview.hidden = false;
         wechatQrPreview.dataset.state = state || "";
         wechatQrStatus.textContent = message || "";
+        wechatQrStatus.hidden = !message;
+        wechatQrStatus.dataset.state = state || "";
         if (detectedImageDataUrl || generatedImageDataUrl) {
           wechatQrDetectedImage.src = detectedImageDataUrl || "";
           wechatQrGeneratedImage.src = generatedImageDataUrl || "";
@@ -339,6 +347,8 @@
         wechatQrPreview.hidden = true;
         wechatQrPreview.dataset.state = "";
         wechatQrStatus.textContent = "";
+        wechatQrStatus.hidden = true;
+        wechatQrStatus.dataset.state = "";
         wechatQrDetectedImage.removeAttribute("src");
         wechatQrGeneratedImage.removeAttribute("src");
         wechatQrDetectedImage.hidden = true;
@@ -385,6 +395,12 @@
           registrationDeadline.disabled = !enabled;
           registrationLimit.disabled = !enabled;
           wechatQrInput.disabled = !enabled;
+          if (registrationFields) {
+            registrationFields.hidden = !enabled;
+          }
+          if (registrationDisabledHint) {
+            registrationDisabledHint.hidden = enabled;
+          }
           if (!enabled) {
             registrationDeadline.value = "";
             registrationLimit.value = "";
