@@ -2136,6 +2136,69 @@ td {
   max-width: 1280px;
 }
 
+.analytics-header {
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.analytics-header > div:first-child {
+  min-width: 0;
+}
+
+.manage-header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.analytics-period-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 74%, #ffffff 26%);
+}
+
+.analytics-table-card .manage-section-heading,
+.analytics-container .form-card > .manage-section-heading {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.analytics-period-switch a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 68px;
+  padding: 5px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.analytics-period-switch a:hover,
+.analytics-period-switch a.is-active {
+  border-color: color-mix(in srgb, var(--brand-primary) 34%, #ffffff 66%);
+  background: #eef7f3;
+  color: var(--brand-primary);
+}
+
+.analytics-period-switch a.is-active {
+  min-width: 78px;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(15, 48, 39, 0.12);
+}
+
 .analytics-filters .btn {
   min-width: 96px;
   text-align: center;
@@ -2177,6 +2240,40 @@ td {
   gap: 16px;
 }
 
+.analytics-primary-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.analytics-primary-metrics article {
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 13px 14px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 62%, #ffffff 38%);
+}
+
+.analytics-primary-metrics span,
+.analytics-primary-metrics small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.analytics-primary-metrics strong {
+  display: block;
+  margin: 5px 0;
+  color: var(--text-main);
+  font-size: 28px;
+  line-height: 1.05;
+}
+
+.analytics-secondary-panels {
+  margin-top: 4px;
+}
+
 .analytics-panel {
   border: 1px solid var(--card-border);
   border-radius: 12px;
@@ -2210,6 +2307,64 @@ td {
   border-radius: 10px;
   padding: 10px;
   background: #fff;
+}
+
+.analytics-table-card {
+  overflow-x: auto;
+}
+
+.analytics-table-card table {
+  min-width: 0;
+  margin: 14px 0 0;
+}
+
+.analytics-collapsible summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--text-main);
+  cursor: pointer;
+  list-style: none;
+}
+
+.analytics-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.analytics-collapsible summary::after {
+  content: "收起";
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  color: var(--brand-primary);
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.analytics-collapsible:not([open]) summary::after {
+  content: "展开";
+}
+
+.analytics-collapsible summary span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.analytics-collapsible summary strong {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.analytics-collapsible summary small {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .compact-item {
@@ -2512,6 +2667,28 @@ td {
 
   .analytics-panels {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-header {
+    flex-direction: column;
+  }
+
+  .manage-header-actions {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .analytics-period-switch {
+    flex-wrap: wrap;
+    border-radius: 14px;
+  }
+
+  .analytics-container .form-card > .manage-section-heading {
+    align-items: stretch;
+  }
+
+  .analytics-primary-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .analytics-strip {
