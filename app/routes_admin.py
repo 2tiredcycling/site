@@ -3221,6 +3221,8 @@ def create_merch_preorder():
     db.session.commit()
     write_audit_log(g.current_user.id, "merch_preorder.create", "merch_preorder_batch", str(batch.id), batch.title)
     flash(f"预报名批次创建成功，已上传图片 {uploaded_count} 张", "success")
+    if (request.form.get("submit_action") or "").strip() == "save_view":
+        return redirect(url_for("web.kit_preorder_detail", batch_id=batch.id))
     return redirect(url_for("admin.merch_preorders_page"))
 
 
@@ -3244,6 +3246,8 @@ def update_merch_preorder(batch_id: int):
     db.session.commit()
     write_audit_log(g.current_user.id, "merch_preorder.update", "merch_preorder_batch", str(batch.id), batch.title)
     flash(f"预报名批次已更新，新增图片 {uploaded_count} 张", "success")
+    if (request.form.get("submit_action") or "").strip() == "save_view":
+        return redirect(url_for("web.kit_preorder_detail", batch_id=batch.id))
     return redirect(url_for("admin.merch_preorder_edit_page", batch_id=batch.id))
 
 

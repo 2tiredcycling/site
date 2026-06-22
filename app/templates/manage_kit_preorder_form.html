@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ '编辑预报名批次' if batch else '新增预报名批次' }} {{ app_version }}</title>
+  <title>{{ '编辑预定批次' if batch else '新增预定批次' }} {{ app_version }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,11 +11,16 @@
   {% from "_status_badge.html" import status_badge %}
   <main class="container">
     <header class="header">
-      <h1>{{ '编辑预报名批次' if batch else '新增预报名批次' }}</h1>
-      <div class="row-actions">
-        <a class="btn" href="{{ url_for('admin.merch_preorders_page') }}">返回列表</a>
+      <div>
+        <h1>{{ '编辑预定批次：' ~ batch.title if batch else '新增预定批次' }}</h1>
         {% if batch %}
-          <a class="btn btn-muted" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">查看前台</a>
+          <p>批次 ID: {{ batch.id }}</p>
+        {% endif %}
+      </div>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.merch_preorders_page') }}">返回预定列表</a>
+        {% if batch %}
+          <a class="btn" href="{{ url_for('web.kit_preorder_detail', batch_id=batch.id) }}">查看前台</a>
           <a class="btn btn-muted" href="{{ url_for('admin.merch_preorder_registrations_page', batch_id=batch.id) }}">预报名信息</a>
         {% endif %}
       </div>
@@ -30,97 +35,120 @@
       {% endif %}
     {% endwith %}
 
-    <form class="card form-card manage-kit-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_merch_preorder', batch_id=batch.id) if batch else url_for('admin.create_merch_preorder') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <section class="form-card-subsection">
-        <h2>基础信息</h2>
-        <section class="filter-grid">
-          <label>标题
-            <input name="title" type="text" required value="{{ batch.title if batch else '' }}">
-          </label>
-          <label class="manage-kit-visible-toggle"><input type="checkbox" name="is_visible" value="1" {% if not batch or batch.is_visible %}checked{% endif %}> 前台展示该批次</label>
-        </section>
-      </section>
+    <section class="card form-card">
+      <form class="single-form manage-kit-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_merch_preorder', batch_id=batch.id) if batch else url_for('admin.create_merch_preorder') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="manage-kit-form-sections">
+          <section class="form-card-subsection manage-kit-form-section">
+            <h2>基础信息</h2>
+            <div class="manage-kit-basic-grid">
+              <label class="manage-kit-title-field">标题
+                <input name="title" type="text" required value="{{ batch.title if batch else '' }}">
+              </label>
+              <div class="manage-kit-side-fields">
+                <label class="manage-kit-visible-toggle">
+                  <input type="checkbox" name="is_visible" value="1" {% if not batch or batch.is_visible %}checked{% endif %}>
+                  <span>前台展示该批次</span>
+                </label>
+              </div>
+              <div class="manage-kit-description-row">
+                <label>款式说明
+                  <textarea name="description" rows="4">{{ batch.description if batch else '' }}</textarea>
+                </label>
+                <label>尺码提醒
+                  <textarea name="size_note" rows="4">{{ batch.size_note if batch else '尺码偏小\n不追求极致贴身的非公路车玩家，建议买大一码或大两码' }}</textarea>
+                </label>
+              </div>
+            </div>
+          </section>
 
-      <section class="form-card-subsection">
-        <h2>时间与状态</h2>
-        <section class="filter-grid">
-          <label>开始日期
-            <input name="start_date" type="date" value="{{ to_local_time(batch.start_at).date().isoformat() if batch and batch.start_at else default_start_date.isoformat() }}">
-          </label>
-          <label>最终截止日期
-            <input name="deadline_date" type="date" required value="{{ to_local_time(batch.deadline_at).date().isoformat() if batch and batch.deadline_at else default_deadline_date.isoformat() }}">
-          </label>
-          <div class="manage-kit-status-preview">
-            <span>自动状态</span>
-            <strong>{% if batch %}{{ status_badge(batch.status, status_labels.get(batch.status, batch.status)) }}{% else %}创建后自动判断{% endif %}</strong>
-            <small>开始日按 00:00 计算，截止日按 23:59 计算。</small>
-          </div>
-        </section>
-      </section>
+          <section class="form-card-subsection manage-kit-form-section">
+            <h2>预定时间</h2>
+            <div class="manage-kit-date-grid">
+              <label>开始日期
+                <input name="start_date" type="date" value="{{ to_local_time(batch.start_at).date().isoformat() if batch and batch.start_at else default_start_date.isoformat() }}">
+              </label>
+              <label>截止日期
+                <input name="deadline_date" type="date" required value="{{ to_local_time(batch.deadline_at).date().isoformat() if batch and batch.deadline_at else default_deadline_date.isoformat() }}">
+              </label>
+              <div class="manage-kit-status-preview">
+                <span>自动状态</span>
+                <strong>{% if batch %}{{ status_badge(batch.status, status_labels.get(batch.status, batch.status)) }}{% else %}创建后自动判断{% endif %}</strong>
+              </div>
+              <p class="hint manage-kit-date-hint">开始日按 00:00 计算，截止日按 23:59 计算。</p>
+            </div>
+          </section>
 
-      <section class="form-card-subsection">
-        <h2>价格</h2>
-        <section class="filter-grid">
-          <label>价格下限
-            <input name="price_min" type="number" min="0" step="1" value="{{ batch.price_min if batch and batch.price_min is not none else '' }}">
-          </label>
-          <label>价格上限
-            <input name="price_max" type="number" min="0" step="1" value="{{ batch.price_max if batch and batch.price_max is not none else '' }}">
-          </label>
-        </section>
-        <label>
-          价格说明
-          <input name="price_note" type="text" value="{{ batch.price_note if batch else '最终价格将根据实际预报名人数确定，但不会超过上限。' }}">
-        </label>
-      </section>
+          <section class="form-card-subsection manage-kit-form-section">
+            <h2>价格信息</h2>
+            <div class="manage-kit-price-grid">
+              <label>价格下限
+                <input name="price_min" type="number" min="0" step="1" value="{{ batch.price_min if batch and batch.price_min is not none else '' }}">
+              </label>
+              <label>价格上限
+                <input name="price_max" type="number" min="0" step="1" value="{{ batch.price_max if batch and batch.price_max is not none else '' }}">
+              </label>
+              <label class="manage-kit-wide-field">价格说明
+                <input name="price_note" type="text" value="{{ batch.price_note if batch else '最终价格将根据实际预报名人数确定，但不会超过上限。' }}">
+              </label>
+            </div>
+          </section>
 
-      <section class="form-card-subsection">
-        <h2>文字说明</h2>
-        <label>
-          尺码提醒
-          <textarea name="size_note" rows="3">{{ batch.size_note if batch else '尺码偏小\n不追求极致贴身的非公路车玩家，建议买大一码或大两码' }}</textarea>
-        </label>
-        <label>
-          款式说明
-          <textarea name="description" rows="5">{{ batch.description if batch else '' }}</textarea>
-        </label>
-      </section>
+          <section class="form-card-subsection manage-kit-form-section">
+            <h2>图片资料</h2>
+            <div class="manage-kit-upload-grid">
+              <label>新增展示图片
+                <input name="gallery_images" type="file" accept="image/*" multiple>
+              </label>
+              <label>新增尺码表图片
+                <input name="size_chart_images" type="file" accept="image/*" multiple>
+              </label>
+            </div>
+            {% if batch %}
+              <details class="manage-kit-media-collapse">
+                <summary>
+                  <span>已上传图片</span>
+                  <small>展示 {{ gallery_images|length }} 张 · 尺码表 {{ size_images|length }} 张</small>
+                </summary>
+                <div class="manage-kit-media-collapse-body">
+                  {% if gallery_images or size_images %}
+                    <div class="manage-kit-thumb-grid">
+                      {% for image in gallery_images %}
+                        <article>
+                          <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
+                          <div class="manage-kit-thumb-meta">
+                            <span>展示图片</span>
+                            <button class="btn btn-danger" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
+                          </div>
+                        </article>
+                      {% endfor %}
+                      {% for image in size_images %}
+                        <article>
+                          <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
+                          <div class="manage-kit-thumb-meta">
+                            <span>尺码表图片</span>
+                            <button class="btn btn-danger" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
+                          </div>
+                        </article>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <p class="hint">当前批次还没有上传图片。</p>
+                  {% endif %}
+                </div>
+              </details>
+            {% endif %}
+          </section>
+        </div>
 
-      <section class="form-card-subsection">
-        <h2>展示图片</h2>
-        <input name="gallery_images" type="file" accept="image/*" multiple>
-        {% if gallery_images %}
-          <div class="manage-media-grid">
-            {% for image in gallery_images %}
-              <article>
-                <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
-                <button class="btn btn-muted" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
-              </article>
-            {% endfor %}
-          </div>
-        {% endif %}
-      </section>
+        <div class="manage-route-form-actions">
+          <a class="btn btn-muted" href="{{ url_for('admin.merch_preorders_page') }}">取消</a>
+          <button class="btn" type="submit" name="submit_action" value="save">{{ '保存批次' if batch else '新增批次' }}</button>
+          <button class="btn btn-muted" type="submit" name="submit_action" value="save_view">{{ '保存并查看前台' if batch else '新增并查看前台' }}</button>
+        </div>
+      </form>
+    </section>
 
-      <section class="form-card-subsection">
-        <h2>尺码表图片</h2>
-        <input name="size_chart_images" type="file" accept="image/*" multiple>
-        {% if size_images %}
-          <div class="manage-media-grid">
-            {% for image in size_images %}
-              <article>
-                <img src="{{ url_for('web.kit_preorder_image', image_id=image.id) }}" alt="{{ image.original_filename }}">
-                <button class="btn btn-muted" type="submit" form="deleteMerchImage{{ image.id }}">删除</button>
-              </article>
-            {% endfor %}
-          </div>
-        {% endif %}
-      </section>
-
-      <div class="row-actions">
-        <button class="btn btn-solid" type="submit">保存批次</button>
-      </div>
-    </form>
     {% if batch %}
       {% for image in gallery_images + size_images %}
         <form id="deleteMerchImage{{ image.id }}" method="post" action="{{ url_for('admin.delete_merch_preorder_image', batch_id=batch.id, image_id=image.id) }}">

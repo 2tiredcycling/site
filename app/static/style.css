@@ -2539,7 +2539,17 @@ td {
   .manage-filter-advanced-grid,
   .manage-route-form-basic-grid,
   .manage-route-form-risk-grid,
-  .manage-route-gpx-stats-grid {
+  .manage-route-gpx-stats-grid,
+  .manage-kit-basic-grid,
+  .manage-kit-description-row,
+  .manage-kit-date-grid,
+  .manage-kit-price-grid,
+  .manage-kit-text-grid,
+  .manage-kit-upload-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manage-kit-thumb-grid {
     grid-template-columns: 1fr;
   }
 
@@ -3820,23 +3830,83 @@ td {
 
 .manage-kit-form {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .manage-kit-form .form-card-subsection {
   margin: 0;
 }
 
+.manage-kit-form-sections {
+  display: grid;
+  gap: 18px;
+}
+
+.manage-kit-form-section {
+  padding: 0 0 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--brand-border) 72%, #ffffff 28%);
+}
+
+.manage-kit-form-section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.manage-kit-form-section h2 {
+  margin: 0 0 12px;
+  color: var(--brand-primary);
+  font-size: 21px;
+}
+
+.manage-kit-basic-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 16px;
+  align-items: end;
+}
+
+.manage-kit-title-field {
+  min-width: 0;
+}
+
+.manage-kit-basic-grid > .manage-kit-wide-field {
+  grid-column: 1 / -1;
+}
+
+.manage-kit-description-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.manage-kit-description-row textarea {
+  min-height: 132px;
+  max-height: 132px;
+  resize: vertical;
+}
+
+.manage-kit-side-fields {
+  display: grid;
+  gap: 10px;
+}
+
 .manage-kit-visible-toggle {
-  align-self: end;
-  min-height: 44px;
+  min-height: 42px;
+  padding: 9px 12px;
   display: flex;
   align-items: center;
   gap: 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--brand-surface-soft);
+  color: var(--brand-primary-strong);
+  font-weight: 700;
 }
 
 .manage-kit-status-preview {
-  min-height: 44px;
+  min-height: 42px;
   padding: 10px 12px;
   border: 1px solid var(--card-border);
   border-radius: 8px;
@@ -3852,6 +3922,118 @@ td {
 .manage-kit-status-preview strong {
   display: block;
   margin: 2px 0;
+}
+
+.manage-kit-date-grid,
+.manage-kit-price-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.manage-kit-date-grid {
+  grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) minmax(180px, 240px) minmax(0, 1fr);
+}
+
+.manage-kit-date-hint {
+  margin: 0 0 10px;
+}
+
+.manage-kit-wide-field {
+  min-width: 0;
+}
+
+.manage-kit-text-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 14px;
+}
+
+.manage-kit-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.manage-kit-media-collapse {
+  margin-top: 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--brand-surface-soft);
+}
+
+.manage-kit-media-collapse summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: var(--brand-primary-strong);
+  font-weight: 800;
+  list-style: none;
+}
+
+.manage-kit-media-collapse summary::-webkit-details-marker {
+  display: none;
+}
+
+.manage-kit-media-collapse summary small {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.manage-kit-media-collapse-body {
+  display: grid;
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+
+.manage-kit-media-collapse-body h3 {
+  margin: 4px 0 -4px;
+  font-size: 16px;
+}
+
+.manage-kit-thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manage-kit-thumb-grid article {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.manage-kit-thumb-grid img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 7px;
+  background: var(--brand-surface-soft);
+}
+
+.manage-kit-thumb-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.manage-kit-thumb-meta span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.manage-kit-thumb-meta .btn {
+  min-height: 32px;
+  padding: 6px 10px;
 }
 
 .kit-compact-section h2 {
