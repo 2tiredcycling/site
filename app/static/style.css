@@ -459,6 +459,30 @@ body {
   white-space: nowrap;
 }
 
+.manage-activity-route-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 420px;
+}
+
+.manage-activity-route-list span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 70%, #ffffff 30%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 72%, #ffffff 28%);
+  color: var(--brand-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.manage-activity-route-list .text-muted {
+  color: var(--text-muted);
+}
+
 .manage-page .manage-route-list-card {
   overflow: visible;
 }

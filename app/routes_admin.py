@@ -57,6 +57,8 @@ from app.models import (
     MERCH_ORDER_PICKED_UP,
     MERCH_ORDER_READY,
     MERCH_ORDER_STATUSES,
+    REGISTRATION_CONFIRMED,
+    REGISTRATION_PENDING,
     ROLE_CONTENT_ADMIN,
     ROLE_OPS_ADMIN,
     ROLE_SUPER_ADMIN,
@@ -1596,11 +1598,25 @@ def activities_page():
     activities_pagination = Activity.query.order_by(Activity.activity_time.desc()).paginate(
         page=page, per_page=20, error_out=False
     )
+    activity_ids = [item.id for item in activities_pagination.items]
+    registration_counts = {activity_id: 0 for activity_id in activity_ids}
+    if activity_ids:
+        rows = (
+            db.session.query(EventRegistration.activity_id, db.func.count(EventRegistration.id))
+            .filter(
+                EventRegistration.activity_id.in_(activity_ids),
+                EventRegistration.status.in_([REGISTRATION_PENDING, REGISTRATION_CONFIRMED]),
+            )
+            .group_by(EventRegistration.activity_id)
+            .all()
+        )
+        registration_counts.update({int(activity_id): int(count or 0) for activity_id, count in rows})
     return render_template(
         "manage_activities.html",
         activities=activities_pagination.items,
         pagination=activities_pagination,
         can_edit=can_edit(g.current_user),
+        registration_counts=registration_counts,
     )
 
 
@@ -2847,6 +2863,7 @@ def delete_feedback(feedback_id: int):
 @login_required
 def create_activity():
     title = (request.form.get("title") or "").strip()
+    submit_action = (request.form.get("submit_action") or "save").strip()
     option_items = _activity_route_options_from_form()
     needs_registration, registration_deadline, registration_limit, registration_error = _activity_registration_from_form()
     if registration_error:
@@ -2921,6 +2938,8 @@ def create_activity():
         flash(f"活动创建成功，已上传媒体文件 {uploaded_count} 个", "success")
     else:
         flash("活动创建成功", "success")
+    if submit_action == "save_view":
+        return redirect(url_for("web.activity_detail", activity_id=activity.id, source="manage"))
     return redirect(url_for("admin.activities_page"))
 
 
@@ -2933,6 +2952,7 @@ def update_activity(activity_id: int):
         return redirect(url_for("admin.activities_page"))
 
     title = (request.form.get("title") or "").strip()
+    submit_action = (request.form.get("submit_action") or "save").strip()
     if not title:
         flash("参数错误：活动标题不能为空", "error")
         return redirect(url_for("admin.activities_page"))
@@ -3010,7 +3030,60 @@ def update_activity(activity_id: int):
         flash(f"活动更新成功，新增媒体文件 {uploaded_count} 个", "success")
     else:
         flash("活动更新成功", "success")
+    if submit_action == "save_view":
+        return redirect(url_for("web.activity_detail", activity_id=activity.id, source="manage"))
     return redirect(url_for("admin.activities_page"))
+
+
+@bp.post("/activities/<int:activity_id>/copy")
+@login_required
+def copy_activity(activity_id: int):
+    activity = Activity.query.filter_by(id=activity_id).first()
+    if not activity:
+        flash("活动不存在", "error")
+        return redirect(url_for("admin.activities_page"))
+
+    base_title = f"{activity.title} 副本"
+    title = base_title[:128]
+    counter = 2
+    while Activity.query.filter_by(title=title).first():
+        suffix = f" {counter}"
+        title = f"{base_title[:128 - len(suffix)]}{suffix}"
+        counter += 1
+
+    copied = Activity(
+        title=title,
+        activity_time=activity.activity_time,
+        needs_registration=activity.needs_registration,
+        registration_deadline=activity.registration_deadline,
+        registration_limit=activity.registration_limit,
+        insurance_qr_path=None,
+        participant_count=activity.participant_count,
+        weather=activity.weather,
+        summary=activity.summary,
+        created_by=g.current_user.id,
+    )
+    copied.routes = list(activity.routes)
+    db.session.add(copied)
+    db.session.flush()
+
+    for option in sorted(activity.route_options, key=lambda item: item.sort_order):
+        db.session.add(
+            ActivityRouteOption(
+                activity_id=copied.id,
+                route_id=option.route_id,
+                level_key=option.level_key,
+                level_label=option.level_label,
+                activity_time=option.activity_time,
+                participant_count=option.participant_count,
+                sort_order=option.sort_order,
+            )
+        )
+
+    db.session.commit()
+    write_audit_log(g.current_user.id, "activity.copy", "activity", str(copied.id), f"from={activity.id}")
+    flash("活动已复制，请检查时间、报名截止时间和路线信息", "success")
+    return redirect(url_for("admin.activity_edit_page", activity_id=copied.id))
 
 
 @bp.post("/activities/<int:activity_id>/delete")
