@@ -36,7 +36,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <section class="card form-card">
-        <h2>基础信息</h2>
+        <h2>信息设置</h2>
         <div class="manage-account-basic-grid">
           <label>用户名<input type="text" name="username" value="{{ user.username if user else '' }}" required></label>
           <label>管理员类型
@@ -53,6 +53,13 @@
             </label>
           {% endif %}
         </div>
+        {% if user %}
+          <label>重置密码（可留空）<input type="password" name="password" placeholder="留空表示不修改"></label>
+          <p class="hint">如需修改密码，长度至少 6 位。</p>
+        {% else %}
+          <label>密码<input type="password" name="password" required></label>
+          <p class="hint">初始密码长度至少 6 位。</p>
+        {% endif %}
       </section>
 
       <section class="card form-card">
@@ -80,17 +87,6 @@
             </label>
           {% endfor %}
         </div>
-      </section>
-
-      <section class="card form-card">
-        <h2>密码设置</h2>
-        {% if user %}
-          <label>重置密码（可留空）<input type="password" name="password" placeholder="留空表示不修改"></label>
-          <p class="hint">如需修改密码，长度至少 6 位。</p>
-        {% else %}
-          <label>密码<input type="password" name="password" required></label>
-          <p class="hint">初始密码长度至少 6 位。</p>
-        {% endif %}
       </section>
 
       <div class="row-actions">
