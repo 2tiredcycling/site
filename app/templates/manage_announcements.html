@@ -50,6 +50,7 @@
               <td>{{ to_local_time(item.offline_at).strftime('%Y-%m-%d %H:%M') if item.offline_at else '-' }}</td>
               <td>
                 <div class="manage-route-actions">
+                  <a class="btn btn-muted" href="{{ url_for('web.announcement_detail', announcement_id=item.id) }}">查看</a>
                   <a class="btn" href="{{ url_for('admin.announcement_edit_page', announcement_id=item.id) }}">编辑</a>
                   <details class="manage-row-more">
                     <summary class="btn btn-muted">更多</summary>
