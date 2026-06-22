@@ -46,10 +46,13 @@
                 <input name="title" type="text" required value="{{ batch.title if batch else '' }}">
               </label>
               <div class="manage-kit-side-fields">
-                <label class="manage-kit-visible-toggle">
-                  <input type="checkbox" name="is_visible" value="1" {% if not batch or batch.is_visible %}checked{% endif %}>
-                  <span>前台展示该批次</span>
-                </label>
+                <div class="manage-kit-setting-card">
+                  <span>展示状态</span>
+                  <label class="manage-kit-visible-toggle">
+                    <input type="checkbox" name="is_visible" value="1" {% if not batch or batch.is_visible %}checked{% endif %}>
+                    <span>前台展示该批次</span>
+                  </label>
+                </div>
               </div>
               <div class="manage-kit-description-row">
                 <label>款式说明
@@ -72,20 +75,22 @@
                 <input name="deadline_date" type="date" required value="{{ to_local_time(batch.deadline_at).date().isoformat() if batch and batch.deadline_at else default_deadline_date.isoformat() }}">
               </label>
               <div class="manage-kit-status-preview">
-                <span>自动状态</span>
-                <strong>{% if batch %}{{ status_badge(batch.status, status_labels.get(batch.status, batch.status)) }}{% else %}创建后自动判断{% endif %}</strong>
+                <div class="manage-kit-status-line">
+                  <span>当前状态</span>
+                  <strong>{% if batch %}{{ status_badge(batch.status, status_labels.get(batch.status, batch.status)) }}{% else %}创建后自动判断{% endif %}</strong>
+                </div>
+                <small>根据开始日期 00:00 和截止日期 23:59 自动计算。</small>
               </div>
-              <p class="hint manage-kit-date-hint">开始日按 00:00 计算，截止日按 23:59 计算。</p>
             </div>
           </section>
 
           <section class="form-card-subsection manage-kit-form-section">
             <h2>价格信息</h2>
             <div class="manage-kit-price-grid">
-              <label>价格下限
+              <label>价格下限（元）
                 <input name="price_min" type="number" min="0" step="1" value="{{ batch.price_min if batch and batch.price_min is not none else '' }}">
               </label>
-              <label>价格上限
+              <label>价格上限（元）
                 <input name="price_max" type="number" min="0" step="1" value="{{ batch.price_max if batch and batch.price_max is not none else '' }}">
               </label>
               <label class="manage-kit-wide-field">价格说明
