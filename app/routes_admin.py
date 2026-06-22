@@ -175,6 +175,7 @@ AUDIT_ACTION_LABELS = {
     "merch_preorder.registration.status": "更新预报名状态",
     "announcement.create": "创建公告",
     "announcement.update": "更新公告",
+    "announcement.status": "更新公告状态",
     "announcement.delete": "删除公告",
     "site_feedback.status_update": "更新网站反馈",
     "user.create": "创建账号",
@@ -3417,6 +3418,31 @@ def update_announcement(announcement_id: int):
     db.session.commit()
     write_audit_log(g.current_user.id, "announcement.update", "announcement", str(announcement.id), announcement.title)
     flash("公告更新成功", "success")
+    return redirect(url_for("admin.announcements_page"))
+
+
+@bp.post("/announcements/<int:announcement_id>/status")
+@login_required
+def update_announcement_status(announcement_id: int):
+    announcement = Announcement.query.filter_by(id=announcement_id).first()
+    if not announcement:
+        flash("公告不存在", "error")
+        return redirect(url_for("admin.announcements_page"))
+
+    status = (request.form.get("status") or "").strip()
+    if status not in {CONTENT_STATUS_PUBLISHED, CONTENT_STATUS_OFFLINE}:
+        flash("公告状态无效", "error")
+        return redirect(url_for("admin.announcements_page"))
+
+    announcement.status = status
+    announcement.updated_by = g.current_user.id
+    announcement.updated_at = utcnow()
+    if status == CONTENT_STATUS_PUBLISHED and not announcement.published_at:
+        announcement.published_at = utcnow()
+
+    db.session.commit()
+    write_audit_log(g.current_user.id, "announcement.status", "announcement", str(announcement.id), status)
+    flash("公告已上线" if status == CONTENT_STATUS_PUBLISHED else "公告已下线", "success")
     return redirect(url_for("admin.announcements_page"))
 
 

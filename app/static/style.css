@@ -487,6 +487,10 @@ body {
   overflow: visible;
 }
 
+.manage-page .form-card:has(.manage-row-more) {
+  overflow: visible;
+}
+
 .manage-route-actions {
   display: flex;
   gap: 8px;

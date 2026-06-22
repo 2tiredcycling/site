@@ -29,29 +29,56 @@
       {% endif %}
     {% endwith %}
 
-    <section class="card form-card">
+    <section class="card form-card manage-announcement-list-card">
       <h2>公告列表</h2>
       <table>
         <thead>
-          <tr><th>ID</th><th>标题</th><th>状态</th><th>置顶</th><th>排序</th><th>上线时间</th><th>下线时间</th><th>关联</th><th>操作</th></tr>
+          <tr><th>标题</th><th>状态</th><th>置顶</th><th>排序</th><th>上线时间</th><th>下线时间</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for item in announcements %}
             <tr>
-              <td>{{ item.id }}</td>
-              <td>{{ item.title }}</td>
+              <td>
+                <div class="manage-route-name-cell">
+                  <strong>{{ item.title }}</strong>
+                </div>
+              </td>
               <td>{{ status_badge(item.status) }}</td>
               <td>{{ '是' if item.is_pinned else '否' }}</td>
               <td>{{ item.sort_order }}</td>
               <td>{{ to_local_time(item.published_at).strftime('%Y-%m-%d %H:%M') if item.published_at else '-' }}</td>
               <td>{{ to_local_time(item.offline_at).strftime('%Y-%m-%d %H:%M') if item.offline_at else '-' }}</td>
-              <td>活动 {{ item.activities|length }} / 路线 {{ item.routes|length }}</td>
-              <td class="row-actions">
-                <a class="btn" href="{{ url_for('admin.announcement_edit_page', announcement_id=item.id) }}">编辑</a>
+              <td>
+                <div class="manage-route-actions">
+                  <a class="btn" href="{{ url_for('admin.announcement_edit_page', announcement_id=item.id) }}">编辑</a>
+                  <details class="manage-row-more">
+                    <summary class="btn btn-muted">更多</summary>
+                    <div class="manage-row-more-menu">
+                      {% if can_edit %}
+                        <form method="post" action="{{ url_for('admin.update_announcement_status', announcement_id=item.id) }}">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          {% if item.status == 'published' %}
+                            <input type="hidden" name="status" value="offline">
+                            <button class="manage-row-menu-item" type="submit">下线</button>
+                          {% else %}
+                            <input type="hidden" name="status" value="published">
+                            <button class="manage-row-menu-item" type="submit">上线</button>
+                          {% endif %}
+                        </form>
+                        <form method="post" action="{{ url_for('admin.delete_announcement', announcement_id=item.id) }}" onsubmit="return confirm('确认删除该公告吗？');">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <button class="manage-row-menu-item is-danger" type="submit">删除</button>
+                        </form>
+                      {% else %}
+                        <button class="manage-row-menu-item is-disabled" type="button" disabled>暂无更多操作</button>
+                      {% endif %}
+                    </div>
+                  </details>
+                </div>
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="9">暂无公告</td></tr>
+            <tr><td colspan="7">暂无公告</td></tr>
           {% endfor %}
         </tbody>
       </table>
