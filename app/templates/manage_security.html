@@ -9,142 +9,192 @@
 </head>
 <body class="manage-page">
   <main class="container analytics-container">
-    <header class="header">
-      <h1>安全监控</h1>
-      <p>聚合展示扫描探测、重点路径命中和限流拦截，帮助快速识别异常来源。</p>
-      <div class="row-actions">
-        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
-        {% if can_view_analytics %}
-          <a class="btn btn-muted" href="{{ url_for('admin.analytics_page') }}">流量统计</a>
-        {% endif %}
+    <header class="header manage-dashboard-header analytics-header">
+      <div>
+        <h1>安全监控</h1>
+        <p>聚合展示扫描探测、重点路径命中和限流拦截，帮助快速识别异常来源。</p>
+      </div>
+      <div class="manage-header-actions">
+        <div class="row-actions">
+          <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+          {% if can_view_analytics %}
+            <a class="btn btn-muted" href="{{ url_for('admin.analytics_page') }}">流量统计</a>
+          {% endif %}
+        </div>
       </div>
     </header>
     {% include "_manage_nav.html" %}
 
     <section class="card form-card">
-      <h2>统计区间</h2>
-      <div class="row-actions analytics-filters">
-        <a class="btn {{ '' if scope == 'recent' and days == 1 else 'btn-muted' }}" href="{{ url_for('admin.security_page', days=1, scope='recent') }}">近1天</a>
-        <a class="btn {{ '' if scope == 'recent' and days == 7 else 'btn-muted' }}" href="{{ url_for('admin.security_page', days=7, scope='recent') }}">近7天</a>
-        <a class="btn {{ '' if scope == 'recent' and days == 30 else 'btn-muted' }}" href="{{ url_for('admin.security_page', days=30, scope='recent') }}">近30天</a>
-        <a class="btn {{ '' if scope == 'post_deploy' else 'btn-muted' }}" href="{{ url_for('admin.security_page', scope='post_deploy') }}">上线后</a>
+      <div class="manage-section-heading">
+        <div>
+          <h2>核心指标</h2>
+          <span>{{ period_label }}</span>
+        </div>
+        <div class="analytics-period-switch" aria-label="统计区间">
+          <a class="{{ 'is-active' if scope == 'recent' and days == 1 else '' }}" href="{{ url_for('admin.security_page', days=1, scope='recent') }}">近1天</a>
+          <a class="{{ 'is-active' if scope == 'recent' and days == 7 else '' }}" href="{{ url_for('admin.security_page', days=7, scope='recent') }}">近7天</a>
+          <a class="{{ 'is-active' if scope == 'recent' and days == 30 else '' }}" href="{{ url_for('admin.security_page', days=30, scope='recent') }}">近30天</a>
+          <a class="{{ 'is-active' if scope == 'post_deploy' else '' }}" href="{{ url_for('admin.security_page', scope='post_deploy') }}">上线后</a>
+        </div>
       </div>
-    </section>
-
-    <section class="card form-card">
-      <h2>核心安全指标（{{ period_label }}）</h2>
-      <div class="metric-row metric-row-6">
-        <div><strong>Probe 请求</strong><div>{{ recent.probe }}</div></div>
-        <div><strong>重点路径命中</strong><div>{{ recent.watchlist }}</div></div>
-        <div><strong>限流 429</strong><div>{{ recent.throttled }}</div></div>
-        <div><strong>可疑 IP(估算)</strong><div>{{ recent.probe_ip }}</div></div>
-        <div><strong>4xx</strong><div>{{ recent.errors_4xx }}</div></div>
-        <div><strong>5xx</strong><div>{{ recent.errors_5xx }}</div></div>
+      <div class="analytics-primary-metrics">
+        <article>
+          <span>Probe 请求</span>
+          <strong>{{ recent.probe }}</strong>
+          <small>{{ period_label }}</small>
+        </article>
+        <article>
+          <span>重点命中</span>
+          <strong>{{ recent.watchlist }}</strong>
+          <small>重点路径</small>
+        </article>
+        <article>
+          <span>限流 429</span>
+          <strong>{{ recent.throttled }}</strong>
+          <small>拦截请求</small>
+        </article>
+        <article>
+          <span>可疑 IP</span>
+          <strong>{{ recent.probe_ip }}</strong>
+          <small>按 IP 去重估算</small>
+        </article>
       </div>
+
+      <article class="analytics-panel analytics-security-detail-panel">
+        <h3>当前区间明细</h3>
+        <div class="metric-row metric-row-6">
+          <div><strong>Probe</strong><div>{{ recent.probe }}</div></div>
+          <div><strong>重点命中</strong><div>{{ recent.watchlist }}</div></div>
+          <div><strong>429</strong><div>{{ recent.throttled }}</div></div>
+          <div><strong>可疑 IP</strong><div>{{ recent.probe_ip }}</div></div>
+          <div><strong>4xx</strong><div>{{ recent.errors_4xx }}</div></div>
+          <div><strong>5xx</strong><div>{{ recent.errors_5xx }}</div></div>
+        </div>
+      </article>
     </section>
 
-    <section class="quick-grid">
-      <section class="card form-card">
-        <h2>重点路径/探测路径 Top10</h2>
-        <table>
-          <thead>
-            <tr><th>路径</th><th>命中数</th></tr>
-          </thead>
-          <tbody>
-            {% for item in top_paths %}
-              <tr><td>{{ item.path }}</td><td>{{ item.hits }}</td></tr>
-            {% else %}
-              <tr><td colspan="2">暂无数据</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
+    <details class="card form-card analytics-table-card analytics-collapsible">
+      <summary>
+        <span>
+          <strong>重点路径 / 探测路径 Top10</strong>
+          <small>{{ period_label }}</small>
+        </span>
+      </summary>
+      <table>
+        <thead>
+          <tr><th>路径</th><th>命中数</th></tr>
+        </thead>
+        <tbody>
+          {% for item in top_paths %}
+            <tr><td>{{ item.path }}</td><td>{{ item.hits }}</td></tr>
+          {% else %}
+            <tr><td colspan="2">暂无数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
 
-      <section class="card form-card">
-        <h2>来源 IP Top10</h2>
-        <table>
-          <thead>
-            <tr><th>IP</th><th>命中数</th></tr>
-          </thead>
-          <tbody>
-            {% for item in top_ips %}
-              <tr><td>{{ item.ip }}</td><td>{{ item.hits }}</td></tr>
-            {% else %}
-              <tr><td colspan="2">暂无数据</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
-    </section>
+    <details class="card form-card analytics-table-card analytics-collapsible">
+      <summary>
+        <span>
+          <strong>来源 IP Top10</strong>
+          <small>{{ period_label }}</small>
+        </span>
+      </summary>
+      <table>
+        <thead>
+          <tr><th>IP</th><th>命中数</th></tr>
+        </thead>
+        <tbody>
+          {% for item in top_ips %}
+            <tr><td>{{ item.ip }}</td><td>{{ item.hits }}</td></tr>
+          {% else %}
+            <tr><td colspan="2">暂无数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
 
-    <section class="quick-grid">
-      <section class="card form-card">
-        <h2>可疑 User-Agent Top10</h2>
-        <table>
-          <thead>
-            <tr><th>User-Agent</th><th>命中数</th></tr>
-          </thead>
-          <tbody>
-            {% for item in top_uas %}
-              <tr><td>{{ item.ua }}</td><td>{{ item.hits }}</td></tr>
-            {% else %}
-              <tr><td colspan="2">暂无数据</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
+    <details class="card form-card analytics-table-card analytics-collapsible">
+      <summary>
+        <span>
+          <strong>可疑 User-Agent Top10</strong>
+          <small>{{ period_label }}</small>
+        </span>
+      </summary>
+      <table>
+        <thead>
+          <tr><th>User-Agent</th><th>命中数</th></tr>
+        </thead>
+        <tbody>
+          {% for item in top_uas %}
+            <tr><td>{{ item.ua }}</td><td>{{ item.hits }}</td></tr>
+          {% else %}
+            <tr><td colspan="2">暂无数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
 
-      <section class="card form-card">
-        <h2>安全趋势（{{ period_label }}）</h2>
-        <table>
-          <thead>
-            <tr><th>日期</th><th>Probe</th><th>重点命中</th><th>429</th></tr>
-          </thead>
-          <tbody>
-            {% for item in daily_stats %}
-              <tr>
-                <td>{{ item.date }}</td>
-                <td>{{ item.probe }}</td>
-                <td>{{ item.watchlist }}</td>
-                <td>{{ item.throttled }}</td>
-              </tr>
-            {% else %}
-              <tr><td colspan="4">暂无数据</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
-    </section>
+    <details class="card form-card analytics-table-card analytics-collapsible">
+      <summary>
+        <span>
+          <strong>安全趋势</strong>
+          <small>{{ period_label }}</small>
+        </span>
+      </summary>
+      <table>
+        <thead>
+          <tr><th>日期</th><th>Probe</th><th>重点命中</th><th>429</th></tr>
+        </thead>
+        <tbody>
+          {% for item in daily_stats %}
+            <tr>
+              <td>{{ item.date }}</td>
+              <td>{{ item.probe }}</td>
+              <td>{{ item.watchlist }}</td>
+              <td>{{ item.throttled }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4">暂无数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
 
-    <section class="card form-card">
-      <h2>最近安全事件（分页）</h2>
-      <form method="get" action="{{ url_for('admin.security_page') }}" class="single-form">
+    <details class="card form-card analytics-table-card analytics-collapsible" open>
+      <summary>
+        <span>
+          <strong>最近安全事件</strong>
+          <small>第 {{ events_pagination.page }} / {{ events_pagination.pages or 1 }} 页，共 {{ events_pagination.total }} 条</small>
+        </span>
+      </summary>
+      <form method="get" action="{{ url_for('admin.security_page') }}" class="security-filter-form security-event-filter-form">
         <input type="hidden" name="days" value="{{ days }}">
         <input type="hidden" name="scope" value="{{ scope }}">
-        <div class="filter-grid">
-          <label>
-            事件类型
-            <select name="event_type">
-              <option value="all" {% if event_filters.event_type == 'all' %}selected{% endif %}>全部</option>
-              <option value="watchlist" {% if event_filters.event_type == 'watchlist' %}selected{% endif %}>watchlist</option>
-              <option value="probe" {% if event_filters.event_type == 'probe' %}selected{% endif %}>probe</option>
-              <option value="throttled" {% if event_filters.event_type == 'throttled' %}selected{% endif %}>throttled</option>
-            </select>
-          </label>
-          <label>
-            状态码
-            <select name="event_status">
-              <option value="all" {% if event_filters.event_status == 'all' %}selected{% endif %}>全部</option>
-              <option value="4xx" {% if event_filters.event_status == '4xx' %}selected{% endif %}>4xx</option>
-              <option value="5xx" {% if event_filters.event_status == '5xx' %}selected{% endif %}>5xx</option>
-              <option value="429" {% if event_filters.event_status == '429' %}selected{% endif %}>429</option>
-            </select>
-          </label>
-          <label>
-            关键词
-            <input type="text" name="event_q" value="{{ event_filters.event_q }}" placeholder="路径/IP/UA 关键词">
-          </label>
-        </div>
+        <label>
+          事件类型
+          <select name="event_type">
+            <option value="all" {% if event_filters.event_type == 'all' %}selected{% endif %}>全部</option>
+            <option value="watchlist" {% if event_filters.event_type == 'watchlist' %}selected{% endif %}>watchlist</option>
+            <option value="probe" {% if event_filters.event_type == 'probe' %}selected{% endif %}>probe</option>
+            <option value="throttled" {% if event_filters.event_type == 'throttled' %}selected{% endif %}>throttled</option>
+          </select>
+        </label>
+        <label>
+          状态码
+          <select name="event_status">
+            <option value="all" {% if event_filters.event_status == 'all' %}selected{% endif %}>全部</option>
+            <option value="4xx" {% if event_filters.event_status == '4xx' %}selected{% endif %}>4xx</option>
+            <option value="5xx" {% if event_filters.event_status == '5xx' %}selected{% endif %}>5xx</option>
+            <option value="429" {% if event_filters.event_status == '429' %}selected{% endif %}>429</option>
+          </select>
+        </label>
+        <label>
+          关键词
+          <input type="text" name="event_q" value="{{ event_filters.event_q }}" placeholder="路径/IP/UA 关键词">
+        </label>
         <div class="row-actions">
           <button class="btn" type="submit">筛选</button>
           <a class="btn btn-muted" href="{{ url_for('admin.security_page', days=days, scope=scope) }}">重置</a>
@@ -180,7 +230,7 @@
           {% endif %}
         </div>
       </section>
-    </section>
+    </details>
   </main>
 </body>
 </html>

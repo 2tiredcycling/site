@@ -2274,6 +2274,10 @@ td {
   margin-top: 4px;
 }
 
+.analytics-security-detail-panel {
+  margin-top: 4px;
+}
+
 .analytics-panel {
   border: 1px solid var(--card-border);
   border-radius: 12px;
@@ -2365,6 +2369,36 @@ td {
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 650;
+}
+
+.security-filter-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.security-filter-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.security-filter-form label:nth-of-type(3),
+.security-filter-form .row-actions {
+  grid-column: 1 / -1;
+}
+
+.security-filter-form .row-actions {
+  margin-top: 2px;
+}
+
+.security-event-filter-form {
+  margin-top: 14px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-surface-soft) 70%, #ffffff 30%);
 }
 
 .compact-item {
@@ -2685,6 +2719,15 @@ td {
 
   .analytics-container .form-card > .manage-section-heading {
     align-items: stretch;
+  }
+
+  .security-filter-form {
+    grid-template-columns: 1fr;
+  }
+
+  .security-filter-form label:nth-of-type(3),
+  .security-filter-form .row-actions {
+    grid-column: auto;
   }
 
   .analytics-primary-metrics {
