@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.6.2]
+
+### Changed
+
+- Refined the management kit preorder list by hiding noisy IDs and moving low-frequency visibility/delete actions into a more menu.
+- Unified the kit preorder edit page with the newer management edit layout, including clearer sections, compact image handling, and save-and-view actions.
+- Improved the kit preorder registration management page by removing noisy IDs, tightening filters and status controls, and making status changes auto-submit.
+
 ## [v4.6.1]
 
 ### Changed
