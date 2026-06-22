@@ -1967,6 +1967,7 @@ def announcement_new_page():
         announcement=None,
         routes=routes,
         activities=activities,
+        default_published_at=_next_local_hour(),
         can_edit=can_edit(g.current_user),
     )
 
@@ -1983,6 +1984,7 @@ def announcement_edit_page(announcement_id: int):
         announcement=announcement,
         routes=Route.query.filter_by(is_deleted=False).order_by(Route.updated_at.desc()).all(),
         activities=Activity.query.order_by(Activity.activity_time.desc()).all(),
+        default_published_at=_next_local_hour(),
         can_edit=can_edit(g.current_user),
     )
 
@@ -2299,6 +2301,15 @@ def _next_month_same_or_next_existing(today_value: date) -> date:
 def _default_merch_preorder_dates() -> tuple[date, date]:
     today_value = _to_local_time(utcnow()).date()
     return today_value, _next_month_same_or_next_existing(today_value)
+
+
+def _next_local_hour(value: datetime | None = None) -> datetime:
+    local_value = _to_local_time(value or utcnow())
+    if local_value.minute or local_value.second or local_value.microsecond:
+        local_value = local_value.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    else:
+        local_value = local_value.replace(second=0, microsecond=0)
+    return local_value
 
 
 def _parse_merch_date(value: str | None, *, end_of_day: bool = False) -> datetime | None:

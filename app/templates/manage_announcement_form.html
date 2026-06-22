@@ -66,11 +66,12 @@
             <h2>发布时间</h2>
             <div class="manage-announcement-time-grid">
               <label>自动上线时间
-                <input type="datetime-local" name="published_at" value="{{ to_local_time(announcement.published_at).strftime('%Y-%m-%dT%H:%M') if announcement and announcement.published_at else '' }}" {% if not can_edit %}disabled{% endif %}>
+                <input type="datetime-local" name="published_at" value="{{ to_local_time(announcement.published_at).strftime('%Y-%m-%dT%H:%M') if announcement and announcement.published_at else default_published_at.strftime('%Y-%m-%dT%H:%M') }}" {% if not can_edit %}disabled{% endif %}>
               </label>
               <label>自动下线时间
                 <input type="datetime-local" name="offline_at" value="{{ to_local_time(announcement.offline_at).strftime('%Y-%m-%dT%H:%M') if announcement and announcement.offline_at else '' }}" {% if not can_edit %}disabled{% endif %}>
               </label>
+              <p class="hint manage-announcement-offline-hint">自动下线时间留空时，公告将长期有效。</p>
             </div>
           </section>
 
