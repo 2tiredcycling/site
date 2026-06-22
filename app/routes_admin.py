@@ -211,6 +211,7 @@ AUDIT_ACTION_LABELS = {
     "site_feedback.status_update": "更新网站反馈",
     "user.create": "创建账号",
     "user.update": "更新账号",
+    "user.activate": "启用账号",
     "user.deactivate": "停用账号",
 }
 
@@ -2160,6 +2161,16 @@ def users_page():
 def user_new_page():
     default_role = ROLE_VIEWER
     default_permissions = _default_page_permissions_for_role(default_role)
+    custom_page_permissions = False
+    copy_from_id = request.args.get("copy_from", type=int)
+    if copy_from_id:
+        source_user = User.query.filter_by(id=copy_from_id).first()
+        if source_user:
+            ensure_user_page_permissions(source_user)
+            default_role = source_user.role
+            default_permissions = _user_page_permissions(source_user)
+            custom_page_permissions = _uses_custom_page_permissions(source_user.role, default_permissions)
+            flash(f"已复制 {source_user.username} 的账号类型和页面权限，请填写新账号用户名与密码。", "success")
     return render_template(
         "manage_user_form.html",
         user=None,
@@ -2172,7 +2183,7 @@ def user_new_page():
         page_keys=PAGE_KEYS,
         page_permissions=default_permissions,
         role_permission_presets={role: _default_page_permissions_for_role(role) for role in ROLES},
-        custom_page_permissions=False,
+        custom_page_permissions=custom_page_permissions,
     )
 
 
@@ -3735,6 +3746,25 @@ def delete_user(user_id: int):
     db.session.commit()
     write_audit_log(g.current_user.id, "user.deactivate", "user", str(user.id), user.username)
     flash("管理员已停用", "success")
+    return redirect(url_for("admin.users_page"))
+
+
+@bp.post("/users/<int:user_id>/status")
+@login_required
+def update_user_status(user_id: int):
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        flash("管理员不存在", "error")
+        return redirect(url_for("admin.users_page"))
+    is_active = (request.form.get("is_active") or "0").strip() == "1"
+    if user.id == g.current_user.id and not is_active:
+        flash("不能停用当前登录账号", "error")
+        return redirect(url_for("admin.users_page"))
+
+    user.is_active = is_active
+    db.session.commit()
+    action = "user.activate" if is_active else "user.deactivate"
+    write_audit_log(g.current_user.id, action, "user", str(user.id), user.username)
     return redirect(url_for("admin.users_page"))
 
 

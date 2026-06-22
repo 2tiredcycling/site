@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [v4.8.1]
+
+### Changed
+
+- Refined the account maintenance list with clearer column sizing, denser permission badges, taller rows, and a low-frequency more-actions menu.
+- Added account copy and active/inactive toggles to the account list actions while keeping edit as the primary action.
+
 ## [v4.8.0]
 
 ### Added

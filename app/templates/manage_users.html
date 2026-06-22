@@ -36,10 +36,17 @@
       <div class="manage-section-heading">
         <div>
           <h2>账号列表</h2>
-          <span>页面权限等级只认新权限表，旧 perm_* 字段不参与当前权限判断。</span>
         </div>
       </div>
       <table>
+        <colgroup>
+          <col class="manage-account-user-col">
+          <col class="manage-account-role-col">
+          <col class="manage-account-status-col">
+          <col class="manage-account-permissions-col">
+          <col class="manage-account-created-col">
+          <col class="manage-account-actions-col">
+        </colgroup>
         <thead>
           <tr><th>用户名</th><th>管理员类型</th><th>状态</th><th>页面权限</th><th>创建时间</th><th>操作</th></tr>
         </thead>
@@ -66,7 +73,29 @@
               <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '-' }}</td>
               <td>
                 {% if can_admin_accounts %}
-                  <a class="btn" href="{{ url_for('admin.user_edit_page', user_id=user.id) }}">编辑</a>
+                  <div class="manage-route-actions">
+                    <a class="btn" href="{{ url_for('admin.user_edit_page', user_id=user.id) }}">编辑</a>
+                    <details class="manage-row-more">
+                      <summary class="btn btn-muted">更多</summary>
+                      <div class="manage-row-more-menu">
+                        <a class="manage-row-menu-item" href="{{ url_for('admin.user_new_page', copy_from=user.id) }}">复制</a>
+                        <form method="post" action="{{ url_for('admin.update_user_status', user_id=user.id) }}">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          {% if user.is_active %}
+                            <input type="hidden" name="is_active" value="0">
+                            <button class="manage-row-menu-item" type="submit" {% if user.id == g.current_user.id %}disabled{% endif %}>禁用</button>
+                          {% else %}
+                            <input type="hidden" name="is_active" value="1">
+                            <button class="manage-row-menu-item" type="submit">启用</button>
+                          {% endif %}
+                        </form>
+                        <form method="post" action="{{ url_for('admin.delete_user', user_id=user.id) }}" onsubmit="return confirm('确认删除该账号吗？当前实现会停用账号并保留审计记录。');">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <button class="manage-row-menu-item is-danger" type="submit" {% if user.id == g.current_user.id %}disabled{% endif %}>删除</button>
+                        </form>
+                      </div>
+                    </details>
+                  </div>
                 {% else %}
                   <span class="hint">只读</span>
                 {% endif %}
@@ -89,5 +118,6 @@
       </div>
     </section>
   </main>
+  <script src="{{ url_for('static', filename='manage-row-more.js') }}"></script>
 </body>
 </html>
