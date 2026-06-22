@@ -2242,6 +2242,32 @@ def _parse_activity_time(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _parse_activity_date(value: str | None) -> date | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        parsed = _parse_activity_time(raw)
+        return _to_local_time(parsed).date() if parsed else None
+
+
+def _parse_activity_option_time(activity_date: date | None, value: str | None) -> datetime | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if "T" in raw or re.match(r"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}", raw):
+        return _parse_activity_time(raw)
+    if activity_date is None:
+        return None
+    try:
+        parsed_time = time.fromisoformat(raw)
+    except ValueError:
+        return None
+    return datetime.combine(activity_date, parsed_time).replace(tzinfo=SH_TZ).astimezone(timezone.utc)
+
+
 def _parse_int_field(value: str | None) -> int | None:
     raw = (value or "").strip()
     if not raw:
@@ -2374,6 +2400,7 @@ def _announcement_from_form(announcement: Announcement | None = None) -> dict:
 
 def _activity_route_options_from_form() -> list[dict]:
     items: list[dict] = []
+    activity_date = _parse_activity_date(request.form.get("activity_date"))
     for sort_order, (level_key, level_label) in enumerate(ACTIVITY_ROUTE_LEVELS, start=1):
         raw = (request.form.get(f"route_option_{level_key}") or "").strip()
         if not raw:
@@ -2383,7 +2410,7 @@ def _activity_route_options_from_form() -> list[dict]:
         except ValueError:
             continue
         participant_count = parse_distance(request.form.get(f"route_option_{level_key}_participants") or "0")
-        option_time = _parse_activity_time(request.form.get(f"route_option_{level_key}_time"))
+        option_time = _parse_activity_option_time(activity_date, request.form.get(f"route_option_{level_key}_time"))
         items.append(
             {
                 "level_key": level_key,

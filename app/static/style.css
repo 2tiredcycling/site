@@ -1153,6 +1153,7 @@ body {
 
 .activity-level-rows {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1176,7 +1177,7 @@ body {
 
 .activity-level-detail-fields {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 1.6fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -1579,6 +1580,8 @@ label {
 input[type="text"],
 input[type="number"],
 input[type="tel"],
+input[type="date"],
+input[type="time"],
 input[type="datetime-local"],
 input[type="password"],
 input[type="file"],
@@ -2306,6 +2309,10 @@ td {
 
   .activity-route-card .filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activity-level-rows {
+    grid-template-columns: 1fr;
   }
 
   .activity-level-fields {
@@ -4400,6 +4407,45 @@ td {
   line-height: 1.5;
 }
 
+.activity-title-date-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(190px, 240px);
+  gap: 12px 20px;
+  align-items: start;
+}
+
+.activity-title-date-row label,
+.activity-level-detail-fields label {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.activity-title-date-row input[type="date"] {
+  width: 100%;
+  max-width: 240px;
+  margin-top: 0;
+}
+
+.activity-title-date-row input {
+  box-sizing: border-box;
+  height: 44px;
+  margin-top: 0;
+}
+
+.activity-level-detail-fields input[type="time"] {
+  width: 100%;
+  max-width: 150px;
+  margin-top: 0;
+}
+
+.activity-level-detail-fields input,
+.activity-level-detail-fields select {
+  box-sizing: border-box;
+  height: 44px;
+  margin-top: 0;
+}
+
 .activity-registration-settings {
   display: grid;
   gap: 10px;
@@ -4546,6 +4592,15 @@ td {
 }
 
 @media (max-width: 760px) {
+  .activity-title-date-row {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-title-date-row input[type="date"],
+  .activity-level-detail-fields input[type="time"] {
+    max-width: none;
+  }
+
   .activity-registration-fields {
     grid-template-columns: 1fr;
   }

@@ -36,7 +36,11 @@
     <section class="card form-card">
       <form method="post" enctype="multipart/form-data" action="{{ url_for('admin.update_activity', activity_id=activity.id) if activity else url_for('admin.create_activity') }}" class="single-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label>活动名<input type="text" name="title" value="{{ activity.title if activity else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
+        {% set activity_date_value = to_local_time(activity.activity_time).strftime('%Y-%m-%d') if activity and activity.activity_time else '' %}
+        <div class="activity-title-date-row">
+          <label class="activity-title-field">活动名<input type="text" name="title" value="{{ activity.title if activity else '' }}" required {% if not can_edit %}disabled{% endif %}></label>
+          <label class="activity-date-field">活动日期<input type="date" name="activity_date" value="{{ activity_date_value }}" required {% if not can_edit %}disabled{% endif %}></label>
+        </div>
         <section class="activity-registration-settings">
           <label class="checkbox-inline">
             <input type="checkbox" name="needs_registration" value="1" {% if activity and activity.needs_registration %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
@@ -125,7 +129,7 @@
                   <input type="number" name="route_option_beginner_participants" min="0" value="{{ route_option_map.get('beginner').get('participant_count') if route_option_map and route_option_map.get('beginner') else 0 }}" {% if not can_edit %}disabled{% endif %}>
                 </label>
                 <label><span>活动时间</span>
-                  <input type="datetime-local" name="route_option_beginner_time" value="{{ to_local_time(route_option_map.get('beginner').get('activity_time')).strftime('%Y-%m-%dT%H:%M') if route_option_map and route_option_map.get('beginner') and route_option_map.get('beginner').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
+                  <input type="time" name="route_option_beginner_time" value="{{ to_local_time(route_option_map.get('beginner').get('activity_time')).strftime('%H:%M') if route_option_map and route_option_map.get('beginner') and route_option_map.get('beginner').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
                 </label>
                 <label>路线图片/视频
                   <input type="file" name="media_files_beginner" accept="image/*,video/*" multiple {% if not can_edit %}disabled{% endif %}>
@@ -150,7 +154,7 @@
                   <input type="number" name="route_option_intermediate_participants" min="0" value="{{ route_option_map.get('intermediate').get('participant_count') if route_option_map and route_option_map.get('intermediate') else 0 }}" {% if not can_edit %}disabled{% endif %}>
                 </label>
                 <label><span>活动时间</span>
-                  <input type="datetime-local" name="route_option_intermediate_time" value="{{ to_local_time(route_option_map.get('intermediate').get('activity_time')).strftime('%Y-%m-%dT%H:%M') if route_option_map and route_option_map.get('intermediate') and route_option_map.get('intermediate').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
+                  <input type="time" name="route_option_intermediate_time" value="{{ to_local_time(route_option_map.get('intermediate').get('activity_time')).strftime('%H:%M') if route_option_map and route_option_map.get('intermediate') and route_option_map.get('intermediate').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
                 </label>
                 <label>路线图片/视频
                   <input type="file" name="media_files_intermediate" accept="image/*,video/*" multiple {% if not can_edit %}disabled{% endif %}>
@@ -175,7 +179,7 @@
                   <input type="number" name="route_option_advanced_participants" min="0" value="{{ route_option_map.get('advanced').get('participant_count') if route_option_map and route_option_map.get('advanced') else 0 }}" {% if not can_edit %}disabled{% endif %}>
                 </label>
                 <label><span>活动时间</span>
-                  <input type="datetime-local" name="route_option_advanced_time" value="{{ to_local_time(route_option_map.get('advanced').get('activity_time')).strftime('%Y-%m-%dT%H:%M') if route_option_map and route_option_map.get('advanced') and route_option_map.get('advanced').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
+                  <input type="time" name="route_option_advanced_time" value="{{ to_local_time(route_option_map.get('advanced').get('activity_time')).strftime('%H:%M') if route_option_map and route_option_map.get('advanced') and route_option_map.get('advanced').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
                 </label>
                 <label>路线图片/视频
                   <input type="file" name="media_files_advanced" accept="image/*,video/*" multiple {% if not can_edit %}disabled{% endif %}>
@@ -300,6 +304,12 @@
               }
             }
           });
+          if (hasRoute && editable) {
+            const timeInput = details.querySelector("input[type='time']");
+            if (timeInput && !timeInput.value) {
+              timeInput.value = "08:30";
+            }
+          }
         };
 
         routeSelect.addEventListener("change", sync);
@@ -307,6 +317,7 @@
       });
 
       const needsRegistration = document.querySelector("input[name='needs_registration']");
+      const activityDateInput = document.querySelector("input[name='activity_date']");
       const registrationDeadline = document.querySelector("[data-registration-deadline]");
       const registrationLimit = document.querySelector("[data-registration-limit]");
       const registrationFields = document.querySelector("[data-registration-fields]");
@@ -355,6 +366,23 @@
         wechatQrGeneratedImage.hidden = true;
       };
 
+      const defaultRegistrationDeadline = () => {
+        const rawDate = (activityDateInput?.value || "").trim();
+        if (!rawDate) {
+          return "";
+        }
+        const dateParts = rawDate.split("-").map((item) => Number.parseInt(item, 10));
+        if (dateParts.length !== 3 || dateParts.some((item) => Number.isNaN(item))) {
+          return "";
+        }
+        const deadlineDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+        deadlineDate.setDate(deadlineDate.getDate() - 1);
+        const year = deadlineDate.getFullYear();
+        const month = String(deadlineDate.getMonth() + 1).padStart(2, "0");
+        const day = String(deadlineDate.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}T23:59`;
+      };
+
       if (wechatQrInput && !wechatQrInput.disabled) {
         wechatQrInput.addEventListener("change", async () => {
           const file = wechatQrInput.files && wechatQrInput.files[0];
@@ -400,6 +428,9 @@
           }
           if (registrationDisabledHint) {
             registrationDisabledHint.hidden = enabled;
+          }
+          if (enabled && !registrationDeadline.value) {
+            registrationDeadline.value = defaultRegistrationDeadline();
           }
           if (!enabled) {
             registrationDeadline.value = "";

@@ -732,14 +732,15 @@ def test_activity_route_options_saved_and_rendered(app_and_client):
         data={
             "csrf_token": csrf_token,
             "title": "Tier Activity",
+            "activity_date": "2026-03-21",
             "route_option_beginner": str(route_ids[0]),
-            "route_option_beginner_time": "2026-03-21T09:00",
+            "route_option_beginner_time": "09:00",
             "route_option_beginner_participants": "12",
             "route_option_intermediate": str(route_ids[1]),
-            "route_option_intermediate_time": "2026-03-21T09:30",
+            "route_option_intermediate_time": "09:30",
             "route_option_intermediate_participants": "8",
             "route_option_advanced": str(route_ids[2]),
-            "route_option_advanced_time": "2026-03-21T10:00",
+            "route_option_advanced_time": "10:00",
             "route_option_advanced_participants": "5",
         },
         follow_redirects=True,
@@ -753,6 +754,15 @@ def test_activity_route_options_saved_and_rendered(app_and_client):
         assert len(options) == 3
         assert len(activity.routes) >= 3
         assert sum(item.participant_count for item in options) == 25
+        sh_tz = timezone(timedelta(hours=8))
+        option_times = {
+            item.level_key: item.activity_time.replace(tzinfo=timezone.utc).astimezone(sh_tz).strftime("%Y-%m-%d %H:%M")
+            for item in options
+        }
+        assert option_times["beginner"] == "2026-03-21 09:00"
+        assert option_times["intermediate"] == "2026-03-21 09:30"
+        assert option_times["advanced"] == "2026-03-21 10:00"
+        assert activity.activity_time.replace(tzinfo=timezone.utc).astimezone(sh_tz).strftime("%Y-%m-%d %H:%M") == "2026-03-21 09:00"
         activity_id = activity.id
 
     detail = client.get(f"/events/{activity_id}")
