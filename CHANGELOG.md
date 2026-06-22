@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.7.1]
+
+### Changed
+
+- Unified management feedback handling around site feedback records and redirected the legacy feedback entry to the site feedback management page.
+- Refined the site feedback management page with compact filters, Chinese status labels, scrollable feedback content, mailto contact links, and quieter status-update behavior.
+- Updated the management dashboard pending-feedback entry to point at the unified site feedback workflow.
+
 ## [v4.7.0]
 
 ### Added
