@@ -3334,7 +3334,6 @@ def update_merch_preorder_registration_status(batch_id: int, registration_id: in
         str(registration.id),
         status,
     )
-    flash("预报名记录状态已更新", "success")
     return redirect(url_for("admin.merch_preorder_registrations_page", batch_id=batch_id))
 
 

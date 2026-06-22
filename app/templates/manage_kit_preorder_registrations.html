@@ -30,7 +30,7 @@
     {% endwith %}
 
     <section class="card form-card">
-      <form class="filter-grid" method="get">
+      <form class="filter-grid manage-kit-registration-filter" method="get">
         <label>状态筛选
           <select name="status">
             <option value="">全部</option>
@@ -43,12 +43,11 @@
       </form>
       <table>
         <thead>
-          <tr><th>ID</th><th>姓名</th><th>学号</th><th>手机号</th><th>性别</th><th>尺码</th><th>件数</th><th>状态</th><th>备注</th><th>提交时间</th><th>操作</th></tr>
+          <tr><th>姓名</th><th>学号</th><th>手机号</th><th>性别</th><th>尺码</th><th>件数</th><th>状态</th><th>备注</th><th>提交时间</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for item in registrations %}
             <tr>
-              <td>{{ item.id }}</td>
               <td>{{ item.name }}</td>
               <td>{{ item.student_id }}</td>
               <td>{{ item.phone }}</td>
@@ -59,19 +58,19 @@
               <td>{{ item.notes }}</td>
               <td>{{ to_local_time(item.created_at).strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</td>
               <td>
-                <form method="post" action="{{ url_for('admin.update_merch_preorder_registration_status', batch_id=batch.id, registration_id=item.id) }}">
+                <form class="manage-kit-registration-status-form" method="post" action="{{ url_for('admin.update_merch_preorder_registration_status', batch_id=batch.id, registration_id=item.id) }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <select name="status">
+                  <select name="status" data-autosubmit-status>
                     {% for status in order_statuses %}
                       <option value="{{ status }}" {% if item.status == status %}selected{% endif %}>{{ status_labels.get(status, status) }}</option>
                     {% endfor %}
                   </select>
-                  <button class="btn btn-muted" type="submit">更新</button>
+                  <button class="btn btn-muted manage-kit-registration-status-submit" type="submit">更新</button>
                 </form>
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="11">暂无预报名记录</td></tr>
+            <tr><td colspan="10">暂无预报名记录</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -86,5 +85,20 @@
       </div>
     </section>
   </main>
+  <script>
+    (() => {
+      document.querySelectorAll("[data-autosubmit-status]").forEach((select) => {
+        select.dataset.originalValue = select.value;
+        select.addEventListener("change", () => {
+          const form = select.closest("form");
+          if (!form || select.value === select.dataset.originalValue) {
+            return;
+          }
+          select.dataset.submitting = "1";
+          form.requestSubmit();
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
