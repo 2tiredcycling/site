@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 import pytest
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import create_app
 from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
@@ -151,6 +151,64 @@ def test_login_failed_writes_audit_log_with_ip(app_and_client):
         )
         assert log is not None
         assert "ip=203.0.113.10" in (log.detail or "")
+
+
+def test_admin_can_change_own_password(app_and_client):
+    app, client = app_and_client
+    resp = login_admin(client)
+    assert resp.status_code == 200
+
+    page = client.get("/manage/account/password")
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "修改密码" in html
+
+    token = _extract_csrf(html)
+    bad_resp = client.post(
+        "/manage/account/password",
+        data={
+            "csrf_token": token,
+            "current_password": "wrong-password",
+            "new_password": "new-admin-password",
+            "confirm_password": "new-admin-password",
+        },
+        follow_redirects=True,
+    )
+    assert "当前密码不正确" in bad_resp.get_data(as_text=True)
+
+    token = _extract_csrf(client.get("/manage/account/password").get_data(as_text=True))
+    good_resp = client.post(
+        "/manage/account/password",
+        data={
+            "csrf_token": token,
+            "current_password": "admin123456789",
+            "new_password": "new-admin-password",
+            "confirm_password": "new-admin-password",
+        },
+        follow_redirects=True,
+    )
+    assert good_resp.status_code == 200
+    assert "密码已更新" in good_resp.get_data(as_text=True)
+
+    with app.app_context():
+        user = User.query.filter_by(username="admin").first()
+        assert user is not None
+        assert check_password_hash(user.password, "new-admin-password")
+        log = AuditLog.query.filter_by(action="user.password_change").order_by(AuditLog.id.desc()).first()
+        assert log is not None
+        assert log.target_id == str(user.id)
+
+    logout_token = get_manage_csrf(client)
+    client.post("/manage/logout", data={"csrf_token": logout_token}, follow_redirects=True)
+    new_login = login(client, "admin", "new-admin-password")
+    assert new_login.status_code == 200
+    assert "管理总览" in new_login.get_data(as_text=True)
+
+    with app.app_context():
+        user = User.query.filter_by(username="admin").first()
+        assert user is not None
+        user.password = generate_password_hash("admin123456789")
+        db.session.commit()
 
 
 def test_access_log_persisted_for_web_request(app_and_client):

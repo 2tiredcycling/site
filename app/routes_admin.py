@@ -182,6 +182,7 @@ MERCH_ACTIVE_ORDER_STATUSES = (
 AUDIT_ACTION_LABELS = {
     "auth.login": "登录后台",
     "auth.logout": "退出后台",
+    "user.password_change": "修改自己的密码",
     "route.create": "创建路线",
     "route.update": "更新路线",
     "route.soft_delete": "移入路线回收站",
@@ -691,6 +692,8 @@ def _required_page_permission_for_request(path: str, method: str) -> tuple[str, 
     normalized = path.rstrip("/")
     is_post = method.upper() == "POST"
 
+    if normalized.startswith("/manage/account/password"):
+        return None
     if normalized.startswith("/manage/analytics"):
         return PAGE_ANALYTICS, PERMISSION_READ
     if normalized.startswith("/manage/security"):
@@ -905,6 +908,45 @@ def logout():
     session.pop("user_id", None)
     write_audit_log(actor_id, "auth.logout", "user", str(actor_id) if actor_id else None, "logout")
     return redirect(url_for("admin.login"))
+
+
+@bp.get("/account/password")
+@login_required
+def account_password_page():
+    return render_template("manage_account_password.html")
+
+
+@bp.post("/account/password")
+@login_required
+def update_account_password():
+    current_password = (request.form.get("current_password") or "").strip()
+    new_password = (request.form.get("new_password") or "").strip()
+    confirm_password = (request.form.get("confirm_password") or "").strip()
+
+    if not current_password or not new_password or not confirm_password:
+        flash("请完整填写当前密码、新密码和确认密码", "error")
+        return redirect(url_for("admin.account_password_page"))
+    if not check_password_hash(g.current_user.password, current_password):
+        flash("当前密码不正确", "error")
+        return redirect(url_for("admin.account_password_page"))
+    if len(new_password) < 6:
+        flash("新密码长度至少 6 位", "error")
+        return redirect(url_for("admin.account_password_page"))
+    if new_password != confirm_password:
+        flash("两次输入的新密码不一致", "error")
+        return redirect(url_for("admin.account_password_page"))
+
+    g.current_user.password = generate_password_hash(new_password)
+    db.session.commit()
+    write_audit_log(
+        g.current_user.id,
+        "user.password_change",
+        "user",
+        str(g.current_user.id),
+        "self-service password update",
+    )
+    flash("密码已更新", "success")
+    return redirect(url_for("admin.account_password_page"))
 
 
 @bp.get("")

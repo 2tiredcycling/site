@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.8.2]
+
+### Added
+
+- Added a self-service password change page for logged-in administrators, with current-password verification and audit logging.
+
 ## [v4.8.1]
 
 ### Changed

@@ -22,6 +22,7 @@
           <span>{{ g.current_user.username }} · {{ g.current_user.role }}</span>
         </div>
         <div class="row-actions">
+          <a class="btn btn-muted" href="{{ url_for('admin.account_password_page') }}">修改密码</a>
           <a class="btn btn-muted" href="{{ url_for('web.index') }}">返回用户页</a>
           <form method="post" action="{{ url_for('admin.logout') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
