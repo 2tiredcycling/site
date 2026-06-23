@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [v4.8.3]
+
+### Fixed
+
+- Separated activity registration counts from manually maintained participant counts so event signup no longer mutates historical participation fields.
+- Updated activity list, homepage, detail, and management form displays to use registration records for signup-enabled activities and manual counts for legacy activities.
+
 ## [v4.8.2]
 
 ### Added

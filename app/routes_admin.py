@@ -228,6 +228,27 @@ def _parse_registration_notes(raw_notes: str) -> dict[str, str]:
     return result
 
 
+def _activity_route_option_registration_counts(activity_id: int) -> dict[int, int]:
+    registrations = (
+        EventRegistration.query.filter(
+            EventRegistration.activity_id == activity_id,
+            EventRegistration.status.in_([REGISTRATION_PENDING, REGISTRATION_CONFIRMED]),
+        )
+        .with_entities(EventRegistration.notes)
+        .all()
+    )
+    counts: dict[int, int] = {}
+    for (notes,) in registrations:
+        note_map = _parse_registration_notes(notes or "")
+        try:
+            option_id = int(note_map.get("route_option_id") or 0)
+        except ValueError:
+            option_id = 0
+        if option_id:
+            counts[option_id] = counts.get(option_id, 0) + 1
+    return counts
+
+
 def _excel_safe_sheet_name(raw: str, used: set[str]) -> str:
     base = (raw or "未指定路线").strip()
     base = re.sub(r'[:\\/?*\[\]]', "_", base)
@@ -1786,6 +1807,7 @@ def activity_new_page():
         media_assets=[],
         route_option_items=[],
         route_option_map={},
+        route_option_registration_counts={},
         legacy_selected_ids=[],
         can_edit=can_write_page(g.current_user, PAGE_ACTIVITIES),
         can_admin=can_admin_page(g.current_user, PAGE_ACTIVITIES),
@@ -1808,6 +1830,7 @@ def activity_edit_page(activity_id: int):
     )
     route_option_map = {
         item.level_key: {
+            "option_id": item.id,
             "route_id": item.route_id,
             "participant_count": int(item.participant_count or 0),
             "activity_time": item.activity_time,
@@ -1818,6 +1841,7 @@ def activity_edit_page(activity_id: int):
         legacy_levels = [key for key, _label in ACTIVITY_ROUTE_LEVELS]
         for index, route in enumerate(activity.routes[: len(legacy_levels)]):
             route_option_map[legacy_levels[index]] = {
+                "option_id": None,
                 "route_id": route.id,
                 "participant_count": int(activity.participant_count or 0),
                 "activity_time": activity.activity_time,
@@ -1829,6 +1853,7 @@ def activity_edit_page(activity_id: int):
         media_assets=media_assets,
         route_option_items=route_option_items,
         route_option_map=route_option_map,
+        route_option_registration_counts=_activity_route_option_registration_counts(activity.id),
         legacy_selected_ids=[route.id for route in activity.routes],
         can_edit=can_write_page(g.current_user, PAGE_ACTIVITIES),
         can_admin=can_admin_page(g.current_user, PAGE_ACTIVITIES),
@@ -2732,6 +2757,19 @@ def _sync_activity_route_options(activity: Activity, option_items: list[dict]) -
         db.session.delete(option)
 
 
+def _preserve_manual_participant_counts(activity: Activity | None, option_items: list[dict]) -> list[dict]:
+    if activity is None:
+        return [{**item, "participant_count": 0} for item in option_items]
+    existing_by_level = {
+        item.level_key: int(item.participant_count or 0)
+        for item in ActivityRouteOption.query.filter_by(activity_id=activity.id).all()
+    }
+    return [
+        {**item, "participant_count": existing_by_level.get(item["level_key"], 0)}
+        for item in option_items
+    ]
+
+
 @bp.post("/routes/create")
 @login_required
 def create_route():
@@ -3133,6 +3171,8 @@ def create_activity():
     if registration_error:
         flash(registration_error, "error")
         return redirect(url_for("admin.activity_new_page"))
+    if needs_registration:
+        option_items = _preserve_manual_participant_counts(None, option_items)
     selected_route_ids = [item["route_id"] for item in option_items]
     selected_route_ids = list(dict.fromkeys(selected_route_ids))
 
@@ -3226,6 +3266,8 @@ def update_activity(activity_id: int):
     if registration_error:
         flash(registration_error, "error")
         return redirect(url_for("admin.activity_edit_page", activity_id=activity.id))
+    if needs_registration:
+        option_items = _preserve_manual_participant_counts(activity, option_items)
     selected_route_ids = [item["route_id"] for item in option_items]
     selected_route_ids = list(dict.fromkeys(selected_route_ids))
 

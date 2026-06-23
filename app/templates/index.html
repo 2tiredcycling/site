@@ -109,7 +109,11 @@
               <article class="edit-item compact-item board-item activity-item">
                 <h3>{{ activity.title }}</h3>
                 <p>时间：{{ to_local_time(activity.activity_time).strftime('%Y-%m-%d %H:%M') if activity.activity_time else '-' }}</p>
-                <p class="hint">人数：{{ activity.participant_count }}，关联路线：{{ activity.routes|length }}</p>
+                {% if activity.needs_registration %}
+                  <p class="hint">报名：{{ (registration_count_map.get(activity.id) if registration_count_map else 0) or 0 }}，关联路线：{{ activity.routes|length }}</p>
+                {% else %}
+                  <p class="hint">人数：{{ (manual_count_map.get(activity.id) if manual_count_map else activity.participant_count) }}，关联路线：{{ activity.routes|length }}</p>
+                {% endif %}
               </article>
             </a>
           {% else %}

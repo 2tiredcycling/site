@@ -55,7 +55,7 @@
             <div class="activity-time-rail">
               <span class="activity-time-dot"></span>
               <strong>{{ activity_date }}</strong>
-              {% if is_events_view and is_upcoming and activity.needs_registration %}
+              {% if activity.needs_registration %}
                 {% set reg_count = (registration_count_map.get(activity.id) if registration_count_map else 0) or 0 %}
                 {% if activity.registration_limit %}
                   <em>{{ reg_count }}/{{ activity.registration_limit }}人</em>
@@ -63,7 +63,7 @@
                   <em>{{ reg_count }}/∞人</em>
                 {% endif %}
               {% else %}
-                <em>{{ activity.participant_count }} 人</em>
+                <em>{{ (manual_count_map.get(activity.id) if manual_count_map else activity.participant_count) }} 人</em>
               {% endif %}
             </div>
             <article

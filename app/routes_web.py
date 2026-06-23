@@ -371,6 +371,33 @@ def _activity_registration_count_map(activity_ids: list[int]) -> dict[int, int]:
     return result
 
 
+def _activity_option_registration_count_map(activity_id: int) -> dict[int, int]:
+    registrations = (
+        EventRegistration.query.filter(
+            EventRegistration.activity_id == activity_id,
+            EventRegistration.status.in_([REGISTRATION_PENDING, REGISTRATION_CONFIRMED]),
+        )
+        .with_entities(EventRegistration.notes)
+        .all()
+    )
+    result: dict[int, int] = {}
+    for (notes,) in registrations:
+        note_map = dict(item.split("=", 1) for item in (notes or "").split("; ") if "=" in item)
+        try:
+            option_id = int(note_map.get("route_option_id") or 0)
+        except ValueError:
+            option_id = 0
+        if option_id:
+            result[option_id] = result.get(option_id, 0) + 1
+    return result
+
+
+def _manual_activity_participant_count(activity: Activity) -> int:
+    if activity.route_options:
+        return sum(int(option.participant_count or 0) for option in activity.route_options)
+    return int(activity.participant_count or 0)
+
+
 def _activity_signup_open(activity: Activity, now_value=None, registration_count: int | None = None) -> bool:
     if not bool(activity.needs_registration):
         return False
@@ -534,6 +561,7 @@ def _difficulty_stars(value: str | None) -> str:
 
 def _activity_route_cards(activity: Activity) -> list[dict]:
     cards: list[dict] = []
+    option_registration_counts = _activity_option_registration_count_map(activity.id) if activity.needs_registration else {}
     options = (
         ActivityRouteOption.query.filter_by(activity_id=activity.id)
         .order_by(ActivityRouteOption.sort_order.asc(), ActivityRouteOption.id.asc())
@@ -578,7 +606,11 @@ def _activity_route_cards(activity: Activity) -> list[dict]:
                 "route": route,
                 "media_assets": media_by_option.get(item.id, []),
                 "activity_time": item.activity_time or activity.activity_time,
-                "participant_count": int(item.participant_count or 0),
+                "participant_count": (
+                    int(option_registration_counts.get(item.id, 0))
+                    if activity.needs_registration and item.id
+                    else int(item.participant_count or 0)
+                ),
                 "distance_km": round(distance_km, 2),
                 "ascent_m": round(float(ascent_m), 1) if ascent_m is not None else None,
                 "difficulty_stars": _difficulty_stars(route.difficulty),
@@ -620,6 +652,8 @@ def _format_lastmod(value) -> str:
 def index() -> str:
     now = utcnow()
     latest_activities = Activity.query.order_by(Activity.activity_time.desc()).limit(5).all()
+    registration_count_map = _activity_registration_count_map([item.id for item in latest_activities])
+    manual_count_map = {item.id: _manual_activity_participant_count(item) for item in latest_activities}
     latest_routes = (
         Route.query.filter_by(status=STATUS_PUBLISHED, is_deleted=False)
         .order_by(Route.updated_at.desc())
@@ -641,6 +675,8 @@ def index() -> str:
     return render_template(
         "index.html",
         latest_activities=latest_activities,
+        registration_count_map=registration_count_map,
+        manual_count_map=manual_count_map,
         latest_routes=latest_routes,
         route_total=route_total,
         announcements=announcements,
@@ -1112,6 +1148,7 @@ def activity_list() -> str:
     now_value = utcnow()
     today_local_date = _to_local_time(utcnow()).date().isoformat()
     registration_count_map = _activity_registration_count_map([item.id for item in pagination.items])
+    manual_count_map = {item.id: _manual_activity_participant_count(item) for item in pagination.items}
     return render_template(
         "activities.html",
         activities=pagination.items,
@@ -1119,6 +1156,7 @@ def activity_list() -> str:
         today_local_date=today_local_date,
         signup_open_map=_activity_signup_open_map(pagination.items, now_value=now_value),
         registration_count_map=registration_count_map,
+        manual_count_map=manual_count_map,
         is_beta_view=_is_beta_request(),
         detail_endpoint="web.activity_detail",
         list_endpoint="web.activity_list",
@@ -1135,6 +1173,7 @@ def events_list() -> str:
     now_value = utcnow()
     today_local_date = _to_local_time(now_value).date().isoformat()
     registration_count_map = _activity_registration_count_map([item.id for item in pagination.items])
+    manual_count_map = {item.id: _manual_activity_participant_count(item) for item in pagination.items}
     return render_template(
         "activities.html",
         activities=pagination.items,
@@ -1143,6 +1182,7 @@ def events_list() -> str:
         today_local_date=today_local_date,
         signup_open_map=_activity_signup_open_map(pagination.items, now_value=now_value),
         registration_count_map=registration_count_map,
+        manual_count_map=manual_count_map,
         is_beta_view=_is_beta_request(),
         detail_endpoint="web.events_detail",
         list_endpoint="web.events_list",
@@ -1426,17 +1466,6 @@ def event_signup_submit(event_id: int):
     notes = "; ".join(note_parts)
 
     if existing_registration and update_registration_id == existing_registration.id:
-        previous_note_map = dict(
-            item.split("=", 1)
-            for item in (existing_registration.notes or "").split("; ")
-            if "=" in item
-        )
-        previous_option_id = None
-        try:
-            previous_option_id = int(previous_note_map.get("route_option_id") or 0) or None
-        except ValueError:
-            previous_option_id = None
-
         existing_registration.name = name
         existing_registration.student_id = student_id
         existing_registration.source_ip = source_ip
@@ -1444,16 +1473,6 @@ def event_signup_submit(event_id: int):
         existing_registration.notes = notes[:1000]
         existing_registration.updated_at = utcnow()
 
-        if previous_option_id != (selected_option.id if selected_option else None):
-            if previous_option_id:
-                previous_option = ActivityRouteOption.query.filter_by(
-                    id=previous_option_id,
-                    activity_id=activity.id,
-                ).first()
-                if previous_option:
-                    previous_option.participant_count = max(0, int(previous_option.participant_count or 0) - 1)
-            if selected_option:
-                selected_option.participant_count = int(selected_option.participant_count or 0) + 1
     else:
         registration = EventRegistration(
             activity_id=activity.id,
@@ -1467,9 +1486,6 @@ def event_signup_submit(event_id: int):
             updated_at=utcnow(),
         )
         db.session.add(registration)
-        activity.participant_count = int(activity.participant_count or 0) + 1
-        if selected_option:
-            selected_option.participant_count = int(selected_option.participant_count or 0) + 1
     db.session.commit()
 
     return redirect(

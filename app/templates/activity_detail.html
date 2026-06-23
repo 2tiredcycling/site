@@ -54,7 +54,7 @@
               </h4>
               <div class="filter-grid">
                 <div><strong>活动时间</strong><div>{{ to_local_time(item.activity_time).strftime('%Y-%m-%d %H:%M') if item.activity_time else '待定' }}</div></div>
-                <div><strong>参与人数</strong><div>{{ item.participant_count if item.participant_count is not none else 0 }}</div></div>
+                <div><strong>{{ '当前报名' if activity.needs_registration else '参与人数' }}</strong><div>{{ item.participant_count if item.participant_count is not none else 0 }}</div></div>
                 <div><strong>里程</strong><div>{{ '%.2f'|format(item.distance_km or 0) }} km</div></div>
                 <div><strong>累计爬升</strong><div>{{ ('%.1f'|format(item.ascent_m) ~ ' m') if item.ascent_m is not none else '暂无' }}</div></div>
               </div>

@@ -129,9 +129,19 @@
                 </select>
               </label>
               <div class="activity-level-detail-fields" data-route-details>
-                <label>参与人数
-                  <input type="number" name="route_option_beginner_participants" min="0" value="{{ route_option_map.get('beginner').get('participant_count') if route_option_map and route_option_map.get('beginner') else 0 }}" {% if not can_edit %}disabled{% endif %}>
-                </label>
+                {% set beginner_option = route_option_map.get('beginner') if route_option_map else none %}
+                {% set beginner_manual_count = beginner_option.get('participant_count') if beginner_option else 0 %}
+                {% set beginner_option_id = beginner_option.get('option_id') if beginner_option else none %}
+                {% if activity and activity.needs_registration %}
+                  <label>当前报名人数
+                    <input type="number" min="0" value="{{ route_option_registration_counts.get(beginner_option_id, 0) if beginner_option_id else 0 }}" disabled>
+                    <input type="hidden" name="route_option_beginner_participants" value="{{ beginner_manual_count }}">
+                  </label>
+                {% else %}
+                  <label>参与人数
+                    <input type="number" name="route_option_beginner_participants" min="0" value="{{ beginner_manual_count }}" {% if not can_edit %}disabled{% endif %}>
+                  </label>
+                {% endif %}
                 <label><span>活动时间</span>
                   <input type="time" name="route_option_beginner_time" value="{{ to_local_time(route_option_map.get('beginner').get('activity_time')).strftime('%H:%M') if route_option_map and route_option_map.get('beginner') and route_option_map.get('beginner').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
                 </label>
@@ -158,9 +168,19 @@
                 </select>
               </label>
               <div class="activity-level-detail-fields" data-route-details>
-                <label>参与人数
-                  <input type="number" name="route_option_intermediate_participants" min="0" value="{{ route_option_map.get('intermediate').get('participant_count') if route_option_map and route_option_map.get('intermediate') else 0 }}" {% if not can_edit %}disabled{% endif %}>
-                </label>
+                {% set intermediate_option = route_option_map.get('intermediate') if route_option_map else none %}
+                {% set intermediate_manual_count = intermediate_option.get('participant_count') if intermediate_option else 0 %}
+                {% set intermediate_option_id = intermediate_option.get('option_id') if intermediate_option else none %}
+                {% if activity and activity.needs_registration %}
+                  <label>当前报名人数
+                    <input type="number" min="0" value="{{ route_option_registration_counts.get(intermediate_option_id, 0) if intermediate_option_id else 0 }}" disabled>
+                    <input type="hidden" name="route_option_intermediate_participants" value="{{ intermediate_manual_count }}">
+                  </label>
+                {% else %}
+                  <label>参与人数
+                    <input type="number" name="route_option_intermediate_participants" min="0" value="{{ intermediate_manual_count }}" {% if not can_edit %}disabled{% endif %}>
+                  </label>
+                {% endif %}
                 <label><span>活动时间</span>
                   <input type="time" name="route_option_intermediate_time" value="{{ to_local_time(route_option_map.get('intermediate').get('activity_time')).strftime('%H:%M') if route_option_map and route_option_map.get('intermediate') and route_option_map.get('intermediate').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
                 </label>
@@ -187,9 +207,19 @@
                 </select>
               </label>
               <div class="activity-level-detail-fields" data-route-details>
-                <label>参与人数
-                  <input type="number" name="route_option_advanced_participants" min="0" value="{{ route_option_map.get('advanced').get('participant_count') if route_option_map and route_option_map.get('advanced') else 0 }}" {% if not can_edit %}disabled{% endif %}>
-                </label>
+                {% set advanced_option = route_option_map.get('advanced') if route_option_map else none %}
+                {% set advanced_manual_count = advanced_option.get('participant_count') if advanced_option else 0 %}
+                {% set advanced_option_id = advanced_option.get('option_id') if advanced_option else none %}
+                {% if activity and activity.needs_registration %}
+                  <label>当前报名人数
+                    <input type="number" min="0" value="{{ route_option_registration_counts.get(advanced_option_id, 0) if advanced_option_id else 0 }}" disabled>
+                    <input type="hidden" name="route_option_advanced_participants" value="{{ advanced_manual_count }}">
+                  </label>
+                {% else %}
+                  <label>参与人数
+                    <input type="number" name="route_option_advanced_participants" min="0" value="{{ advanced_manual_count }}" {% if not can_edit %}disabled{% endif %}>
+                  </label>
+                {% endif %}
                 <label><span>活动时间</span>
                   <input type="time" name="route_option_advanced_time" value="{{ to_local_time(route_option_map.get('advanced').get('activity_time')).strftime('%H:%M') if route_option_map and route_option_map.get('advanced') and route_option_map.get('advanced').get('activity_time') else '' }}" {% if not can_edit %}disabled{% endif %}>
                 </label>

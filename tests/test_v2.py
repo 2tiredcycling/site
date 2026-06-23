@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -842,6 +842,73 @@ def test_activity_route_options_saved_and_rendered(app_and_client):
     assert "中级路线" in body
     assert "高级路线" in body
     assert "参与人数" in body
+
+
+def test_event_signup_does_not_mutate_manual_participant_counts(app_and_client):
+    app, client = app_and_client
+    starts_at = datetime.now(timezone.utc) + timedelta(days=14)
+    deadline = starts_at - timedelta(days=1)
+    with app.app_context():
+        route = Route(
+            route_name="Signup Count Route",
+            gpx_filename="signup-count-route.gpx",
+            distance_km=20,
+            status="published",
+        )
+        activity = Activity(
+            title="Signup Count Activity",
+            activity_time=starts_at,
+            needs_registration=True,
+            registration_deadline=deadline,
+            registration_limit=10,
+            participant_count=7,
+        )
+        db.session.add_all([route, activity])
+        db.session.flush()
+        option = ActivityRouteOption(
+            activity_id=activity.id,
+            route_id=route.id,
+            level_key="beginner",
+            level_label="初级",
+            activity_time=starts_at,
+            participant_count=7,
+            sort_order=1,
+        )
+        activity.routes = [route]
+        db.session.add(option)
+        db.session.commit()
+        activity_id = activity.id
+        option_id = option.id
+
+    resp = client.post(
+        f"/events/{activity_id}/signup",
+        data={
+            "name": "Signup User",
+            "student_id": "SID001",
+            "option_id": str(option_id),
+            "source": "events_detail",
+            "consent_required": "1",
+            "consent_image": "1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+
+    with app.app_context():
+        activity = db.session.get(Activity, activity_id)
+        option = db.session.get(ActivityRouteOption, option_id)
+        registration_count = EventRegistration.query.filter_by(activity_id=activity_id).count()
+        assert activity is not None
+        assert option is not None
+        assert registration_count == 1
+        assert activity.participant_count == 7
+        assert option.participant_count == 7
+
+    detail = client.get(f"/events/{activity_id}")
+    body = detail.get_data(as_text=True)
+    assert detail.status_code == 200
+    assert "当前报名" in body
+    assert ">1<" in body
 
 
 def test_activity_detail_legacy_route_relation_compatible(app_and_client):
