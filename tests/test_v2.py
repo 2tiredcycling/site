@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MemberUser, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MemberUser, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_MEMBERS, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -208,6 +208,171 @@ def test_member_login_rejects_disabled_account(app_and_client):
     resp = login_member(client, "DISABLED001", "memberpass123")
     assert resp.status_code == 401
     assert "学号或密码不正确" in resp.get_data(as_text=True)
+
+
+def test_manage_member_users_page_lists_member_accounts(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add_all(
+            [
+                MemberUser(
+                    student_id="20260011",
+                    nickname="Visible Rider",
+                    password_hash=generate_password_hash("memberpass123"),
+                    account_status=MEMBER_ACCOUNT_ACTIVE,
+                ),
+                MemberUser(
+                    student_id="20260012",
+                    nickname="Disabled Rider",
+                    password_hash=generate_password_hash("memberpass123"),
+                    account_status=MEMBER_ACCOUNT_DISABLED,
+                ),
+            ]
+        )
+        db.session.commit()
+
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/members")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "20260011" in html
+    assert "Visible Rider" in html
+    assert "20260012" in html
+    assert "Disabled Rider" in html
+    assert "重置密码" in html
+    assert "删除账户" in html
+
+    filtered = client.get("/manage/members?q=Visible")
+    assert filtered.status_code == 200
+    filtered_html = filtered.get_data(as_text=True)
+    assert "Visible Rider" in filtered_html
+    assert "Disabled Rider" not in filtered_html
+
+
+def test_manage_member_write_permission_can_update_but_not_delete(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20260021",
+            nickname="Writable Rider",
+            password_hash=generate_password_hash("old-member-pass"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        writer = User(
+            username="member_writer",
+            password=generate_password_hash("writer123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add_all([member, writer])
+        db.session.flush()
+        grant_page_permission(writer, PAGE_MEMBERS, PERMISSION_WRITE)
+        db.session.commit()
+        member_id = member.id
+
+    assert login_member(client, "20260021", "old-member-pass").status_code == 200
+    page = client.get("/")
+    logout_token = _extract_csrf(page.get_data(as_text=True))
+    client.post("/member/logout", data={"csrf_token": logout_token}, follow_redirects=True)
+
+    assert login(client, "member_writer", "writer123456789").status_code == 200
+    page = client.get("/manage/members")
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "重置密码" in html
+    assert "删除账户" not in html
+    token = _extract_csrf(html)
+
+    disabled = client.post(
+        f"/manage/members/{member_id}/status",
+        data={"csrf_token": token, "account_status": MEMBER_ACCOUNT_DISABLED},
+        follow_redirects=True,
+    )
+    assert disabled.status_code == 200
+    with app.app_context():
+        member = db.session.get(MemberUser, member_id)
+        assert member.account_status == MEMBER_ACCOUNT_DISABLED
+
+    reset = client.post(
+        f"/manage/members/{member_id}/reset-password",
+        data={"csrf_token": token},
+        follow_redirects=True,
+    )
+    assert reset.status_code == 200
+    reset_html = reset.get_data(as_text=True)
+    assert "临时密码" in reset_html
+    with app.app_context():
+        member = db.session.get(MemberUser, member_id)
+        assert not check_password_hash(member.password_hash, "old-member-pass")
+
+    deleted = client.post(
+        f"/manage/members/{member_id}/delete",
+        data={"csrf_token": token},
+        follow_redirects=False,
+    )
+    assert deleted.status_code == 302
+    assert "/manage/login" in (deleted.headers.get("Location") or "")
+    with app.app_context():
+        assert db.session.get(MemberUser, member_id) is not None
+
+
+def test_manage_member_read_permission_is_read_only(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            MemberUser(
+                student_id="20260031",
+                nickname="Read Only Rider",
+                password_hash=generate_password_hash("memberpass123"),
+                account_status=MEMBER_ACCOUNT_ACTIVE,
+            )
+        )
+        reader = User(
+            username="member_reader",
+            password=generate_password_hash("reader123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add(reader)
+        db.session.flush()
+        grant_page_permission(reader, PAGE_MEMBERS, PERMISSION_READ)
+        db.session.commit()
+
+    assert login(client, "member_reader", "reader123456789").status_code == 200
+    page = client.get("/manage/members")
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "Read Only Rider" in html
+    assert "重置密码" not in html
+    assert "禁用账户" not in html
+    assert "删除账户" not in html
+
+
+def test_manage_member_admin_permission_can_delete_account(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20260041",
+            nickname="Delete Rider",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        db.session.add(member)
+        db.session.commit()
+        member_id = member.id
+
+    assert login_admin(client).status_code == 200
+    page = client.get("/manage/members")
+    token = _extract_csrf(page.get_data(as_text=True))
+    deleted = client.post(
+        f"/manage/members/{member_id}/delete",
+        data={"csrf_token": token},
+        follow_redirects=True,
+    )
+    assert deleted.status_code == 200
+    assert "社员账号已删除" in deleted.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(MemberUser, member_id) is None
 
 
 def test_unauth_manage_redirect_writes_audit_log(app_and_client):

@@ -182,6 +182,12 @@
             <span>管理员账号、角色与权限配置</span>
           </a>
         {% endif %}
+        {% if can_manage_members %}
+          <a class="card form-card manage-entry-card" href="{{ url_for('admin.member_users_page') }}">
+            <strong>社员账号</strong>
+            <span>查看前台社员账号、状态与最近登录</span>
+          </a>
+        {% endif %}
         {% if can_view_analytics %}
           <a class="card form-card manage-entry-card" href="{{ url_for('admin.analytics_page') }}">
             <strong>流量统计</strong>

@@ -61,6 +61,8 @@ from app.models import (
     MERCH_ORDER_PICKED_UP,
     MERCH_ORDER_READY,
     MERCH_ORDER_STATUSES,
+    MEMBER_ACCOUNT_ACTIVE,
+    MEMBER_ACCOUNT_DISABLED,
     PAGE_ACCOUNTS,
     PAGE_ACTIVITIES,
     PAGE_ANALYTICS,
@@ -69,6 +71,7 @@ from app.models import (
     PAGE_FEEDBACK,
     PAGE_KEYS,
     PAGE_KIT_PREORDERS,
+    PAGE_MEMBERS,
     PAGE_PERMISSION_LEVELS,
     PAGE_ROUTES,
     PAGE_SECURITY,
@@ -99,6 +102,7 @@ from app.models import (
     EventRegistration,
     ImportReport,
     MediaAsset,
+    MemberUser,
     MerchPreorderBatch,
     MerchPreorderImage,
     MerchPreorderRegistration,
@@ -148,6 +152,7 @@ PAGE_PERMISSION_LABELS = {
     PAGE_ANALYTICS: "流量",
     PAGE_SECURITY: "安全",
     PAGE_ACCOUNTS: "账号",
+    PAGE_MEMBERS: "社员",
     PAGE_AUDIT_LOGS: "审计日志",
 }
 PERMISSION_LEVEL_LABELS = {
@@ -214,6 +219,10 @@ AUDIT_ACTION_LABELS = {
     "user.update": "更新账号",
     "user.activate": "启用账号",
     "user.deactivate": "停用账号",
+    "member_user.activate": "启用社员账号",
+    "member_user.disable": "禁用社员账号",
+    "member_user.password_reset": "重置社员密码",
+    "member_user.delete": "删除社员账号",
 }
 
 
@@ -729,6 +738,12 @@ def _required_page_permission_for_request(path: str, method: str) -> tuple[str, 
         if normalized.endswith("/new") or normalized.endswith("/edit"):
             return PAGE_ACCOUNTS, PERMISSION_ADMIN
         return PAGE_ACCOUNTS, PERMISSION_READ
+    if normalized.startswith("/manage/members"):
+        if is_post and "/delete" in normalized:
+            return PAGE_MEMBERS, PERMISSION_ADMIN
+        if is_post:
+            return PAGE_MEMBERS, PERMISSION_WRITE
+        return PAGE_MEMBERS, PERMISSION_READ
 
     content_prefixes = (
         ("/manage/routes", PAGE_ROUTES),
@@ -815,6 +830,8 @@ def _inject_csrf_token():
             nav_items.append({"label": "安全", "endpoint": "admin.security_page", "prefix": "/manage/security"})
         if can_read_page(user, PAGE_ACCOUNTS):
             nav_items.append({"label": "账号", "endpoint": "admin.users_page", "prefix": "/manage/users"})
+        if can_read_page(user, PAGE_MEMBERS):
+            nav_items.append({"label": "社员", "endpoint": "admin.member_users_page", "prefix": "/manage/members"})
     return {
         "csrf_token": get_csrf_token,
         "to_local_time": _to_local_time,
@@ -985,6 +1002,7 @@ def dashboard():
     can_view_analytics_flag = can_read_page(user, PAGE_ANALYTICS)
     can_view_security_flag = can_read_page(user, PAGE_SECURITY)
     can_manage_users_flag = can_read_page(user, PAGE_ACCOUNTS)
+    can_manage_members_flag = can_read_page(user, PAGE_MEMBERS)
     can_view_audit_logs_flag = can_read_page(user, PAGE_AUDIT_LOGS)
     can_write_routes_flag = can_write_page(user, PAGE_ROUTES)
     can_write_activities_flag = can_write_page(user, PAGE_ACTIVITIES)
@@ -1111,6 +1129,7 @@ def dashboard():
         can_view_announcements=can_view_announcements_flag,
         can_review=can_view_feedback_flag,
         can_manage_users=can_manage_users_flag,
+        can_manage_members=can_manage_members_flag,
         can_view_analytics=can_view_analytics_flag,
         can_view_security=can_view_security_flag,
         can_view_audit_logs=can_view_audit_logs_flag,
@@ -2221,6 +2240,85 @@ def users_page():
         user_page_permissions=_user_page_permissions,
         can_admin_accounts=can_admin_page(g.current_user, PAGE_ACCOUNTS),
     )
+
+
+@bp.get("/members")
+@login_required
+def member_users_page():
+    page = max(1, request.args.get("page", default=1, type=int))
+    q = (request.args.get("q") or "").strip()
+    query = MemberUser.query
+    if q:
+        like_value = f"%{q}%"
+        query = query.filter(db.or_(MemberUser.student_id.ilike(like_value), MemberUser.nickname.ilike(like_value)))
+    pagination = query.order_by(MemberUser.created_at.desc(), MemberUser.id.desc()).paginate(
+        page=page,
+        per_page=20,
+        error_out=False,
+    )
+    return render_template(
+        "manage_member_users.html",
+        members=pagination.items,
+        pagination=pagination,
+        q=q,
+        can_write_members=can_write_page(g.current_user, PAGE_MEMBERS),
+        can_admin_members=can_admin_page(g.current_user, PAGE_MEMBERS),
+    )
+
+
+@bp.post("/members/<int:member_id>/status")
+@login_required
+def update_member_user_status(member_id: int):
+    member = MemberUser.query.filter_by(id=member_id).first()
+    if not member:
+        flash("社员账号不存在", "error")
+        return redirect(url_for("admin.member_users_page"))
+
+    status = (request.form.get("account_status") or "").strip()
+    if status not in {MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED}:
+        flash("社员账号状态无效", "error")
+        return redirect(url_for("admin.member_users_page"))
+
+    member.account_status = status
+    member.updated_at = utcnow()
+    db.session.commit()
+    action = "member_user.activate" if status == MEMBER_ACCOUNT_ACTIVE else "member_user.disable"
+    write_audit_log(g.current_user.id, action, "member_user", str(member.id), member.student_id)
+    flash("社员账号已启用" if status == MEMBER_ACCOUNT_ACTIVE else "社员账号已禁用", "success")
+    return redirect(url_for("admin.member_users_page"))
+
+
+@bp.post("/members/<int:member_id>/reset-password")
+@login_required
+def reset_member_user_password(member_id: int):
+    member = MemberUser.query.filter_by(id=member_id).first()
+    if not member:
+        flash("社员账号不存在", "error")
+        return redirect(url_for("admin.member_users_page"))
+
+    temporary_password = secrets.token_urlsafe(12)
+    member.password_hash = generate_password_hash(temporary_password)
+    member.updated_at = utcnow()
+    db.session.commit()
+    write_audit_log(g.current_user.id, "member_user.password_reset", "member_user", str(member.id), member.student_id)
+    flash(f"已重置 {member.student_id} 的密码，临时密码：{temporary_password}", "success")
+    return redirect(url_for("admin.member_users_page"))
+
+
+@bp.post("/members/<int:member_id>/delete")
+@login_required
+def delete_member_user(member_id: int):
+    member = MemberUser.query.filter_by(id=member_id).first()
+    if not member:
+        flash("社员账号不存在", "error")
+        return redirect(url_for("admin.member_users_page"))
+
+    detail = f"{member.student_id}:{member.nickname}"
+    db.session.delete(member)
+    db.session.commit()
+    write_audit_log(g.current_user.id, "member_user.delete", "member_user", str(member_id), detail)
+    flash("社员账号已删除", "success")
+    return redirect(url_for("admin.member_users_page"))
 
 
 @bp.get("/users/new")

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.9.1]
+
+### Added
+
+- Added a management page for front-site member accounts, including student ID, nickname, account status, registration time, recent login time, search, and permission-controlled reset/status/delete actions.
+
 ## [v4.9.0]
 
 ### Added

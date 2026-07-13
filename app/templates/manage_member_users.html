@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>社员账号 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
+  <main class="container">
+    <header class="header">
+      <h1>社员账号</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.users_page') }}">管理员账号</a>
+      </div>
+    </header>
+    {% include "_manage_nav.html" %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card form-card manage-route-filter-card">
+      <h2 class="manage-route-filter-title">筛选</h2>
+      <form method="get" action="{{ url_for('admin.member_users_page') }}" class="single-form manage-route-filter-form">
+        <div class="manage-route-filter-basic">
+          <label class="manage-filter-field manage-filter-keyword">
+            <span>关键词</span>
+            <input type="text" name="q" value="{{ q }}" placeholder="学号或昵称">
+          </label>
+          <div class="manage-filter-actions">
+            <button class="btn" type="submit">应用</button>
+            <a class="btn btn-muted" href="{{ url_for('admin.member_users_page') }}">重置</a>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="card form-card manage-route-list-card">
+      <h2>社员列表</h2>
+      <p class="hint">当前为账号层信息；后续社员资料、租车记录会通过社员账号 ID 关联。</p>
+      <table>
+        <thead>
+          <tr><th>学号</th><th>昵称</th><th>状态</th><th>注册时间</th><th>最近登录</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for member in members %}
+            <tr>
+              <td>
+                <div class="manage-route-name-cell">
+                  <strong>{{ member.student_id }}</strong>
+                  <div class="hint">ID: {{ member.id }}</div>
+                </div>
+              </td>
+              <td>{{ member.nickname }}</td>
+              <td>
+                {% if member.account_status == 'active' %}
+                  {{ status_badge('active', '启用') }}
+                {% else %}
+                  {{ status_badge('offline', '禁用') }}
+                {% endif %}
+              </td>
+              <td>{{ to_local_time(member.created_at).strftime('%Y-%m-%d %H:%M') if member.created_at else '-' }}</td>
+              <td>{{ to_local_time(member.last_login_at).strftime('%Y-%m-%d %H:%M') if member.last_login_at else '-' }}</td>
+              <td>
+                <div class="manage-route-actions">
+                  <span class="hint">查看</span>
+                  {% if can_write_members or can_admin_members %}
+                    <details class="manage-row-more">
+                      <summary class="btn btn-muted">更多</summary>
+                      <div class="manage-row-more-menu">
+                        {% if can_write_members %}
+                          <form method="post" action="{{ url_for('admin.update_member_user_status', member_id=member.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            {% if member.account_status == 'active' %}
+                              <input type="hidden" name="account_status" value="disabled">
+                              <button class="manage-row-menu-item" type="submit">禁用账户</button>
+                            {% else %}
+                              <input type="hidden" name="account_status" value="active">
+                              <button class="manage-row-menu-item" type="submit">启用账户</button>
+                            {% endif %}
+                          </form>
+                          <form method="post" action="{{ url_for('admin.reset_member_user_password', member_id=member.id) }}" onsubmit="return confirm('确认重置该社员账号密码？临时密码只会显示一次。');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="manage-row-menu-item" type="submit">重置密码</button>
+                          </form>
+                        {% endif %}
+                        {% if can_admin_members %}
+                          <form method="post" action="{{ url_for('admin.delete_member_user', member_id=member.id) }}" onsubmit="return confirm('确认删除该社员账号吗？此操作会移除登录账号。');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="manage-row-menu-item is-danger" type="submit">删除账户</button>
+                          </form>
+                        {% endif %}
+                      </div>
+                    </details>
+                  {% else %}
+                    <span class="hint">只读</span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">暂无社员账号</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.member_users_page', page=pagination.prev_num, q=q) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.member_users_page', page=pagination.next_num, q=q) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='manage-row-more.js') }}"></script>
+</body>
+</html>
