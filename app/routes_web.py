@@ -314,6 +314,22 @@ def _validate_member_register_input(student_id: str, nickname: str, password: st
     return ""
 
 
+def _member_login_redirect():
+    return redirect(_url_for("web.member_login", next=request.path))
+
+
+def _validate_member_password_update(member: MemberUser, current_password: str, new_password: str, password_confirm: str) -> str:
+    if not current_password or not new_password or not password_confirm:
+        return "请完整填写当前密码、新密码和确认密码。"
+    if not check_password_hash(member.password_hash, current_password):
+        return "当前密码不正确。"
+    if len(new_password) < MEMBER_PASSWORD_MIN_LENGTH:
+        return "新密码至少需要 8 位。"
+    if new_password != password_confirm:
+        return "两次输入的新密码不一致。"
+    return ""
+
+
 def _rating_summary_map(route_ids: list[int]) -> dict[int, dict]:
     if not route_ids:
         return {}
@@ -1708,6 +1724,53 @@ def member_login_submit():
     db.session.commit()
     session["member_user_id"] = member.id
     return redirect(_member_auth_next())
+
+
+@bp.get("/member/password")
+def member_password():
+    member = _current_member_user()
+    if not member:
+        return _member_login_redirect()
+    return render_template(
+        "member_password.html",
+        member=member,
+        error_message="",
+        success_message="",
+        meta_description="修改 2Tired 骑行社社员账号密码。",
+    )
+
+
+@bp.post("/member/password")
+def member_password_submit():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+    member = _current_member_user()
+    if not member:
+        return _member_login_redirect()
+
+    current_password = request.form.get("current_password") or ""
+    new_password = request.form.get("new_password") or ""
+    password_confirm = request.form.get("password_confirm") or ""
+    error_message = _validate_member_password_update(member, current_password, new_password, password_confirm)
+    if error_message:
+        return render_template(
+            "member_password.html",
+            member=member,
+            error_message=error_message,
+            success_message="",
+            meta_description="修改 2Tired 骑行社社员账号密码。",
+        ), 400
+
+    member.password_hash = generate_password_hash(new_password)
+    member.updated_at = utcnow()
+    db.session.commit()
+    return render_template(
+        "member_password.html",
+        member=member,
+        error_message="",
+        success_message="密码已更新。",
+        meta_description="修改 2Tired 骑行社社员账号密码。",
+    )
 
 
 @bp.post("/member/logout")

@@ -24,6 +24,9 @@
     </a>
     {% set member_user = current_member_user() %}
     {% if member_user %}
+      <a class="quick-pill {% if ep.endswith('.member_password') %}is-active{% endif %}" href="{{ url_for('web.member_password') }}" {% if ep.endswith('.member_password') %}aria-current="page"{% endif %}>
+        <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-user"></use></svg></span><span>改密</span>
+      </a>
       <form method="post" action="{{ url_for('web.member_logout') }}" class="site-nav-inline-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="quick-pill quick-pill-button" type="submit">

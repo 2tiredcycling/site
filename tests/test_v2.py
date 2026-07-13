@@ -192,6 +192,60 @@ def test_member_login_updates_last_login_and_logout_clears_session(app_and_clien
     assert "Login Rider" not in resp.get_data(as_text=True)
 
 
+def test_member_password_page_requires_login(app_and_client):
+    _app, client = app_and_client
+    resp = client.get("/member/password", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/member/login" in (resp.headers.get("Location") or "")
+    assert "next=/member/password" in (resp.headers.get("Location") or "")
+
+
+def test_member_can_change_own_password(app_and_client):
+    app, client = app_and_client
+    assert register_member(client, "20260051", "Password Rider", "oldpass123").status_code == 200
+
+    page = client.get("/member/password")
+    assert page.status_code == 200
+    token = _extract_csrf(page.get_data(as_text=True))
+    wrong_current = client.post(
+        "/member/password",
+        data={
+            "csrf_token": token,
+            "current_password": "wrongpass123",
+            "new_password": "newpass123",
+            "password_confirm": "newpass123",
+        },
+        follow_redirects=True,
+    )
+    assert wrong_current.status_code == 400
+    assert "当前密码不正确" in wrong_current.get_data(as_text=True)
+
+    updated = client.post(
+        "/member/password",
+        data={
+            "csrf_token": token,
+            "current_password": "oldpass123",
+            "new_password": "newpass123",
+            "password_confirm": "newpass123",
+        },
+        follow_redirects=True,
+    )
+    assert updated.status_code == 200
+    assert "密码已更新" in updated.get_data(as_text=True)
+
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20260051").first()
+        assert member is not None
+        assert check_password_hash(member.password_hash, "newpass123")
+        assert not check_password_hash(member.password_hash, "oldpass123")
+
+    page = client.get("/")
+    logout_token = _extract_csrf(page.get_data(as_text=True))
+    client.post("/member/logout", data={"csrf_token": logout_token}, follow_redirects=True)
+    assert login_member(client, "20260051", "oldpass123").status_code == 401
+    assert login_member(client, "20260051", "newpass123").status_code == 200
+
+
 def test_member_login_rejects_disabled_account(app_and_client):
     app, client = app_and_client
     with app.app_context():

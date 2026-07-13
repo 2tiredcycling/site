@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.9.2]
+
+### Added
+
+- Added a front-site member password change page with current-password verification and logged-in navigation entry.
+
 ## [v4.9.1]
 
 ### Added
