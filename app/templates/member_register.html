@@ -10,11 +10,11 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <main class="container narrow">
+  <main class="container">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
 
-    <section class="card form-card login-card">
+    <section class="card form-card login-card member-auth-card">
       <p class="hero-kicker">MEMBER ACCOUNT</p>
       <h1>社员账号注册</h1>
       <p class="hint">当前只创建登录账号；学院、联系方式等社员资料会在后续步骤中单独补充。</p>
@@ -37,10 +37,12 @@
         <label>
           密码
           <input type="password" name="password" minlength="8" autocomplete="new-password" required>
+          <span class="field-hint">至少 8 位。</span>
         </label>
         <label>
           确认密码
           <input type="password" name="password_confirm" minlength="8" autocomplete="new-password" required>
+          <span class="field-hint">请再次输入同一密码。</span>
         </label>
         <div class="row-actions">
           <button class="btn" type="submit">注册并登录</button>

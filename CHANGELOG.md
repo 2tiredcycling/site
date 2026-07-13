@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.9.5]
+
+### Changed
+
+- Widened the member registration form to match the member login layout and added visible password rule hints to registration and password change forms.
+
 ## [v4.9.4]
 
 ### Changed

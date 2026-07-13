@@ -2670,6 +2670,13 @@ td {
   color: var(--text-muted);
 }
 
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .edit-item {
   border: 1px solid var(--card-border);
   border-radius: 10px;
