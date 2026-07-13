@@ -5,10 +5,11 @@ from io import StringIO
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, send_from_directory, url_for as flask_url_for
+from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, send_from_directory, session, url_for as flask_url_for
 from markupsafe import Markup, escape as html_escape
+from werkzeug.security import check_password_hash, generate_password_hash
 
-from app.auth import client_ip
+from app.auth import client_ip, get_csrf_token, validate_csrf_token
 from app.models import (
     CONTENT_STATUS_PUBLISHED,
     FEEDBACK_APPROVED,
@@ -17,11 +18,13 @@ from app.models import (
     Announcement,
     EventRegistration,
     MERCH_BATCH_ACTIVE,
+    MEMBER_ACCOUNT_ACTIVE,
     MERCH_ORDER_CANCELLED,
     MERCH_ORDER_CONFIRMED,
     MERCH_ORDER_PENDING,
     MERCH_ORDER_PICKED_UP,
     MERCH_ORDER_READY,
+    MemberUser,
     Route,
     RouteFeedback,
     REGISTRATION_CONFIRMED,
@@ -56,6 +59,8 @@ MERCH_SIZE_OPTIONS = ("XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL")
 MERCH_GENDER_OPTIONS = ("男", "女", "其他/不便填写")
 ANNOUNCEMENT_LINK_PATTERN = re.compile(r"\[\[([^\]|]{1,180})\|([^\]]{1,120})\]\]")
 ANNOUNCEMENT_LINK_PREFIXES = ("/events/", "/routes/", "/kit/", "/announcements/")
+MEMBER_STUDENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{3,32}$")
+MEMBER_PASSWORD_MIN_LENGTH = 8
 
 
 def _url_for(endpoint: str, **values):
@@ -249,7 +254,64 @@ def _to_local_time(value):
 
 @bp.app_context_processor
 def _inject_time_helpers():
-    return {"to_local_time": _to_local_time}
+    return {
+        "to_local_time": _to_local_time,
+        "csrf_token": get_csrf_token,
+        "current_member_user": _current_member_user,
+    }
+
+
+def _current_member_user() -> MemberUser | None:
+    user_id = session.get("member_user_id")
+    if not user_id:
+        return None
+    return MemberUser.query.filter_by(id=user_id, account_status=MEMBER_ACCOUNT_ACTIVE).first()
+
+
+def _normalize_member_student_id(raw: str | None) -> str:
+    return (raw or "").strip().upper()
+
+
+def _normalize_member_nickname(raw: str | None) -> str:
+    return re.sub(r"\s+", " ", (raw or "").strip())
+
+
+def _member_auth_next(default_endpoint: str = "web.index") -> str:
+    raw_next = (request.args.get("next") or request.form.get("next") or "").strip()
+    if raw_next.startswith("/") and not raw_next.startswith("//"):
+        return raw_next
+    return _url_for(default_endpoint)
+
+
+def _render_member_auth(
+    template_name: str,
+    error_message: str = "",
+    student_id: str = "",
+    nickname: str = "",
+):
+    return render_template(
+        template_name,
+        error_message=error_message,
+        student_id=student_id,
+        nickname=nickname,
+        next_url=_member_auth_next(),
+    )
+
+
+def _validate_member_register_input(student_id: str, nickname: str, password: str, password_confirm: str) -> str:
+    if not student_id:
+        return "请填写学号。"
+    if not MEMBER_STUDENT_ID_PATTERN.fullmatch(student_id):
+        return "学号需为 3-32 位，可使用字母、数字、下划线和短横线。"
+    if not nickname:
+        return "请填写昵称。"
+    if len(nickname) > 64:
+        return "昵称长度不能超过 64 个字符。"
+    if len(password) < MEMBER_PASSWORD_MIN_LENGTH:
+        return "密码至少需要 8 位。"
+    if password != password_confirm:
+        return "两次输入的密码不一致。"
+    return ""
 
 
 def _rating_summary_map(route_ids: list[int]) -> dict[int, dict]:
@@ -1565,6 +1627,95 @@ def media_asset_file(asset_id: int):
     response.cache_control.max_age = 31536000
     response.cache_control.immutable = True
     return response
+
+
+@bp.get("/member/register")
+def member_register():
+    if _current_member_user():
+        return redirect(_member_auth_next())
+    return _render_member_auth(
+        "member_register.html",
+        student_id=_normalize_member_student_id(request.args.get("student_id")),
+        nickname=_normalize_member_nickname(request.args.get("nickname")),
+    )
+
+
+@bp.post("/member/register")
+def member_register_submit():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+
+    student_id = _normalize_member_student_id(request.form.get("student_id"))
+    nickname = _normalize_member_nickname(request.form.get("nickname"))
+    password = request.form.get("password") or ""
+    password_confirm = request.form.get("password_confirm") or ""
+    error_message = _validate_member_register_input(student_id, nickname, password, password_confirm)
+    if error_message:
+        return _render_member_auth(
+            "member_register.html",
+            error_message=error_message,
+            student_id=student_id,
+            nickname=nickname,
+        ), 400
+
+    existing = MemberUser.query.filter(db.func.upper(MemberUser.student_id) == student_id.upper()).first()
+    if existing:
+        return _render_member_auth(
+            "member_register.html",
+            error_message="该学号已注册账号。",
+            student_id=student_id,
+            nickname=nickname,
+        ), 409
+
+    now_value = utcnow()
+    member = MemberUser(
+        student_id=student_id,
+        nickname=nickname,
+        password_hash=generate_password_hash(password),
+        account_status=MEMBER_ACCOUNT_ACTIVE,
+        created_at=now_value,
+        updated_at=now_value,
+    )
+    db.session.add(member)
+    db.session.commit()
+    session["member_user_id"] = member.id
+    return redirect(_member_auth_next())
+
+
+@bp.get("/member/login")
+def member_login():
+    if _current_member_user():
+        return redirect(_member_auth_next())
+    return _render_member_auth(
+        "member_login.html",
+        student_id=_normalize_member_student_id(request.args.get("student_id")),
+    )
+
+
+@bp.post("/member/login")
+def member_login_submit():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+
+    student_id = _normalize_member_student_id(request.form.get("student_id"))
+    password = request.form.get("password") or ""
+    member = MemberUser.query.filter(db.func.upper(MemberUser.student_id) == student_id.upper()).first()
+    if not member or member.account_status != MEMBER_ACCOUNT_ACTIVE or not check_password_hash(member.password_hash, password):
+        return _render_member_auth("member_login.html", error_message="学号或密码不正确。", student_id=student_id), 401
+
+    member.last_login_at = utcnow()
+    member.updated_at = utcnow()
+    db.session.commit()
+    session["member_user_id"] = member.id
+    return redirect(_member_auth_next())
+
+
+@bp.post("/member/logout")
+def member_logout():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+    session.pop("member_user_id", None)
+    return redirect(_url_for("web.index"))
 
 
 @bp.get("/health")

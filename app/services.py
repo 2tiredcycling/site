@@ -60,6 +60,72 @@ def _add_column_if_missing(table: str, column: str, ddl: str) -> None:
         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
 
 
+def _rebuild_sqlite_legacy_member_users() -> None:
+    if not _is_sqlite():
+        return
+    columns = _table_columns("member_users")
+    if "username" not in columns:
+        return
+
+    student_expr = "UPPER(username)"
+    if "student_id" in columns:
+        student_expr = "UPPER(COALESCE(NULLIF(student_id, ''), username))"
+    nickname_expr = "username"
+    if "nickname" in columns:
+        nickname_expr = "COALESCE(NULLIF(nickname, ''), username)"
+
+    with db.engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS member_users_legacy_username"))
+        conn.execute(text("ALTER TABLE member_users RENAME TO member_users_legacy_username"))
+        conn.execute(
+            text(
+                """
+                CREATE TABLE member_users (
+                    id INTEGER NOT NULL,
+                    student_id VARCHAR(32) NOT NULL,
+                    nickname VARCHAR(64) NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    account_status VARCHAR(16) DEFAULT 'active' NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    last_login_at DATETIME,
+                    PRIMARY KEY (id),
+                    CONSTRAINT uq_member_users_student_id UNIQUE (student_id)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                f"""
+                INSERT INTO member_users (
+                    id,
+                    student_id,
+                    nickname,
+                    password_hash,
+                    account_status,
+                    created_at,
+                    updated_at,
+                    last_login_at
+                )
+                SELECT
+                    id,
+                    {student_expr},
+                    {nickname_expr},
+                    password_hash,
+                    COALESCE(NULLIF(account_status, ''), 'active'),
+                    COALESCE(created_at, CURRENT_TIMESTAMP),
+                    COALESCE(updated_at, created_at, CURRENT_TIMESTAMP),
+                    last_login_at
+                FROM member_users_legacy_username
+                """
+            )
+        )
+        conn.execute(text("CREATE INDEX idx_member_users_student_id ON member_users (student_id)"))
+        conn.execute(text("CREATE INDEX idx_member_users_account_status ON member_users (account_status)"))
+        conn.execute(text("DROP TABLE member_users_legacy_username"))
+
+
 def _legacy_page_permissions_for_user(user: User) -> dict[str, str]:
     preset = ROLE_PAGE_PERMISSION_PRESETS.get(user.role)
     if preset:
@@ -114,6 +180,7 @@ def ensure_all_user_page_permissions() -> None:
 def ensure_schema_compat() -> None:
     db.create_all()
     is_sqlite = _is_sqlite()
+    _rebuild_sqlite_legacy_member_users()
 
     if is_sqlite:
         _add_column_if_missing("routes", "updated_at", "updated_at DATETIME")
@@ -192,6 +259,8 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("activities", "registration_limit", "registration_limit INTEGER")
         _add_column_if_missing("activities", "insurance_qr_path", "insurance_qr_path TEXT")
         _add_column_if_missing("media_assets", "activity_route_option_id", "activity_route_option_id INTEGER")
+        _add_column_if_missing("member_users", "student_id", "student_id VARCHAR(32) DEFAULT '' NOT NULL")
+        _add_column_if_missing("member_users", "nickname", "nickname VARCHAR(64) DEFAULT '' NOT NULL")
     else:
         _add_column_if_missing("routes", "updated_at", "updated_at TIMESTAMP")
         _add_column_if_missing("routes", "uploaded_at", "uploaded_at TIMESTAMP")
@@ -269,6 +338,8 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("activities", "registration_limit", "registration_limit INTEGER")
         _add_column_if_missing("activities", "insurance_qr_path", "insurance_qr_path TEXT")
         _add_column_if_missing("media_assets", "activity_route_option_id", "activity_route_option_id INTEGER")
+        _add_column_if_missing("member_users", "student_id", "student_id VARCHAR(32) DEFAULT '' NOT NULL")
+        _add_column_if_missing("member_users", "nickname", "nickname VARCHAR(64) DEFAULT '' NOT NULL")
 
     with db.engine.begin() as conn:
         conn.execute(text("UPDATE routes SET uploaded_at = created_at WHERE uploaded_at IS NULL"))
@@ -351,6 +422,14 @@ def ensure_schema_compat() -> None:
         conn.execute(text("UPDATE event_registrations SET updated_at = created_at WHERE updated_at IS NULL"))
         conn.execute(text("UPDATE activity_route_options SET participant_count = 0 WHERE participant_count IS NULL"))
         conn.execute(text(f"UPDATE activities SET needs_registration = {false_literal} WHERE needs_registration IS NULL"))
+        member_columns = _table_columns("member_users")
+        if "student_id" in member_columns:
+            if "username" in member_columns:
+                conn.execute(text("UPDATE member_users SET student_id = UPPER(username) WHERE student_id IS NULL OR student_id = ''"))
+                conn.execute(text("UPDATE member_users SET nickname = username WHERE nickname IS NULL OR nickname = ''"))
+            conn.execute(text("UPDATE member_users SET student_id = UPPER(student_id) WHERE student_id IS NOT NULL"))
+        if "nickname" in member_columns:
+            conn.execute(text("UPDATE member_users SET nickname = student_id WHERE nickname IS NULL OR nickname = ''"))
 
     db.session.expire_all()
     ensure_all_user_page_permissions()

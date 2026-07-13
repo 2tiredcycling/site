@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MemberUser, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -60,6 +60,32 @@ def login(client, username: str, password: str):
 
 def login_admin(client):
     return login(client, "admin", "admin123456789")
+
+
+def register_member(client, student_id: str, nickname: str, password: str, follow_redirects: bool = True):
+    register_page = client.get("/member/register")
+    token = _extract_csrf(register_page.get_data(as_text=True))
+    return client.post(
+        "/member/register",
+        data={
+            "student_id": student_id,
+            "nickname": nickname,
+            "password": password,
+            "password_confirm": password,
+            "csrf_token": token,
+        },
+        follow_redirects=follow_redirects,
+    )
+
+
+def login_member(client, student_id: str, password: str, follow_redirects: bool = True):
+    login_page = client.get("/member/login")
+    token = _extract_csrf(login_page.get_data(as_text=True))
+    return client.post(
+        "/member/login",
+        data={"student_id": student_id, "password": password, "csrf_token": token},
+        follow_redirects=follow_redirects,
+    )
 
 
 def get_manage_csrf(client) -> str:
@@ -114,6 +140,74 @@ def test_csrf_required_for_login(app_and_client):
         follow_redirects=False,
     )
     assert resp.status_code == 400
+
+
+def test_member_register_creates_account_and_logs_in(app_and_client):
+    app, client = app_and_client
+    resp = register_member(client, "12345678", "Rider One", "memberpass123")
+    assert resp.status_code == 200
+    assert "Rider One" in resp.get_data(as_text=True)
+
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="12345678").first()
+        assert member is not None
+        assert member.nickname == "Rider One"
+        assert member.account_status == MEMBER_ACCOUNT_ACTIVE
+        assert check_password_hash(member.password_hash, "memberpass123")
+        assert member.last_login_at is None
+
+
+def test_member_register_rejects_duplicate_student_id(app_and_client):
+    app, client = app_and_client
+    assert register_member(client, "sid001", "First Rider", "memberpass123").status_code == 200
+    with client.session_transaction() as sess:
+        sess.pop("member_user_id", None)
+    resp = register_member(client, "SID001", "Second Rider", "memberpass123")
+    assert resp.status_code == 409
+    assert "该学号已注册账号" in resp.get_data(as_text=True)
+
+    with app.app_context():
+        assert MemberUser.query.filter_by(student_id="SID001").count() == 1
+
+
+def test_member_login_updates_last_login_and_logout_clears_session(app_and_client):
+    app, client = app_and_client
+    assert register_member(client, "20260001", "Login Rider", "memberpass123").status_code == 200
+    page = client.get("/")
+    logout_token = _extract_csrf(page.get_data(as_text=True))
+    client.post("/member/logout", data={"csrf_token": logout_token}, follow_redirects=True)
+
+    resp = login_member(client, "20260001", "memberpass123")
+    assert resp.status_code == 200
+    assert "Login Rider" in resp.get_data(as_text=True)
+
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20260001").first()
+        assert member.last_login_at is not None
+
+    page = client.get("/")
+    logout_token = _extract_csrf(page.get_data(as_text=True))
+    resp = client.post("/member/logout", data={"csrf_token": logout_token}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert "Login Rider" not in resp.get_data(as_text=True)
+
+
+def test_member_login_rejects_disabled_account(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            MemberUser(
+                student_id="DISABLED001",
+                nickname="Disabled Rider",
+                password_hash=generate_password_hash("memberpass123"),
+                account_status=MEMBER_ACCOUNT_DISABLED,
+            )
+        )
+        db.session.commit()
+
+    resp = login_member(client, "DISABLED001", "memberpass123")
+    assert resp.status_code == 401
+    assert "学号或密码不正确" in resp.get_data(as_text=True)
 
 
 def test_unauth_manage_redirect_writes_audit_log(app_and_client):

@@ -140,6 +140,10 @@ MERCH_ORDER_STATUSES = (
     MERCH_ORDER_PICKED_UP,
 )
 
+MEMBER_ACCOUNT_ACTIVE = "active"
+MEMBER_ACCOUNT_DISABLED = "disabled"
+MEMBER_ACCOUNT_STATUSES = (MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED)
+
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -201,6 +205,34 @@ class User(db.Model):
             "perm_view_audit_logs": self.perm_view_audit_logs,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class MemberUser(db.Model):
+    __tablename__ = "member_users"
+    __table_args__ = (
+        Index("idx_member_users_student_id", "student_id"),
+        Index("idx_member_users_account_status", "account_status"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.String(32), nullable=False, unique=True)
+    nickname = db.Column(db.String(64), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    account_status = db.Column(db.String(16), nullable=False, default=MEMBER_ACCOUNT_ACTIVE)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+
+    def as_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "student_id": self.student_id,
+            "nickname": self.nickname,
+            "account_status": self.account_status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
         }
 
 

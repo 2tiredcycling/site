@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.9.0]
+
+### Added
+
+- Added the `member_users` table and migration for front-site member accounts with student ID login and nickname display fields.
+- Added member registration, login, and logout flows using password hashes and active/disabled account status.
+- Added front-site navigation entry points for member login state.
+
 ## [v4.8.3]
 
 ### Fixed

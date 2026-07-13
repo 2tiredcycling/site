@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>社员账号登录 | 2Tired 骑行社</title>
+  <meta name="description" content="登录 2Tired 骑行社社员账号。">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container narrow">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+
+    <section class="card form-card login-card">
+      <p class="hero-kicker">MEMBER ACCOUNT</p>
+      <h1>社员账号登录</h1>
+
+      {% if error_message %}
+        <div class="alert">{{ error_message }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('web.member_login_submit') }}" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <label>
+          学号
+          <input type="text" name="student_id" value="{{ student_id or '' }}" maxlength="32" autocomplete="username" required>
+        </label>
+        <label>
+          密码
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <div class="row-actions">
+          <button class="btn" type="submit">登录</button>
+          <a class="btn btn-muted" href="{{ url_for('web.member_register', next=next_url, student_id=student_id) }}">注册账号</a>
+        </div>
+      </form>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

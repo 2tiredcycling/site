@@ -1000,6 +1000,14 @@ body {
   margin-bottom: 14px;
 }
 
+.site-nav-inline-form {
+  display: contents;
+}
+
+.site-nav-inline-form .quick-pill {
+  height: 100%;
+}
+
 .site-nav-shell {
   margin-bottom: 18px;
   position: relative;
