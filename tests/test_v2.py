@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta, timezone
+﻿from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 import json
 from pathlib import Path
@@ -8,7 +8,7 @@ import pytest
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MemberUser, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_MEMBERS, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MemberProfile, MemberUser, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_MEMBERS, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -500,6 +500,66 @@ def test_manage_member_admin_permission_can_delete_account(app_and_client):
     assert "社员账号已删除" in deleted.get_data(as_text=True)
     with app.app_context():
         assert db.session.get(MemberUser, member_id) is None
+
+
+def test_member_profile_links_to_member_user_and_serializes(app_and_client):
+    app, _client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20261001",
+            nickname="Profile Rider",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        profile = MemberProfile(
+            member_user=member,
+            student_id="20261001",
+            full_name="Profile Person",
+            entry_year=2026,
+            school="理工学院",
+            college="逸夫书院",
+            phone="13800000000",
+            last_confirmed_at=date(2026, 7, 11),
+        )
+        db.session.add(profile)
+        db.session.commit()
+
+        saved = MemberProfile.query.filter_by(student_id="20261001").first()
+        assert saved is not None
+        assert saved.member_user == member
+        assert member.profile == saved
+        assert saved.as_dict()["last_confirmed_at"] == "2026-07-11"
+        assert saved.as_dict()["full_name"] == "Profile Person"
+
+
+def test_member_profile_survives_member_user_delete(app_and_client):
+    app, _client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20261002",
+            nickname="Detached Rider",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        profile = MemberProfile(
+            member_user=member,
+            student_id="20261002",
+            full_name="Detached Person",
+            last_confirmed_at=date(2026, 7, 11),
+        )
+        db.session.add(profile)
+        db.session.commit()
+        member_id = member.id
+        profile_id = profile.id
+
+        db.session.delete(member)
+        db.session.commit()
+
+        saved = db.session.get(MemberProfile, profile_id)
+        assert db.session.get(MemberUser, member_id) is None
+        assert saved is not None
+        assert saved.member_user_id is None
+        assert saved.student_id == "20261002"
 
 
 def test_unauth_manage_redirect_writes_audit_log(app_and_client):
@@ -2036,5 +2096,4 @@ def test_route_rollback_rejects_missing_gpx_snapshot(app_and_client):
         route = db.session.get(Route, route_id)
         assert route is not None
         assert route.route_name == old_name
-
 

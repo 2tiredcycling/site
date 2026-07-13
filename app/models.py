@@ -228,6 +228,7 @@ class MemberUser(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
     last_login_at = db.Column(db.DateTime, nullable=True)
+    profile = db.relationship("MemberProfile", back_populates="member_user", uselist=False)
 
     def as_dict(self) -> dict:
         return {
@@ -238,6 +239,48 @@ class MemberUser(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
+        }
+
+
+class MemberProfile(db.Model):
+    __tablename__ = "member_profiles"
+    __table_args__ = (
+        UniqueConstraint("student_id", name="uq_member_profiles_student_id"),
+        UniqueConstraint("member_user_id", name="uq_member_profiles_member_user_id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    member_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("member_users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    student_id = db.Column(db.String(32), nullable=False)
+    full_name = db.Column(db.String(64), nullable=False)
+    gender = db.Column(db.String(16), nullable=True)
+    entry_year = db.Column(db.Integer, nullable=True)
+    school = db.Column(db.String(128), nullable=True)
+    college = db.Column(db.String(128), nullable=True)
+    phone = db.Column(db.String(32), nullable=True)
+    last_confirmed_at = db.Column(db.Date, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    member_user = db.relationship("MemberUser", back_populates="profile")
+
+    def as_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "member_user_id": self.member_user_id,
+            "student_id": self.student_id,
+            "full_name": self.full_name,
+            "gender": self.gender,
+            "entry_year": self.entry_year,
+            "school": self.school,
+            "college": self.college,
+            "phone": self.phone,
+            "last_confirmed_at": self.last_confirmed_at.isoformat() if self.last_confirmed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 

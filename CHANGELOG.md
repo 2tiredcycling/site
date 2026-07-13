@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.10.0]
+
+### Added
+
+- Added the `member_profiles` table and model for member profile records separated from login accounts, with optional one-to-one account linkage and `ON DELETE SET NULL` behavior.
+
 ## [v4.9.5]
 
 ### Changed
