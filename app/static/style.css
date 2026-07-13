@@ -1182,6 +1182,68 @@ body {
   margin-bottom: 10px;
 }
 
+.member-account-shell {
+  max-width: 1080px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.member-account-head {
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.member-account-head .site-nav-inline-form {
+  margin: 0;
+}
+
+.member-account-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.member-account-layout > .edit-item,
+.member-account-side .edit-item {
+  margin-bottom: 0;
+}
+
+.member-account-side {
+  display: grid;
+  gap: 14px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.detail-grid > div {
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--brand-surface);
+}
+
+.detail-grid strong,
+.detail-grid span {
+  display: block;
+}
+
+.detail-grid strong {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.detail-grid span {
+  margin-top: 4px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
 .rich-text {
   line-height: 1.8;
 }
@@ -2859,7 +2921,8 @@ td {
   }
 
   .manage-account-basic-grid,
-  .manage-page-permission-grid {
+  .manage-page-permission-grid,
+  .member-account-layout {
     grid-template-columns: 1fr;
   }
 
@@ -2942,8 +3005,13 @@ td {
   }
 
   form,
-  .filter-grid {
+  .filter-grid,
+  .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .member-account-head {
+    align-items: stretch;
   }
 
   .feedback-meta-row {

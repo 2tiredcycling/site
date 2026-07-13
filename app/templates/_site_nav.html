@@ -24,15 +24,9 @@
     </a>
     {% set member_user = current_member_user() %}
     {% if member_user %}
-      <a class="quick-pill {% if ep.endswith('.member_password') %}is-active{% endif %}" href="{{ url_for('web.member_password') }}" {% if ep.endswith('.member_password') %}aria-current="page"{% endif %}>
-        <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-user"></use></svg></span><span>改密</span>
+      <a class="quick-pill {% if ep.endswith('.member_account') or ep.endswith('.member_password') %}is-active{% endif %}" href="{{ url_for('web.member_account') }}" {% if ep.endswith('.member_account') or ep.endswith('.member_password') %}aria-current="page"{% endif %}>
+        <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-user"></use></svg></span><span>账号</span>
       </a>
-      <form method="post" action="{{ url_for('web.member_logout') }}" class="site-nav-inline-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="quick-pill quick-pill-button" type="submit">
-          <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-user"></use></svg></span><span>{{ member_user.nickname or member_user.student_id }} · 退出</span>
-        </button>
-      </form>
     {% else %}
       <a class="quick-pill {% if ep.endswith('.member_login') or ep.endswith('.member_register') %}is-active{% endif %}" href="{{ url_for('web.member_login', next=request.path) }}" {% if ep.endswith('.member_login') or ep.endswith('.member_register') %}aria-current="page"{% endif %}>
         <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-user"></use></svg></span><span>登录</span>

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.9.3]
+
+### Added
+
+- Added a front-site member account center for account overview, the password-change entry, and future member profile and rental record sections.
+
 ## [v4.9.2]
 
 ### Added

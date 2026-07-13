@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的账号 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '查看 2Tired 骑行社社员账号信息。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+
+    <section class="card form-card member-account-shell">
+      <div class="section-head member-account-head">
+        <div>
+          <p class="hero-kicker">MEMBER ACCOUNT</p>
+          <h1>我的账号</h1>
+          <p class="hint">{{ member.nickname or member.student_id }} · {{ member.student_id }}</p>
+        </div>
+        <form method="post" action="{{ url_for('web.member_logout') }}" class="site-nav-inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-muted" type="submit">退出登录</button>
+        </form>
+      </div>
+
+      <div class="member-account-layout">
+        <article class="edit-item compact-item">
+          <div class="row-actions">
+            <div>
+              <strong>账号信息</strong>
+              <p class="hint">当前仅保存登录所需字段，社员资料会在后续独立表中接入。</p>
+            </div>
+            <a class="btn" href="{{ url_for('web.member_password') }}">修改密码</a>
+          </div>
+          <div class="detail-grid">
+            <div><strong>学号</strong><span>{{ member.student_id }}</span></div>
+            <div><strong>昵称</strong><span>{{ member.nickname or '-' }}</span></div>
+            <div><strong>账号状态</strong><span>{{ '启用' if member.account_status == 'active' else '禁用' }}</span></div>
+            <div><strong>注册时间</strong><span>{{ to_local_time(member.created_at).strftime('%Y-%m-%d %H:%M') if member.created_at else '-' }}</span></div>
+            <div><strong>最近登录</strong><span>{{ to_local_time(member.last_login_at).strftime('%Y-%m-%d %H:%M') if member.last_login_at else '暂无记录' }}</span></div>
+          </div>
+        </article>
+
+        <div class="member-account-side">
+          <article class="edit-item compact-item">
+            <strong>社员资料</strong>
+            <p class="hint">后续可在这里维护姓名、学院、联系方式、骑行偏好等资料。</p>
+            <div class="row-actions">
+              <button class="btn btn-muted" type="button" disabled>待接入</button>
+            </div>
+          </article>
+
+          <article class="edit-item compact-item">
+            <strong>租车与装备记录</strong>
+            <p class="hint">后续可在这里查看车辆、装备借还状态和历史记录。</p>
+            <div class="row-actions">
+              <button class="btn btn-muted" type="button" disabled>待接入</button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

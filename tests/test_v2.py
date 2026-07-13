@@ -146,7 +146,9 @@ def test_member_register_creates_account_and_logs_in(app_and_client):
     app, client = app_and_client
     resp = register_member(client, "12345678", "Rider One", "memberpass123")
     assert resp.status_code == 200
-    assert "Rider One" in resp.get_data(as_text=True)
+    assert "账号" in resp.get_data(as_text=True)
+    account_page = client.get("/member/account")
+    assert "Rider One" in account_page.get_data(as_text=True)
 
     with app.app_context():
         member = MemberUser.query.filter_by(student_id="12345678").first()
@@ -173,19 +175,21 @@ def test_member_register_rejects_duplicate_student_id(app_and_client):
 def test_member_login_updates_last_login_and_logout_clears_session(app_and_client):
     app, client = app_and_client
     assert register_member(client, "20260001", "Login Rider", "memberpass123").status_code == 200
-    page = client.get("/")
+    page = client.get("/member/account")
     logout_token = _extract_csrf(page.get_data(as_text=True))
     client.post("/member/logout", data={"csrf_token": logout_token}, follow_redirects=True)
 
     resp = login_member(client, "20260001", "memberpass123")
     assert resp.status_code == 200
-    assert "Login Rider" in resp.get_data(as_text=True)
+    assert "账号" in resp.get_data(as_text=True)
+    account_page = client.get("/member/account")
+    assert "Login Rider" in account_page.get_data(as_text=True)
 
     with app.app_context():
         member = MemberUser.query.filter_by(student_id="20260001").first()
         assert member.last_login_at is not None
 
-    page = client.get("/")
+    page = client.get("/member/account")
     logout_token = _extract_csrf(page.get_data(as_text=True))
     resp = client.post("/member/logout", data={"csrf_token": logout_token}, follow_redirects=True)
     assert resp.status_code == 200
@@ -198,6 +202,38 @@ def test_member_password_page_requires_login(app_and_client):
     assert resp.status_code == 302
     assert "/member/login" in (resp.headers.get("Location") or "")
     assert "next=/member/password" in (resp.headers.get("Location") or "")
+
+
+def test_member_account_page_requires_login(app_and_client):
+    _app, client = app_and_client
+    resp = client.get("/member/account", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/member/login" in (resp.headers.get("Location") or "")
+    assert "next=/member/account" in (resp.headers.get("Location") or "")
+
+
+def test_member_account_page_shows_account_summary_and_password_entry(app_and_client):
+    _app, client = app_and_client
+    assert register_member(client, "20260050", "Account Rider", "memberpass123").status_code == 200
+
+    page = client.get("/member/account")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "我的账号" in html
+    assert "20260050" in html
+    assert "Account Rider" in html
+    assert "修改密码" in html
+    assert "/member/password" in html
+    assert "社员资料" in html
+    assert "租车与装备记录" in html
+    assert "退出登录" in html
+
+    homepage = client.get("/")
+    homepage_html = homepage.get_data(as_text=True)
+    assert "账号" in homepage_html
+    assert "改密" not in homepage_html
+    assert "退出登录" not in homepage_html
+    assert "/member/account" in homepage_html
 
 
 def test_member_can_change_own_password(app_and_client):
@@ -239,7 +275,7 @@ def test_member_can_change_own_password(app_and_client):
         assert check_password_hash(member.password_hash, "newpass123")
         assert not check_password_hash(member.password_hash, "oldpass123")
 
-    page = client.get("/")
+    page = client.get("/member/account")
     logout_token = _extract_csrf(page.get_data(as_text=True))
     client.post("/member/logout", data={"csrf_token": logout_token}, follow_redirects=True)
     assert login_member(client, "20260051", "oldpass123").status_code == 401
@@ -325,7 +361,7 @@ def test_manage_member_write_permission_can_update_but_not_delete(app_and_client
         member_id = member.id
 
     assert login_member(client, "20260021", "old-member-pass").status_code == 200
-    page = client.get("/")
+    page = client.get("/member/account")
     logout_token = _extract_csrf(page.get_data(as_text=True))
     client.post("/member/logout", data={"csrf_token": logout_token}, follow_redirects=True)
 

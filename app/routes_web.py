@@ -1740,6 +1740,18 @@ def member_password():
     )
 
 
+@bp.get("/member/account")
+def member_account():
+    member = _current_member_user()
+    if not member:
+        return _member_login_redirect()
+    return render_template(
+        "member_account.html",
+        member=member,
+        meta_description="查看 2Tired 骑行社社员账号信息。",
+    )
+
+
 @bp.post("/member/password")
 def member_password_submit():
     if not validate_csrf_token(request.form.get("csrf_token")):
