@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>社员资料 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description or '查看 2Tired 骑行社社员资料。' }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+
+    <section class="card form-card member-account-shell">
+      <div class="section-head member-account-head">
+        <div>
+          <p class="hero-kicker">MEMBER PROFILE</p>
+          <h1>社员资料</h1>
+          <p class="hint">{{ member.nickname or member.student_id }} · {{ member.student_id }}</p>
+        </div>
+        <a class="btn btn-muted" href="{{ url_for('web.member_account') }}">返回账号中心</a>
+      </div>
+
+      {% if profile %}
+        <article class="edit-item compact-item">
+          <div class="row-actions">
+            <div>
+              <strong>{{ profile.full_name }}</strong>
+              <p class="hint">资料当前为只读展示；后续会接入本人确认和修改流程。</p>
+            </div>
+          </div>
+          <div class="detail-grid member-profile-grid">
+            <div><strong>真实姓名</strong><span>{{ profile.full_name }}</span></div>
+            <div><strong>学号</strong><span>{{ profile.student_id }}</span></div>
+            <div><strong>性别</strong><span>{{ profile.gender or '待补充' }}</span></div>
+            <div><strong>入学年份</strong><span>{{ profile.entry_year or '待补充' }}</span></div>
+            <div><strong>学院</strong><span>{{ profile.school or '待补充' }}</span></div>
+            <div><strong>书院</strong><span>{{ profile.college or '待补充' }}</span></div>
+            <div><strong>手机号</strong><span>{{ profile.phone or '待补充' }}</span></div>
+            <div><strong>最近确认</strong><span>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '待确认' }}</span></div>
+          </div>
+        </article>
+      {% else %}
+        <article class="edit-item compact-item">
+          <strong>暂未匹配到社员档案</strong>
+          <p class="hint">系统会按你的登录学号 {{ member.student_id }} 匹配已导入的社员资料。名单导入后再次进入本页会自动关联。</p>
+        </article>
+      {% endif %}
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

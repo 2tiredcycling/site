@@ -102,6 +102,7 @@ from app.models import (
     EventRegistration,
     ImportReport,
     MediaAsset,
+    MemberProfile,
     MemberUser,
     MerchPreorderBatch,
     MerchPreorderImage,
@@ -738,6 +739,8 @@ def _required_page_permission_for_request(path: str, method: str) -> tuple[str, 
         if normalized.endswith("/new") or normalized.endswith("/edit"):
             return PAGE_ACCOUNTS, PERMISSION_ADMIN
         return PAGE_ACCOUNTS, PERMISSION_READ
+    if normalized.startswith("/manage/member-profiles"):
+        return PAGE_MEMBERS, PERMISSION_READ
     if normalized.startswith("/manage/members"):
         if is_post and "/delete" in normalized:
             return PAGE_MEMBERS, PERMISSION_ADMIN
@@ -831,7 +834,8 @@ def _inject_csrf_token():
         if can_read_page(user, PAGE_ACCOUNTS):
             nav_items.append({"label": "账号", "endpoint": "admin.users_page", "prefix": "/manage/users"})
         if can_read_page(user, PAGE_MEMBERS):
-            nav_items.append({"label": "社员", "endpoint": "admin.member_users_page", "prefix": "/manage/members"})
+            nav_items.append({"label": "社员账号", "endpoint": "admin.member_users_page", "prefix": "/manage/members"})
+            nav_items.append({"label": "社员档案", "endpoint": "admin.member_profiles_page", "prefix": "/manage/member-profiles"})
     return {
         "csrf_token": get_csrf_token,
         "to_local_time": _to_local_time,
@@ -2263,6 +2267,46 @@ def member_users_page():
         q=q,
         can_write_members=can_write_page(g.current_user, PAGE_MEMBERS),
         can_admin_members=can_admin_page(g.current_user, PAGE_MEMBERS),
+    )
+
+
+@bp.get("/member-profiles")
+@login_required
+def member_profiles_page():
+    page = max(1, request.args.get("page", default=1, type=int))
+    q = (request.args.get("q") or "").strip()
+    link_status = (request.args.get("link_status") or "").strip()
+    query = MemberProfile.query.outerjoin(MemberUser, MemberProfile.member_user_id == MemberUser.id)
+    if q:
+        like_value = f"%{q}%"
+        query = query.filter(
+            db.or_(
+                MemberProfile.student_id.ilike(like_value),
+                MemberProfile.full_name.ilike(like_value),
+                MemberProfile.school.ilike(like_value),
+                MemberProfile.college.ilike(like_value),
+                MemberProfile.phone.ilike(like_value),
+                MemberUser.nickname.ilike(like_value),
+            )
+        )
+    if link_status == "linked":
+        query = query.filter(MemberProfile.member_user_id.isnot(None))
+    elif link_status == "unlinked":
+        query = query.filter(MemberProfile.member_user_id.is_(None))
+    else:
+        link_status = ""
+
+    pagination = query.order_by(MemberProfile.student_id.asc(), MemberProfile.id.asc()).paginate(
+        page=page,
+        per_page=20,
+        error_out=False,
+    )
+    return render_template(
+        "manage_member_profiles.html",
+        profiles=pagination.items,
+        pagination=pagination,
+        q=q,
+        link_status=link_status,
     )
 
 

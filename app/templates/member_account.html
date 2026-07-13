@@ -60,9 +60,13 @@
         <div class="member-account-side">
           <article class="edit-item compact-item">
             <strong>社员资料</strong>
-            <p class="hint">后续可在这里维护姓名、学院、联系方式、骑行偏好等资料。</p>
+            {% if profile %}
+              <p class="hint">已匹配到 {{ profile.full_name }} 的社员档案。</p>
+            {% else %}
+              <p class="hint">暂未匹配到同学号的社员档案；导入名单后会自动关联。</p>
+            {% endif %}
             <div class="row-actions">
-              <button class="btn btn-muted" type="button" disabled>待接入</button>
+              <a class="btn btn-muted" href="{{ url_for('web.member_profile') }}">查看资料</a>
             </div>
           </article>
 

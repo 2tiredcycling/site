@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.10.1]
+
+### Added
+
+- Added automatic member profile linking by student ID after registration and when opening member account/profile pages.
+- Added a front-site read-only member profile page linked from the member account center.
+- Added a management-side read-only member profile list with keyword and account binding filters.
+
 ## [v4.10.0]
 
 ### Added

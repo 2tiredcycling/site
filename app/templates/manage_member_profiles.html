@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>社员档案 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
+  <main class="container">
+    <header class="header">
+      <h1>社员档案</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.member_users_page') }}">社员账号</a>
+      </div>
+    </header>
+    {% include "_manage_nav.html" %}
+
+    <section class="card form-card manage-route-filter-card">
+      <h2 class="manage-route-filter-title">筛选</h2>
+      <form method="get" action="{{ url_for('admin.member_profiles_page') }}" class="single-form manage-route-filter-form">
+        <div class="manage-route-filter-basic">
+          <label class="manage-filter-field manage-filter-keyword">
+            <span>关键词</span>
+            <input type="text" name="q" value="{{ q }}" placeholder="学号、姓名、学院、书院、手机号或昵称">
+          </label>
+          <label class="manage-filter-field">
+            <span>绑定状态</span>
+            <select name="link_status">
+              <option value="" {% if not link_status %}selected{% endif %}>全部</option>
+              <option value="linked" {% if link_status == 'linked' %}selected{% endif %}>已绑定账号</option>
+              <option value="unlinked" {% if link_status == 'unlinked' %}selected{% endif %}>未绑定账号</option>
+            </select>
+          </label>
+          <div class="manage-filter-actions">
+            <button class="btn" type="submit">应用</button>
+            <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page') }}">重置</a>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="card form-card manage-route-list-card">
+      <h2>档案列表</h2>
+      <p class="hint">当前为只读档案视图；账号绑定会按学号在用户注册或打开用户页时自动完成。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>学号</th>
+            <th>姓名</th>
+            <th>学院 / 书院</th>
+            <th>联系方式</th>
+            <th>确认日期</th>
+            <th>账号绑定</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for profile in profiles %}
+            <tr>
+              <td>
+                <div class="manage-route-name-cell">
+                  <strong>{{ profile.student_id }}</strong>
+                  <div class="hint">ID: {{ profile.id }}</div>
+                </div>
+              </td>
+              <td>
+                <strong>{{ profile.full_name }}</strong>
+                <div class="hint">{{ profile.gender or '性别待补充' }} · {{ profile.entry_year or '入学年份待补充' }}</div>
+              </td>
+              <td>
+                <div>{{ profile.school or '-' }}</div>
+                <div class="hint">{{ profile.college or '书院未填写' }}</div>
+              </td>
+              <td>{{ profile.phone or '-' }}</td>
+              <td>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '-' }}</td>
+              <td>
+                {% if profile.member_user %}
+                  {{ status_badge('active', '已绑定') }}
+                  <div class="hint">{{ profile.member_user.nickname }} · ID {{ profile.member_user.id }}</div>
+                {% else %}
+                  {{ status_badge('pending', '未绑定') }}
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">暂无社员档案</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page', page=pagination.prev_num, q=q, link_status=link_status) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page', page=pagination.next_num, q=q, link_status=link_status) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

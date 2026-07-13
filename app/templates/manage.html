@@ -187,6 +187,10 @@
             <strong>社员账号</strong>
             <span>查看前台社员账号、状态与最近登录</span>
           </a>
+          <a class="card form-card manage-entry-card" href="{{ url_for('admin.member_profiles_page') }}">
+            <strong>社员档案</strong>
+            <span>查看社员实名资料、学院书院与账号绑定状态</span>
+          </a>
         {% endif %}
         {% if can_view_analytics %}
           <a class="card form-card manage-entry-card" href="{{ url_for('admin.analytics_page') }}">

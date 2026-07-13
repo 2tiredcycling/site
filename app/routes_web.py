@@ -24,6 +24,7 @@ from app.models import (
     MERCH_ORDER_PENDING,
     MERCH_ORDER_PICKED_UP,
     MERCH_ORDER_READY,
+    MemberProfile,
     MemberUser,
     Route,
     RouteFeedback,
@@ -335,6 +336,23 @@ def _validate_member_password_update(member: MemberUser, current_password: str, 
     if new_password != password_confirm:
         return "两次输入的新密码不一致。"
     return ""
+
+
+def _sync_member_profile_link(member: MemberUser) -> MemberProfile | None:
+    if member.profile:
+        return member.profile
+
+    profile = MemberProfile.query.filter(db.func.upper(MemberProfile.student_id) == member.student_id.upper()).first()
+    if not profile:
+        return None
+    if profile.member_user_id and profile.member_user_id != member.id:
+        return None
+
+    if profile.member_user_id != member.id:
+        profile.member_user_id = member.id
+        profile.updated_at = utcnow()
+        db.session.commit()
+    return profile
 
 
 def _rating_summary_map(route_ids: list[int]) -> dict[int, dict]:
@@ -1701,6 +1719,7 @@ def member_register_submit():
     )
     db.session.add(member)
     db.session.commit()
+    _sync_member_profile_link(member)
     session["member_user_id"] = member.id
     return redirect(_member_auth_next())
 
@@ -1752,12 +1771,28 @@ def member_account():
     member = _current_member_user()
     if not member:
         return _member_login_redirect()
+    profile = _sync_member_profile_link(member)
     return render_template(
         "member_account.html",
         member=member,
+        profile=profile,
         error_message="",
         success_message=request.args.get("updated") == "nickname",
         meta_description="查看 2Tired 骑行社社员账号信息。",
+    )
+
+
+@bp.get("/member/profile")
+def member_profile():
+    member = _current_member_user()
+    if not member:
+        return _member_login_redirect()
+    profile = _sync_member_profile_link(member)
+    return render_template(
+        "member_profile.html",
+        member=member,
+        profile=profile,
+        meta_description="查看 2Tired 骑行社社员资料。",
     )
 
 
@@ -1772,9 +1807,11 @@ def member_account_nickname_submit():
     nickname = _normalize_member_nickname(request.form.get("nickname"))
     error_message = _validate_member_nickname(nickname)
     if error_message:
+        profile = _sync_member_profile_link(member)
         return render_template(
             "member_account.html",
             member=member,
+            profile=profile,
             error_message=error_message,
             success_message=False,
             meta_description="查看 2Tired 骑行社社员账号信息。",

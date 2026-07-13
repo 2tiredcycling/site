@@ -212,6 +212,14 @@ def test_member_account_page_requires_login(app_and_client):
     assert "next=/member/account" in (resp.headers.get("Location") or "")
 
 
+def test_member_profile_page_requires_login(app_and_client):
+    _app, client = app_and_client
+    resp = client.get("/member/profile", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/member/login" in (resp.headers.get("Location") or "")
+    assert "next=/member/profile" in (resp.headers.get("Location") or "")
+
+
 def test_member_account_page_shows_account_summary_and_password_entry(app_and_client):
     _app, client = app_and_client
     assert register_member(client, "20260050", "Account Rider", "memberpass123").status_code == 200
@@ -228,6 +236,7 @@ def test_member_account_page_shows_account_summary_and_password_entry(app_and_cl
     assert "注册时间" not in html
     assert "最近登录" not in html
     assert "社员资料" in html
+    assert "/member/profile" in html
     assert "租车与装备记录" in html
     assert "退出登录" in html
 
@@ -238,6 +247,80 @@ def test_member_account_page_shows_account_summary_and_password_entry(app_and_cl
     assert "改密" not in homepage_html
     assert "退出登录" not in homepage_html
     assert "/member/account" in homepage_html
+
+
+def test_member_register_auto_links_matching_profile(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        profile = MemberProfile(
+            student_id="20260100",
+            full_name="Linked Person",
+            gender="女",
+            entry_year=2026,
+            school="理工学院",
+            college="逸夫书院",
+            phone="13800000000",
+            last_confirmed_at=date(2026, 7, 11),
+        )
+        db.session.add(profile)
+        db.session.commit()
+        profile_id = profile.id
+
+    assert register_member(client, "20260100", "Linked Rider", "memberpass123").status_code == 200
+
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20260100").first()
+        profile = db.session.get(MemberProfile, profile_id)
+        assert member is not None
+        assert profile is not None
+        assert profile.member_user_id == member.id
+
+    page = client.get("/member/profile")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "Linked Person" in html
+    assert "理工学院" in html
+    assert "13800000000" in html
+    assert "2026-07-11" in html
+
+
+def test_member_account_auto_links_profile_imported_after_registration(app_and_client):
+    app, client = app_and_client
+    assert register_member(client, "20260101", "Late Profile Rider", "memberpass123").status_code == 200
+
+    with app.app_context():
+        profile = MemberProfile(
+            student_id="20260101",
+            full_name="Late Profile Person",
+            school="经管学院",
+            last_confirmed_at=date(2026, 7, 11),
+        )
+        db.session.add(profile)
+        db.session.commit()
+        profile_id = profile.id
+        assert profile.member_user_id is None
+
+    page = client.get("/member/account")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "已匹配到 Late Profile Person 的社员档案" in html
+
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20260101").first()
+        profile = db.session.get(MemberProfile, profile_id)
+        assert member is not None
+        assert profile.member_user_id == member.id
+
+
+def test_member_profile_page_handles_missing_profile(app_and_client):
+    _app, client = app_and_client
+    assert register_member(client, "20260102", "No Profile Rider", "memberpass123").status_code == 200
+
+    page = client.get("/member/profile")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "暂未匹配到社员档案" in html
+    assert "20260102" in html
 
 
 def test_member_can_update_own_nickname(app_and_client):
@@ -374,6 +457,101 @@ def test_manage_member_users_page_lists_member_accounts(app_and_client):
     filtered_html = filtered.get_data(as_text=True)
     assert "Visible Rider" in filtered_html
     assert "Disabled Rider" not in filtered_html
+
+
+def test_manage_member_profiles_page_lists_and_filters_profiles(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20260201",
+            nickname="Bound Rider",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        db.session.add_all(
+            [
+                member,
+                MemberProfile(
+                    member_user=member,
+                    student_id="20260201",
+                    full_name="Bound Person",
+                    gender="男",
+                    entry_year=2026,
+                    school="理工学院",
+                    college="逸夫书院",
+                    phone="13800000001",
+                    last_confirmed_at=date(2026, 7, 11),
+                ),
+                MemberProfile(
+                    student_id="20260202",
+                    full_name="Unbound Person",
+                    school="经管学院",
+                    phone="13800000002",
+                    last_confirmed_at=date(2026, 7, 11),
+                ),
+            ]
+        )
+        db.session.commit()
+
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/member-profiles")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "Bound Person" in html
+    assert "Unbound Person" in html
+    assert "理工学院" in html
+    assert "13800000001" in html
+    assert "已绑定" in html
+    assert "未绑定" in html
+    assert "Bound Rider" in html
+
+    filtered = client.get("/manage/member-profiles?q=经管")
+    filtered_html = filtered.get_data(as_text=True)
+    assert filtered.status_code == 200
+    assert "Unbound Person" in filtered_html
+    assert "Bound Person" not in filtered_html
+
+    linked = client.get("/manage/member-profiles?link_status=linked")
+    linked_html = linked.get_data(as_text=True)
+    assert linked.status_code == 200
+    assert "Bound Person" in linked_html
+    assert "Unbound Person" not in linked_html
+
+    unlinked = client.get("/manage/member-profiles?link_status=unlinked")
+    unlinked_html = unlinked.get_data(as_text=True)
+    assert unlinked.status_code == 200
+    assert "Unbound Person" in unlinked_html
+    assert "Bound Person" not in unlinked_html
+
+
+def test_manage_member_profiles_page_allows_member_read_permission(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            MemberProfile(
+                student_id="20260203",
+                full_name="Reader Visible Person",
+                school="人文社科学院",
+                last_confirmed_at=date(2026, 7, 11),
+            )
+        )
+        reader = User(
+            username="member_profile_reader",
+            password=generate_password_hash("reader123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add(reader)
+        db.session.flush()
+        grant_page_permission(reader, PAGE_MEMBERS, PERMISSION_READ)
+        db.session.commit()
+
+    assert login(client, "member_profile_reader", "reader123456789").status_code == 200
+    page = client.get("/manage/member-profiles")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "Reader Visible Person" in html
+    assert "社员档案" in html
 
 
 def test_manage_member_write_permission_can_update_but_not_delete(app_and_client):
