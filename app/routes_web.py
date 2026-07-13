@@ -298,15 +298,22 @@ def _render_member_auth(
     )
 
 
+def _validate_member_nickname(nickname: str) -> str:
+    if not nickname:
+        return "请填写昵称。"
+    if len(nickname) > 64:
+        return "昵称长度不能超过 64 个字符。"
+    return ""
+
+
 def _validate_member_register_input(student_id: str, nickname: str, password: str, password_confirm: str) -> str:
     if not student_id:
         return "请填写学号。"
     if not MEMBER_STUDENT_ID_PATTERN.fullmatch(student_id):
         return "学号需为 3-32 位，可使用字母、数字、下划线和短横线。"
-    if not nickname:
-        return "请填写昵称。"
-    if len(nickname) > 64:
-        return "昵称长度不能超过 64 个字符。"
+    nickname_error = _validate_member_nickname(nickname)
+    if nickname_error:
+        return nickname_error
     if len(password) < MEMBER_PASSWORD_MIN_LENGTH:
         return "密码至少需要 8 位。"
     if password != password_confirm:
@@ -1748,8 +1755,35 @@ def member_account():
     return render_template(
         "member_account.html",
         member=member,
+        error_message="",
+        success_message=request.args.get("updated") == "nickname",
         meta_description="查看 2Tired 骑行社社员账号信息。",
     )
+
+
+@bp.post("/member/account/nickname")
+def member_account_nickname_submit():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+    member = _current_member_user()
+    if not member:
+        return _member_login_redirect()
+
+    nickname = _normalize_member_nickname(request.form.get("nickname"))
+    error_message = _validate_member_nickname(nickname)
+    if error_message:
+        return render_template(
+            "member_account.html",
+            member=member,
+            error_message=error_message,
+            success_message=False,
+            meta_description="查看 2Tired 骑行社社员账号信息。",
+        ), 400
+
+    member.nickname = nickname
+    member.updated_at = utcnow()
+    db.session.commit()
+    return redirect(_url_for("web.member_account", updated="nickname"))
 
 
 @bp.post("/member/password")

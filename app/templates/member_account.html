@@ -32,16 +32,28 @@
           <div class="row-actions">
             <div>
               <strong>账号信息</strong>
-              <p class="hint">当前仅保存登录所需字段，社员资料会在后续独立表中接入。</p>
+              <p class="hint">当前仅显示登录所需的学号和昵称。</p>
             </div>
             <a class="btn" href="{{ url_for('web.member_password') }}">修改密码</a>
           </div>
+
+          {% if success_message %}
+            <div class="alert alert-ok">昵称已更新。</div>
+          {% endif %}
+          {% if error_message %}
+            <div class="alert">{{ error_message }}</div>
+          {% endif %}
+
           <div class="detail-grid">
             <div><strong>学号</strong><span>{{ member.student_id }}</span></div>
-            <div><strong>昵称</strong><span>{{ member.nickname or '-' }}</span></div>
-            <div><strong>账号状态</strong><span>{{ '启用' if member.account_status == 'active' else '禁用' }}</span></div>
-            <div><strong>注册时间</strong><span>{{ to_local_time(member.created_at).strftime('%Y-%m-%d %H:%M') if member.created_at else '-' }}</span></div>
-            <div><strong>最近登录</strong><span>{{ to_local_time(member.last_login_at).strftime('%Y-%m-%d %H:%M') if member.last_login_at else '暂无记录' }}</span></div>
+            <form method="post" action="{{ url_for('web.member_account_nickname_submit') }}" class="member-nickname-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label>
+                <strong>昵称</strong>
+                <input type="text" name="nickname" value="{{ member.nickname or '' }}" maxlength="64" autocomplete="nickname" required>
+              </label>
+              <button class="btn btn-muted" type="submit">保存昵称</button>
+            </form>
           </div>
         </article>
 

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [v4.9.4]
+
+### Changed
+
+- Simplified the member account center to show only student ID and nickname, moved the top navigation label to the member nickname, and widened the member login form.
+- Added self-service nickname editing from the member account center.
+
 ## [v4.9.3]
 
 ### Added

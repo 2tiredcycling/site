@@ -1188,6 +1188,12 @@ body {
   margin-right: auto;
 }
 
+.member-auth-card {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .member-account-head {
   align-items: flex-start;
   margin-bottom: 16px;
@@ -1226,6 +1232,26 @@ body {
   border-radius: 8px;
   padding: 10px 12px;
   background: var(--brand-surface);
+}
+
+.member-nickname-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--brand-surface);
+}
+
+.member-nickname-form label {
+  display: block;
+  margin: 0;
+}
+
+.member-nickname-form input {
+  margin-top: 4px;
 }
 
 .detail-grid strong,
@@ -3006,7 +3032,8 @@ td {
 
   form,
   .filter-grid,
-  .detail-grid {
+  .detail-grid,
+  .member-nickname-form {
     grid-template-columns: 1fr;
   }
 

@@ -146,7 +146,7 @@ def test_member_register_creates_account_and_logs_in(app_and_client):
     app, client = app_and_client
     resp = register_member(client, "12345678", "Rider One", "memberpass123")
     assert resp.status_code == 200
-    assert "账号" in resp.get_data(as_text=True)
+    assert "Rider One" in resp.get_data(as_text=True)
     account_page = client.get("/member/account")
     assert "Rider One" in account_page.get_data(as_text=True)
 
@@ -181,7 +181,7 @@ def test_member_login_updates_last_login_and_logout_clears_session(app_and_clien
 
     resp = login_member(client, "20260001", "memberpass123")
     assert resp.status_code == 200
-    assert "账号" in resp.get_data(as_text=True)
+    assert "Login Rider" in resp.get_data(as_text=True)
     account_page = client.get("/member/account")
     assert "Login Rider" in account_page.get_data(as_text=True)
 
@@ -224,16 +224,53 @@ def test_member_account_page_shows_account_summary_and_password_entry(app_and_cl
     assert "Account Rider" in html
     assert "修改密码" in html
     assert "/member/password" in html
+    assert "账号状态" not in html
+    assert "注册时间" not in html
+    assert "最近登录" not in html
     assert "社员资料" in html
     assert "租车与装备记录" in html
     assert "退出登录" in html
 
     homepage = client.get("/")
     homepage_html = homepage.get_data(as_text=True)
-    assert "账号" in homepage_html
+    assert "Account Rider" in homepage_html
+    assert "<span>账号</span>" not in homepage_html
     assert "改密" not in homepage_html
     assert "退出登录" not in homepage_html
     assert "/member/account" in homepage_html
+
+
+def test_member_can_update_own_nickname(app_and_client):
+    app, client = app_and_client
+    assert register_member(client, "20260052", "Old Nick", "memberpass123").status_code == 200
+
+    page = client.get("/member/account")
+    token = _extract_csrf(page.get_data(as_text=True))
+    blank = client.post(
+        "/member/account/nickname",
+        data={"csrf_token": token, "nickname": "   "},
+        follow_redirects=True,
+    )
+    assert blank.status_code == 400
+    assert "请填写昵称" in blank.get_data(as_text=True)
+
+    updated = client.post(
+        "/member/account/nickname",
+        data={"csrf_token": token, "nickname": "New Nick"},
+        follow_redirects=True,
+    )
+    updated_html = updated.get_data(as_text=True)
+    assert updated.status_code == 200
+    assert "昵称已更新" in updated_html
+    assert "New Nick" in updated_html
+
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20260052").first()
+        assert member is not None
+        assert member.nickname == "New Nick"
+
+    homepage = client.get("/")
+    assert "New Nick" in homepage.get_data(as_text=True)
 
 
 def test_member_can_change_own_password(app_and_client):
