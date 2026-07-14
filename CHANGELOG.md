@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.11.0]
+
+### Added
+
+- Added the persistent membership application data model for continuously open club applications.
+- Added normalized application option definitions for competition interest, cycling experience, bicycle status, review state, and form versioning.
+- Added the database migration and tests for membership application account, reviewer, and approved-profile relationships.
+
 ## [v4.10.5]
 
 ### Chore

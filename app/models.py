@@ -3,6 +3,11 @@ from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Index, UniqueConstraint
 
+from app.membership_application_options import (
+    APPLICATION_STATUS_PENDING,
+    CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION,
+)
+
 db = SQLAlchemy()
 
 ROLE_SUPER_ADMIN = "super_admin"
@@ -279,6 +284,82 @@ class MemberProfile(db.Model):
             "college": self.college,
             "phone": self.phone,
             "last_confirmed_at": self.last_confirmed_at.isoformat() if self.last_confirmed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class MembershipApplication(db.Model):
+    __tablename__ = "membership_applications"
+    __table_args__ = (
+        Index("idx_membership_applications_student_id", "student_id"),
+        Index("idx_membership_applications_member_user_id", "member_user_id"),
+        Index("idx_membership_applications_status_submitted_at", "status", "submitted_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    member_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("member_users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    student_id = db.Column(db.String(32), nullable=False)
+    full_name = db.Column(db.String(64), nullable=False)
+    gender = db.Column(db.String(16), nullable=True)
+    entry_year = db.Column(db.Integer, nullable=True)
+    school = db.Column(db.String(128), nullable=True)
+    college = db.Column(db.String(128), nullable=True)
+    phone = db.Column(db.String(32), nullable=True)
+    competition_interest = db.Column(db.String(16), nullable=False)
+    cycling_experience = db.Column(db.String(32), nullable=False)
+    bicycle_status = db.Column(db.String(32), nullable=False)
+    other_bicycle_description = db.Column(db.String(255), nullable=True)
+    additional_note = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(16), nullable=False, default=APPLICATION_STATUS_PENDING)
+    form_version = db.Column(db.Integer, nullable=False, default=CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION)
+    submitted_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    reviewed_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    review_note = db.Column(db.Text, nullable=True)
+    approved_profile_id = db.Column(
+        db.Integer,
+        db.ForeignKey("member_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    member_user = db.relationship("MemberUser", foreign_keys=[member_user_id])
+    reviewer = db.relationship("User", foreign_keys=[reviewed_by])
+    approved_profile = db.relationship("MemberProfile", foreign_keys=[approved_profile_id])
+
+    def as_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "member_user_id": self.member_user_id,
+            "student_id": self.student_id,
+            "full_name": self.full_name,
+            "gender": self.gender,
+            "entry_year": self.entry_year,
+            "school": self.school,
+            "college": self.college,
+            "phone": self.phone,
+            "competition_interest": self.competition_interest,
+            "cycling_experience": self.cycling_experience,
+            "bicycle_status": self.bicycle_status,
+            "other_bicycle_description": self.other_bicycle_description,
+            "additional_note": self.additional_note,
+            "status": self.status,
+            "form_version": self.form_version,
+            "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "reviewed_by": self.reviewed_by,
+            "review_note": self.review_note,
+            "approved_profile_id": self.approved_profile_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -4,11 +4,15 @@ import json
 from pathlib import Path
 import re
 
+from alembic import command
+from alembic.config import Config
 import pytest
+from sqlalchemy import UniqueConstraint, create_engine, inspect
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import create_app
-from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MemberProfile, MemberUser, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_MEMBERS, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
+from app.membership_application_options import APPLICATION_STATUSES, BICYCLE_STATUS_VALUES, COMPETITION_INTEREST_VALUES, CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION, CYCLING_EXPERIENCE_VALUES
+from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MembershipApplication, MemberProfile, MemberUser, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_MEMBERS, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
 from app.security_monitor import is_watchlist_probe_path
 
 
@@ -1010,6 +1014,193 @@ def test_member_profile_survives_member_user_delete(app_and_client):
         assert saved is not None
         assert saved.member_user_id is None
         assert saved.student_id == "20261002"
+
+
+def _membership_application(**overrides) -> MembershipApplication:
+    values = {
+        "student_id": "20261101",
+        "full_name": "Application Person",
+        "gender": "女",
+        "entry_year": 2026,
+        "school": "SSE",
+        "college": "shaw",
+        "phone": "13800000001",
+        "competition_interest": "unsure",
+        "cycling_experience": "casual",
+        "bicycle_status": "road_bike",
+    }
+    values.update(overrides)
+    return MembershipApplication(**values)
+
+
+def test_membership_application_can_be_created_without_member_user(app_and_client):
+    app, _client = app_and_client
+    with app.app_context():
+        application = _membership_application(member_user_id=None)
+        db.session.add(application)
+        db.session.commit()
+
+        saved = db.session.get(MembershipApplication, application.id)
+        assert saved is not None
+        assert saved.member_user_id is None
+        assert saved.status == "pending"
+        assert saved.form_version == CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION
+        assert saved.submitted_at is not None
+        assert saved.created_at is not None
+        assert saved.updated_at is not None
+        payload = saved.as_dict()
+        assert payload["submitted_at"] == saved.submitted_at.isoformat()
+        assert payload["created_at"] == saved.created_at.isoformat()
+        assert payload["updated_at"] == saved.updated_at.isoformat()
+
+
+def test_membership_application_relationships_and_non_unique_history(app_and_client):
+    app, _client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20261102",
+            nickname="Application Rider",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        reviewer = User(
+            username="application_reviewer",
+            password=generate_password_hash("reviewer123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        profile = MemberProfile(student_id="20261102", full_name="Approved Person")
+        db.session.add_all([member, reviewer, profile])
+        db.session.flush()
+
+        first = _membership_application(
+            member_user=member,
+            student_id="20261102",
+            full_name="Application Rider",
+            reviewer=reviewer,
+            approved_profile=profile,
+            status="rejected",
+        )
+        second = _membership_application(
+            member_user=member,
+            student_id="20261102",
+            full_name="Application Rider Again",
+            status="pending",
+            competition_interest="yes",
+            cycling_experience="long_distance",
+            bicycle_status="mountain_bike",
+        )
+        db.session.add_all([first, second])
+        db.session.commit()
+
+        saved = MembershipApplication.query.filter_by(student_id="20261102").order_by(MembershipApplication.id.asc()).all()
+        assert len(saved) == 2
+        assert saved[0].member_user == member
+        assert saved[0].reviewer == reviewer
+        assert saved[0].approved_profile == profile
+        assert saved[1].member_user_id == member.id
+
+
+def test_membership_application_options_and_foreign_keys_match_contract(app_and_client):
+    app, _client = app_and_client
+    assert APPLICATION_STATUSES == ("pending", "approved", "rejected")
+    assert COMPETITION_INTEREST_VALUES == ("yes", "no", "unsure")
+    assert CYCLING_EXPERIENCE_VALUES == ("beginner", "casual", "long_distance", "competition")
+    assert BICYCLE_STATUS_VALUES == (
+        "no_bicycle",
+        "mountain_bike",
+        "road_bike",
+        "folding_commuter",
+        "other_bicycle",
+        "off_campus",
+    )
+
+    with app.app_context():
+        table = MembershipApplication.__table__
+        foreign_keys = {
+            column.name: (foreign_key.column.table.name, foreign_key.column.name, foreign_key.ondelete)
+            for column in table.columns
+            for foreign_key in column.foreign_keys
+        }
+        assert foreign_keys["member_user_id"] == ("member_users", "id", "SET NULL")
+        assert foreign_keys["reviewed_by"] == ("users", "id", "SET NULL")
+        assert foreign_keys["approved_profile_id"] == ("member_profiles", "id", "SET NULL")
+        unique_constraints = [constraint for constraint in table.constraints if isinstance(constraint, UniqueConstraint)]
+        assert not any(constraint.columns.keys() == ["student_id"] for constraint in unique_constraints)
+        assert not any(constraint.columns.keys() == ["member_user_id"] for constraint in unique_constraints)
+
+
+def test_membership_application_migration_upgrade_downgrade(tmp_path, monkeypatch):
+    db_path = tmp_path / "migration.db"
+    monkeypatch.setenv("FLASK_ENV", "development")
+    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
+    config = Config("alembic.ini")
+    db.metadata.create_all(engine)
+    MembershipApplication.__table__.drop(engine)
+
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.stamp(config, "20260713_0007")
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "20260714_0008")
+    inspector = inspect(engine)
+    assert "membership_applications" in inspector.get_table_names()
+    columns = {column["name"]: column for column in inspector.get_columns("membership_applications")}
+    expected_columns = {
+        "id",
+        "member_user_id",
+        "student_id",
+        "full_name",
+        "gender",
+        "entry_year",
+        "school",
+        "college",
+        "phone",
+        "competition_interest",
+        "cycling_experience",
+        "bicycle_status",
+        "other_bicycle_description",
+        "additional_note",
+        "status",
+        "form_version",
+        "submitted_at",
+        "reviewed_at",
+        "reviewed_by",
+        "review_note",
+        "approved_profile_id",
+        "created_at",
+        "updated_at",
+    }
+    assert set(columns) == expected_columns
+    assert columns["student_id"]["nullable"] is False
+    assert columns["member_user_id"]["nullable"] is True
+    indexes = {index["name"]: tuple(index["column_names"]) for index in inspector.get_indexes("membership_applications")}
+    assert indexes["idx_membership_applications_student_id"] == ("student_id",)
+    assert indexes["idx_membership_applications_member_user_id"] == ("member_user_id",)
+    assert indexes["idx_membership_applications_status_submitted_at"] == ("status", "submitted_at")
+    foreign_keys = {
+        tuple(foreign_key["constrained_columns"]): (
+            foreign_key["referred_table"],
+            tuple(foreign_key["referred_columns"]),
+            foreign_key.get("options", {}).get("ondelete"),
+        )
+        for foreign_key in inspector.get_foreign_keys("membership_applications")
+    }
+    assert foreign_keys[("member_user_id",)] == ("member_users", ("id",), "SET NULL")
+    assert foreign_keys[("reviewed_by",)] == ("users", ("id",), "SET NULL")
+    assert foreign_keys[("approved_profile_id",)] == ("member_profiles", ("id",), "SET NULL")
+
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.downgrade(config, "20260713_0007")
+    assert "membership_applications" not in inspect(engine).get_table_names()
+
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "head")
+    assert "membership_applications" in inspect(engine).get_table_names()
+    engine.dispose()
 
 
 def test_unauth_manage_redirect_writes_audit_log(app_and_client):
