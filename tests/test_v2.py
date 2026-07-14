@@ -1,4 +1,5 @@
 ﻿from datetime import date, datetime, timedelta, timezone
+from datetime import time
 from io import BytesIO
 import json
 from pathlib import Path
@@ -60,6 +61,11 @@ def login(client, username: str, password: str):
         data={"username": username, "password": password, "csrf_token": token},
         follow_redirects=True,
     )
+
+
+def _clear_manage_session(client):
+    with client.session_transaction() as sess:
+        sess.pop("user_id", None)
 
 
 def login_admin(client):
@@ -1033,6 +1039,61 @@ def _membership_application(**overrides) -> MembershipApplication:
     return MembershipApplication(**values)
 
 
+def _join_form_data(**overrides) -> dict[str, str]:
+    values = {
+        "student_id": "20261201",
+        "full_name": "Join Person",
+        "gender": "女",
+        "entry_year": "2026",
+        "school": "SSE",
+        "college": "shaw",
+        "phone": "+86 13800000001",
+        "competition_interest": "unsure",
+        "cycling_experience": "casual",
+        "bicycle_status": "road_bike",
+        "other_bicycle_description": "",
+        "additional_note": "想了解周末骑行安排。",
+        "confirm_info": "1",
+    }
+    values.update(overrides)
+    return values
+
+
+def _post_join(client, follow_redirects: bool = False, **overrides):
+    page = client.get("/join")
+    token = _extract_csrf(page.get_data(as_text=True))
+    data = _join_form_data(**overrides)
+    data["csrf_token"] = token
+    return client.post("/join", data=data, follow_redirects=follow_redirects)
+
+
+def _register_member_with_next(client, student_id: str, nickname: str, password: str, next_url: str = "/account/membership-applications"):
+    register_page = client.get(f"/member/register?next={next_url}")
+    token = _extract_csrf(register_page.get_data(as_text=True))
+    return client.post(
+        "/member/register",
+        data={
+            "student_id": student_id,
+            "nickname": nickname,
+            "password": password,
+            "password_confirm": password,
+            "next": next_url,
+            "csrf_token": token,
+        },
+        follow_redirects=True,
+    )
+
+
+def _login_member_with_next(client, student_id: str, password: str, next_url: str = "/account/membership-applications"):
+    login_page = client.get(f"/member/login?next={next_url}")
+    token = _extract_csrf(login_page.get_data(as_text=True))
+    return client.post(
+        "/member/login",
+        data={"student_id": student_id, "password": password, "next": next_url, "csrf_token": token},
+        follow_redirects=True,
+    )
+
+
 def test_membership_application_can_be_created_without_member_user(app_and_client):
     app, _client = app_and_client
     with app.app_context():
@@ -1128,6 +1189,1512 @@ def test_membership_application_options_and_foreign_keys_match_contract(app_and_
         unique_constraints = [constraint for constraint in table.constraints if isinstance(constraint, UniqueConstraint)]
         assert not any(constraint.columns.keys() == ["student_id"] for constraint in unique_constraints)
         assert not any(constraint.columns.keys() == ["member_user_id"] for constraint in unique_constraints)
+
+
+def test_join_page_available_for_anonymous_user(app_and_client):
+    _app, client = app_and_client
+    resp = client.get("/join")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "加入 2Tired 骑行社" in html
+    assert 'name="student_id"' in html
+    assert "我已阅读上述说明" in html
+
+
+def test_join_page_for_logged_in_member_uses_readonly_account_student_id(app_and_client):
+    _app, client = app_and_client
+    assert register_member(client, "20261202", "Join Rider", "memberpass123").status_code == 200
+    resp = client.get("/join")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "20261202" in html
+    assert "已登录账号将使用当前账号学号" in html
+
+
+def test_anonymous_join_post_creates_pending_application_and_audit(app_and_client):
+    app, client = app_and_client
+    resp = _post_join(client, student_id="sid-join-01", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/join/success" in (resp.headers.get("Location") or "")
+
+    with app.app_context():
+        application = MembershipApplication.query.filter_by(student_id="SID-JOIN-01").first()
+        assert application is not None
+        assert application.member_user_id is None
+        assert application.status == "pending"
+        assert application.form_version == CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION
+        assert application.reviewed_at is None
+        assert application.reviewed_by is None
+        assert application.review_note is None
+        assert application.approved_profile_id is None
+        assert application.phone == "+86 13800000001"
+        audit = AuditLog.query.filter_by(action="membership_application.submit").first()
+        assert audit is not None
+        assert audit.actor_id is None
+        assert audit.target_type == "membership_application"
+        assert audit.target_id == str(application.id)
+        detail = json.loads(audit.detail)
+        assert detail == {
+            "actor_type": "anonymous",
+            "submission_type": "public",
+            "form_version": CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION,
+        }
+        assert application.full_name not in audit.detail
+        assert application.phone not in audit.detail
+        assert "周末骑行" not in audit.detail
+
+
+def test_join_post_success_page_has_no_personal_data_in_url(app_and_client):
+    _app, client = app_and_client
+    resp = _post_join(client, student_id="20261203", full_name="No Url Person")
+    assert resp.status_code == 302
+    location = resp.headers.get("Location") or ""
+    assert location.endswith("/join/success")
+    assert "20261203" not in location
+    assert "No" not in location
+
+
+def test_logged_in_join_post_binds_member_and_ignores_forged_student_id(app_and_client):
+    app, client = app_and_client
+    assert register_member(client, "20261204", "Bound Rider", "memberpass123").status_code == 200
+    resp = _post_join(client, student_id="FORGED999", full_name="Bound Person")
+    assert resp.status_code == 302
+
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20261204").first()
+        application = MembershipApplication.query.filter_by(full_name="Bound Person").first()
+        assert application is not None
+        assert application.student_id == "20261204"
+        assert application.member_user_id == member.id
+        audit = AuditLog.query.filter_by(
+            action="membership_application.submit",
+            target_id=str(application.id),
+        ).first()
+        detail = json.loads(audit.detail)
+        assert detail["actor_type"] == "member_user"
+        assert detail["submission_type"] == "authenticated"
+        assert detail["member_user_id"] == member.id
+
+
+def test_anonymous_submission_does_not_auto_bind_existing_member_user(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            MemberUser(
+                student_id="20261205",
+                nickname="Existing Account",
+                password_hash=generate_password_hash("memberpass123"),
+                account_status=MEMBER_ACCOUNT_ACTIVE,
+            )
+        )
+        db.session.commit()
+
+    resp = _post_join(client, student_id="20261205")
+    assert resp.status_code == 302
+    with app.app_context():
+        application = MembershipApplication.query.filter_by(student_id="20261205").first()
+        assert application is not None
+        assert application.member_user_id is None
+
+
+def test_join_blocks_existing_formal_member_profile_and_approved_application(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(MemberProfile(student_id="20261206", full_name="Formal Person"))
+        db.session.add(_membership_application(student_id="20261207", status="approved"))
+        db.session.commit()
+
+    profile_resp = _post_join(client, student_id="20261206")
+    approved_resp = _post_join(client, student_id="20261207")
+    assert profile_resp.status_code == 409
+    assert "该学号已经存在正式社员档案，无需重复申请。如资料有误，请联系管理人员。" in profile_resp.get_data(as_text=True)
+    assert approved_resp.status_code == 409
+    assert "该学号已经存在正式社员档案，无需重复申请。如资料有误，请联系管理人员。" in approved_resp.get_data(as_text=True)
+
+
+def test_join_get_blocks_logged_in_account_bound_to_profile(app_and_client):
+    app, client = app_and_client
+    assert register_member(client, "20261208", "Formal Rider", "memberpass123").status_code == 200
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20261208").first()
+        db.session.add(MemberProfile(member_user_id=member.id, student_id="20261208", full_name="Formal Rider"))
+        db.session.commit()
+
+    resp = client.get("/join")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "该学号已经存在正式社员档案，无需重复申请。如资料有误，请联系管理人员。" in html
+    assert "提交申请" not in html
+
+
+def test_join_blocks_pending_by_student_id_and_member_user(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(_membership_application(student_id="20261209", status="pending"))
+        db.session.commit()
+    student_resp = _post_join(client, student_id="20261209")
+    assert student_resp.status_code == 409
+    assert "你已有一份待审核的入社申请，请勿重复提交。" in student_resp.get_data(as_text=True)
+
+    assert register_member(client, "20261210", "Pending Rider", "memberpass123").status_code == 200
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20261210").first()
+        db.session.add(_membership_application(member_user_id=member.id, student_id="DIFFERENT10", status="pending"))
+        db.session.commit()
+    account_page = client.get("/member/account")
+    token = _extract_csrf(account_page.get_data(as_text=True))
+    data = _join_form_data()
+    data["csrf_token"] = token
+    member_resp = client.post("/join", data=data)
+    assert member_resp.status_code == 409
+    assert "你已有一份待审核的入社申请，请勿重复提交。" in member_resp.get_data(as_text=True)
+
+
+def test_rejected_application_history_allows_new_submission(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(_membership_application(student_id="20261211", status="rejected"))
+        db.session.commit()
+
+    get_resp = client.get("/join")
+    assert get_resp.status_code == 200
+    post_resp = _post_join(client, student_id="20261211", full_name="Second Try")
+    assert post_resp.status_code == 302
+    with app.app_context():
+        applications = MembershipApplication.query.filter_by(student_id="20261211").all()
+        assert len(applications) == 2
+        assert sorted(item.status for item in applications) == ["pending", "rejected"]
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"student_id": ""}, "请填写学号。"),
+        ({"full_name": "   "}, "请填写真实姓名。"),
+        ({"gender": "unknown"}, "性别不在允许范围内。"),
+        ({"entry_year": "year"}, "入学年份需为数字"),
+        ({"school": "Unknown School"}, "学院不在允许范围内。"),
+        ({"college": "Unknown College"}, "书院不在允许范围内。"),
+        ({"phone": ""}, "请填写手机号或常用联系电话。"),
+        ({"competition_interest": "maybe"}, "请选择参赛意愿。"),
+        ({"cycling_experience": "daily"}, "请选择骑行经验。"),
+        ({"bicycle_status": "spaceship"}, "请选择车辆情况。"),
+        ({"confirm_info": ""}, "请先确认提交的信息真实有效。"),
+    ],
+)
+def test_join_validation_errors_keep_form_and_reject_bad_values(app_and_client, overrides, message):
+    _app, client = app_and_client
+    data = dict(overrides)
+    if "student_id" not in data:
+        data["student_id"] = f"VAL{abs(hash(message)) % 1000000:06d}"
+    resp = _post_join(client, **data)
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 400
+    assert message in html
+    if data.get("student_id"):
+        assert data["student_id"] in html
+
+
+def test_join_requires_other_bicycle_description_only_for_other_status(app_and_client):
+    app, client = app_and_client
+    missing = _post_join(client, student_id="20261212", bicycle_status="other_bicycle", other_bicycle_description="")
+    assert missing.status_code == 400
+    assert "请补充说明自行车类型" in missing.get_data(as_text=True)
+
+    accepted = _post_join(
+        client,
+        student_id="20261213",
+        bicycle_status="road_bike",
+        other_bicycle_description="forged hidden value",
+    )
+    assert accepted.status_code == 302
+    with app.app_context():
+        application = MembershipApplication.query.filter_by(student_id="20261213").first()
+        assert application.other_bicycle_description is None
+
+
+def test_join_accepts_international_phone_and_limits_note_length(app_and_client):
+    app, client = app_and_client
+    accepted = _post_join(client, student_id="20261214", phone="+852 9123 4567")
+    assert accepted.status_code == 302
+    too_long = _post_join(client, student_id="20261215", additional_note="x" * 1001)
+    assert too_long.status_code == 400
+    assert "补充说明不能超过 1000 个字符" in too_long.get_data(as_text=True)
+
+    with app.app_context():
+        application = MembershipApplication.query.filter_by(student_id="20261214").first()
+        assert application.phone == "+852 9123 4567"
+
+
+def test_join_requires_csrf_token(app_and_client):
+    _app, client = app_and_client
+    resp = client.post("/join", data=_join_form_data())
+    assert resp.status_code == 400
+
+
+def test_join_rate_limit_uses_ip_and_student_id(app_and_client):
+    _app, client = app_and_client
+    for index in range(5):
+        resp = _post_join(client, student_id="20261216", full_name=f"Bad Try {index}", confirm_info="")
+        assert resp.status_code == 400
+    limited = _post_join(client, student_id="20261216", full_name="Bad Try Limited", confirm_info="")
+    assert limited.status_code == 429
+    assert "提交过于频繁" in limited.get_data(as_text=True)
+
+
+def test_membership_application_creation_rolls_back_when_audit_fails(app_and_client, monkeypatch):
+    app, _client = app_and_client
+
+    def fail_audit(*_args, **_kwargs):
+        raise RuntimeError("audit failed")
+
+    monkeypatch.setattr("app.services.add_audit_log", fail_audit)
+    with app.app_context():
+        from app.services import create_membership_application
+
+        audit_count_before = AuditLog.query.filter_by(
+            action="membership_application.submit",
+            target_type="membership_application",
+        ).count()
+        with pytest.raises(RuntimeError):
+            create_membership_application(_join_form_data(student_id="20261217"))
+
+        assert MembershipApplication.query.filter_by(student_id="20261217").count() == 0
+        assert (
+            AuditLog.query.filter_by(
+                action="membership_application.submit",
+                target_type="membership_application",
+            ).count()
+            == audit_count_before
+        )
+
+
+def test_anonymous_join_success_stores_short_lived_link_context(app_and_client):
+    app, client = app_and_client
+    resp = _post_join(client, student_id="20261701")
+    assert resp.status_code == 302
+    with client.session_transaction() as sess:
+        context = sess.get("membership_application_link_context")
+        assert context is not None
+        assert isinstance(context.get("application_id"), int)
+        assert isinstance(context.get("token"), str)
+        assert len(context["token"]) >= 32
+        assert isinstance(context.get("created_at"), int)
+    with app.app_context():
+        application = MembershipApplication.query.filter_by(student_id="20261701").first()
+        assert application.member_user_id is None
+
+
+def test_register_after_anonymous_join_links_matching_application(app_and_client):
+    app, client = app_and_client
+    assert _post_join(client, student_id="20261702").status_code == 302
+    resp = _register_member_with_next(client, "20261702", "Linked Register", "memberpass123")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "刚提交的入社申请已关联到当前账号" in html
+
+    with client.session_transaction() as sess:
+        assert "membership_application_link_context" not in sess
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20261702").first()
+        application = MembershipApplication.query.filter_by(student_id="20261702").first()
+        assert application.member_user_id == member.id
+        log = AuditLog.query.filter_by(
+            action="membership_application.link_account",
+            target_type="membership_application",
+            target_id=str(application.id),
+        ).first()
+        assert log is not None
+        detail = json.loads(log.detail)
+        assert detail == {
+            "actor_type": "member_user",
+            "member_user_id": member.id,
+            "link_method": "post_submission_register",
+        }
+        assert "token" not in log.detail
+        assert application.full_name not in log.detail
+        assert application.phone not in log.detail
+
+
+def test_login_after_anonymous_join_links_matching_application(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            MemberUser(
+                student_id="20261703",
+                nickname="Existing Link Login",
+                password_hash=generate_password_hash("memberpass123"),
+                account_status=MEMBER_ACCOUNT_ACTIVE,
+            )
+        )
+        db.session.commit()
+
+    assert _post_join(client, student_id="20261703").status_code == 302
+    resp = _login_member_with_next(client, "20261703", "memberpass123")
+    assert resp.status_code == 200
+    assert "刚提交的入社申请已关联到当前账号" in resp.get_data(as_text=True)
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20261703").first()
+        application = MembershipApplication.query.filter_by(student_id="20261703").first()
+        assert application.member_user_id == member.id
+        log = AuditLog.query.filter_by(action="membership_application.link_account", target_id=str(application.id)).first()
+        assert json.loads(log.detail)["link_method"] == "post_submission_login"
+
+
+def test_post_submission_link_requires_exact_student_id_and_does_not_break_register(app_and_client):
+    app, client = app_and_client
+    assert _post_join(client, student_id="20261704").status_code == 302
+    resp = _register_member_with_next(client, "20261799", "Mismatch Register", "memberpass123")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "不匹配" in html
+    with client.session_transaction() as sess:
+        assert "membership_application_link_context" not in sess
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20261799").first()
+        application = MembershipApplication.query.filter_by(student_id="20261704").first()
+        assert member is not None
+        assert application.member_user_id is None
+
+
+def test_post_submission_link_rejects_already_bound_and_expired_or_forged_context(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        owner = MemberUser(
+            student_id="20261705",
+            nickname="Owner",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        db.session.add(owner)
+        db.session.flush()
+        owner_id = owner.id
+        bound_application = _membership_application(
+            member_user_id=owner_id,
+            student_id="20261705",
+            full_name="Already Bound Link",
+            status="pending",
+        )
+        expired_application = _membership_application(
+            student_id="20261706",
+            full_name="Expired Link",
+            status="pending",
+        )
+        db.session.add_all([bound_application, expired_application])
+        db.session.commit()
+        bound_id = bound_application.id
+        expired_id = expired_application.id
+
+    with client.session_transaction() as sess:
+        sess["membership_application_link_context"] = {
+            "application_id": bound_id,
+            "token": "x" * 48,
+            "created_at": int(datetime.now(timezone.utc).timestamp()),
+        }
+    assert login_member(client, "20261705", "memberpass123").status_code == 200
+    with app.app_context():
+        assert db.session.get(MembershipApplication, bound_id).member_user_id == owner_id
+
+    with client.session_transaction() as sess:
+        sess.pop("member_user_id", None)
+        sess["membership_application_link_context"] = {
+            "application_id": expired_id,
+            "token": "y" * 48,
+            "created_at": int((datetime.now(timezone.utc) - timedelta(hours=2)).timestamp()),
+        }
+    with app.app_context():
+        db.session.add(
+            MemberUser(
+                student_id="20261706",
+                nickname="Expired Login",
+                password_hash=generate_password_hash("memberpass123"),
+                account_status=MEMBER_ACCOUNT_ACTIVE,
+            )
+        )
+        db.session.commit()
+    assert _login_member_with_next(client, "20261706", "memberpass123").status_code == 200
+    with app.app_context():
+        assert db.session.get(MembershipApplication, expired_id).member_user_id is None
+
+    with client.session_transaction() as sess:
+        sess.pop("member_user_id", None)
+        sess["membership_application_link_context"] = {"application_id": "bad", "token": "", "created_at": "bad"}
+    assert _register_member_with_next(client, "20261707", "Forged Context", "memberpass123").status_code == 200
+    with client.session_transaction() as sess:
+        assert "membership_application_link_context" not in sess
+
+
+def test_link_failure_does_not_roll_back_login(app_and_client, monkeypatch):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            MemberUser(
+                student_id="20261708",
+                nickname="Link Failure Login",
+                password_hash=generate_password_hash("memberpass123"),
+                account_status=MEMBER_ACCOUNT_ACTIVE,
+            )
+        )
+        db.session.commit()
+    assert _post_join(client, student_id="20261708").status_code == 302
+
+    def fail_audit(*_args, **_kwargs):
+        raise RuntimeError("audit failed")
+
+    monkeypatch.setattr("app.routes_web.add_audit_log", fail_audit)
+    resp = _login_member_with_next(client, "20261708", "memberpass123")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "关联未完成" in html
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20261708").first()
+        application = MembershipApplication.query.filter_by(student_id="20261708").first()
+        assert member.last_login_at is not None
+        assert application.member_user_id is None
+
+
+def test_member_applications_page_requires_login_and_shows_only_current_user_history(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        first_member = MemberUser(
+            student_id="20261709",
+            nickname="History One",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        other_member = MemberUser(
+            student_id="20261710",
+            nickname="History Two",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        db.session.add_all([first_member, other_member])
+        db.session.flush()
+        db.session.add_all(
+            [
+                _membership_application(
+                    member_user_id=first_member.id,
+                    student_id="20261709",
+                    full_name="Old Pending History",
+                    status="pending",
+                    submitted_at=datetime(2026, 7, 10, 1, 0, tzinfo=timezone.utc),
+                ),
+                _membership_application(
+                    member_user_id=first_member.id,
+                    student_id="20261709",
+                    full_name="New Approved History",
+                    status="approved",
+                    reviewed_at=datetime(2026, 7, 12, 1, 0, tzinfo=timezone.utc),
+                    review_note="欢迎加入",
+                    submitted_at=datetime(2026, 7, 12, 1, 0, tzinfo=timezone.utc),
+                ),
+                _membership_application(
+                    member_user_id=first_member.id,
+                    student_id="20261709",
+                    full_name="Rejected History",
+                    status="rejected",
+                    reviewed_at=datetime(2026, 7, 11, 1, 0, tzinfo=timezone.utc),
+                    review_note="请补充资料",
+                    submitted_at=datetime(2026, 7, 11, 1, 0, tzinfo=timezone.utc),
+                ),
+                _membership_application(
+                    member_user_id=other_member.id,
+                    student_id="20261710",
+                    full_name="Other User History",
+                    status="pending",
+                    submitted_at=datetime(2026, 7, 13, 1, 0, tzinfo=timezone.utc),
+                ),
+            ]
+        )
+        db.session.commit()
+
+    anonymous = client.get("/account/membership-applications", follow_redirects=False)
+    assert anonymous.status_code == 302
+    assert "/member/login" in (anonymous.headers.get("Location") or "")
+    assert login_member(client, "20261709", "memberpass123").status_code == 200
+    page = client.get("/account/membership-applications")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "New Approved History" not in html
+    assert "已同意" in html
+    assert "待审核" in html
+    assert "已拒绝" in html
+    assert "欢迎加入" in html
+    assert "请补充资料" in html
+    assert "Other User History" not in html
+    assert html.index("已同意") < html.index("已拒绝") < html.index("待审核")
+
+
+def test_logged_in_join_application_appears_in_member_history(app_and_client):
+    app, client = app_and_client
+    assert register_member(client, "20261711", "Logged Join", "memberpass123").status_code == 200
+    resp = _post_join(client, student_id="FORGED", full_name="Logged Join Application")
+    assert resp.status_code == 302
+    page = client.get("/account/membership-applications")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "待审核" in html
+    with app.app_context():
+        member = MemberUser.query.filter_by(student_id="20261711").first()
+        application = MembershipApplication.query.filter_by(full_name="Logged Join Application").first()
+        assert application.member_user_id == member.id
+
+
+def _create_membership_reader(username: str = "application_reader") -> None:
+    reader = User(
+        username=username,
+        password=generate_password_hash("reader123456789"),
+        role=ROLE_VIEWER,
+        is_active=True,
+    )
+    db.session.add(reader)
+    db.session.flush()
+    grant_page_permission(reader, PAGE_MEMBERS, PERMISSION_READ)
+
+
+def _create_membership_writer(username: str = "application_writer") -> None:
+    writer = User(
+        username=username,
+        password=generate_password_hash("writer123456789"),
+        role=ROLE_VIEWER,
+        is_active=True,
+    )
+    db.session.add(writer)
+    db.session.flush()
+    grant_page_permission(writer, PAGE_MEMBERS, PERMISSION_WRITE)
+
+
+def _create_membership_admin(username: str = "application_admin") -> None:
+    admin = User(
+        username=username,
+        password=generate_password_hash("admin123456789"),
+        role=ROLE_VIEWER,
+        is_active=True,
+    )
+    db.session.add(admin)
+    db.session.flush()
+    grant_page_permission(admin, PAGE_MEMBERS, PERMISSION_ADMIN)
+
+
+def test_manage_membership_applications_requires_backend_login_and_permission(app_and_client):
+    app, client = app_and_client
+    resp = client.get("/manage/membership-applications", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/manage/login" in (resp.headers.get("Location") or "")
+
+    assert register_member(client, "20261300", "Front Member", "memberpass123").status_code == 200
+    member_resp = client.get("/manage/membership-applications", follow_redirects=False)
+    assert member_resp.status_code == 302
+    assert "/manage/login" in (member_resp.headers.get("Location") or "")
+
+    with app.app_context():
+        blocked = User(
+            username="application_blocked",
+            password=generate_password_hash("blocked123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add(blocked)
+        db.session.flush()
+        grant_page_permission(blocked, PAGE_MEMBERS, PERMISSION_NONE)
+        db.session.commit()
+
+    assert login(client, "application_blocked", "blocked123456789").status_code == 200
+    blocked_page = client.get("/manage/membership-applications")
+    assert blocked_page.status_code in {302, 403}
+    assert b"Page Applicant" not in blocked_page.data
+
+
+def test_manage_membership_applications_read_permission_lists_and_details(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20261301",
+            nickname="Bound Applicant",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        profile = MemberProfile(student_id="20261301", full_name="Approved Profile")
+        reviewer = User(
+            username="application_review_user",
+            password=generate_password_hash("reviewer123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add_all([member, profile, reviewer])
+        db.session.flush()
+        application = _membership_application(
+            member_user_id=member.id,
+            approved_profile_id=profile.id,
+            reviewed_by=reviewer.id,
+            student_id="20261301",
+            full_name="Readable Applicant",
+            gender="男",
+            entry_year=2026,
+            school="SSE",
+            college="shaw",
+            competition_interest="unsure",
+            cycling_experience="casual",
+            bicycle_status="road_bike",
+            additional_note="希望参加周末骑行。",
+            status="approved",
+            reviewed_at=datetime(2026, 7, 14, 8, 30, tzinfo=timezone.utc),
+            review_note="资料通过",
+        )
+        db.session.add(application)
+        _create_membership_reader()
+        db.session.commit()
+        application_id = application.id
+
+    assert login(client, "application_reader", "reader123456789").status_code == 200
+    with app.app_context():
+        audit_count_before = AuditLog.query.count()
+    list_resp = client.get("/manage/membership-applications?status=all")
+    assert list_resp.status_code == 200
+    list_html = list_resp.get_data(as_text=True)
+    assert "Readable Applicant" in list_html
+    assert "还不确定" in list_html
+    assert "偶尔休闲骑行" in list_html
+    assert "有公路车" in list_html
+    assert "已绑定" in list_html
+
+    detail_resp = client.get(f"/manage/membership-applications/{application_id}?status=all")
+    detail_html = detail_resp.get_data(as_text=True)
+    assert detail_resp.status_code == 200
+    assert "Readable Applicant" in detail_html
+    assert "理工学院" in detail_html
+    assert "逸夫书院" in detail_html
+    assert "希望参加周末骑行。" in detail_html
+    assert "资料通过" in detail_html
+    assert "application_review_user" in detail_html
+    assert "Approved Profile" in detail_html
+    assert "password_hash" not in detail_html
+    with app.app_context():
+        assert AuditLog.query.count() == audit_count_before
+
+
+def test_manage_membership_applications_default_filters_pending_and_orders_desc(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        old_pending = _membership_application(
+            student_id="20261302",
+            full_name="Old Pending Applicant",
+            status="pending",
+            submitted_at=datetime(2026, 7, 10, 1, 0, tzinfo=timezone.utc),
+        )
+        new_pending = _membership_application(
+            student_id="20261303",
+            full_name="New Pending Applicant",
+            status="pending",
+            submitted_at=datetime(2026, 7, 12, 1, 0, tzinfo=timezone.utc),
+        )
+        approved = _membership_application(
+            student_id="20261304",
+            full_name="Approved Hidden Applicant",
+            status="approved",
+            submitted_at=datetime(2026, 7, 13, 1, 0, tzinfo=timezone.utc),
+        )
+        db.session.add_all([old_pending, new_pending, approved])
+        _create_membership_reader("application_order_reader")
+        db.session.commit()
+
+    assert login(client, "application_order_reader", "reader123456789").status_code == 200
+    resp = client.get("/manage/membership-applications?q=Pending Applicant")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "New Pending Applicant" in html
+    assert "Old Pending Applicant" in html
+    assert "Approved Hidden Applicant" not in html
+    assert html.index("New Pending Applicant") < html.index("Old Pending Applicant")
+
+
+def test_manage_membership_applications_status_search_and_date_filters(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add_all(
+            [
+                _membership_application(
+                    student_id="20261305",
+                    full_name="Pending Searchable",
+                    status="pending",
+                    submitted_at=datetime(2026, 7, 11, 4, 0, tzinfo=timezone.utc),
+                ),
+                _membership_application(
+                    student_id="20261306",
+                    full_name="Rejected Searchable",
+                    status="rejected",
+                    submitted_at=datetime(2026, 7, 12, 4, 0, tzinfo=timezone.utc),
+                ),
+                _membership_application(
+                    student_id="20261307",
+                    full_name="Approved Searchable",
+                    status="approved",
+                    submitted_at=datetime(2026, 7, 13, 4, 0, tzinfo=timezone.utc),
+                ),
+            ]
+        )
+        _create_membership_reader("application_filter_reader")
+        db.session.commit()
+
+    assert login(client, "application_filter_reader", "reader123456789").status_code == 200
+    all_resp = client.get("/manage/membership-applications?status=all&q=Searchable")
+    all_html = all_resp.get_data(as_text=True)
+    assert "Pending Searchable" in all_html
+    assert "Rejected Searchable" in all_html
+    assert "Approved Searchable" in all_html
+
+    rejected_resp = client.get("/manage/membership-applications?status=rejected&q=Searchable")
+    rejected_html = rejected_resp.get_data(as_text=True)
+    assert "Rejected Searchable" in rejected_html
+    assert "Pending Searchable" not in rejected_html
+
+    approved_resp = client.get("/manage/membership-applications?status=approved&q=Searchable")
+    approved_html = approved_resp.get_data(as_text=True)
+    assert "Approved Searchable" in approved_html
+    assert "Pending Searchable" not in approved_html
+
+    name_resp = client.get("/manage/membership-applications?status=all&q=Approved")
+    name_html = name_resp.get_data(as_text=True)
+    assert "Approved Searchable" in name_html
+    assert "Rejected Searchable" not in name_html
+
+    sid_resp = client.get("/manage/membership-applications?status=all&q=20261306")
+    sid_html = sid_resp.get_data(as_text=True)
+    assert "Rejected Searchable" in sid_html
+    assert "Approved Searchable" not in sid_html
+
+    date_resp = client.get("/manage/membership-applications?status=all&q=Searchable&start_date=2026-07-12&end_date=2026-07-12")
+    date_html = date_resp.get_data(as_text=True)
+    assert "Rejected Searchable" in date_html
+    assert "Pending Searchable" not in date_html
+    assert "Approved Searchable" not in date_html
+
+
+def test_manage_membership_applications_invalid_date_range_and_missing_detail(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            _membership_application(
+                student_id="20261308",
+                full_name="Date Range Applicant",
+                status="pending",
+                submitted_at=datetime(2026, 7, 12, 4, 0, tzinfo=timezone.utc),
+            )
+        )
+        _create_membership_reader("application_date_reader")
+        db.session.commit()
+
+    assert login(client, "application_date_reader", "reader123456789").status_code == 200
+    invalid = client.get("/manage/membership-applications?start_date=2026-07-13&end_date=2026-07-12")
+    invalid_html = invalid.get_data(as_text=True)
+    assert invalid.status_code == 200
+    assert "开始日期不能晚于结束日期。" in invalid_html
+    assert "Date Range Applicant" not in invalid_html
+
+    missing = client.get("/manage/membership-applications/999999")
+    assert missing.status_code == 404
+
+
+def test_manage_membership_applications_pagination_preserves_filters_and_nav_count(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        for index in range(21):
+            db.session.add(
+                _membership_application(
+                    student_id=f"202614{index:02d}",
+                    full_name=f"Page Applicant {index:02d}",
+                    status="pending",
+                    submitted_at=datetime(2026, 7, 14, 0, index, tzinfo=timezone.utc),
+                )
+            )
+        db.session.add(_membership_application(student_id="20261500", full_name="Rejected Nav Applicant", status="rejected"))
+        _create_membership_reader("application_page_reader")
+        db.session.commit()
+        pending_count = MembershipApplication.query.filter_by(status="pending").count()
+
+    assert login(client, "application_page_reader", "reader123456789").status_code == 200
+    page = client.get("/manage/membership-applications?status=pending&q=Page&page=1")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert f"入社申请（{pending_count}）" in html
+    assert "page=2" in html
+    assert "q=Page" in html
+    assert "status=pending" in html
+    assert "Rejected Nav Applicant" not in html
+
+
+def test_manage_membership_applications_nav_hidden_without_permission(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        blocked = User(
+            username="application_nav_blocked",
+            password=generate_password_hash("blocked123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add(blocked)
+        db.session.flush()
+        grant_page_permission(blocked, PAGE_MEMBERS, PERMISSION_NONE)
+        grant_page_permission(blocked, PAGE_ANALYTICS, PERMISSION_READ)
+        db.session.commit()
+
+    assert login(client, "application_nav_blocked", "blocked123456789").status_code == 200
+    page = client.get("/manage/analytics")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "入社申请" not in html
+
+
+def test_membership_application_review_buttons_require_write_permission(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        application = _membership_application(student_id="20261601", full_name="Readonly Review", status="pending")
+        db.session.add(application)
+        _create_membership_reader("application_review_reader")
+        db.session.commit()
+        application_id = application.id
+
+    assert login(client, "application_review_reader", "reader123456789").status_code == 200
+    detail = client.get(f"/manage/membership-applications/{application_id}")
+    html = detail.get_data(as_text=True)
+    assert detail.status_code == 200
+    assert "你的权限为只读" in html
+    assert "同意申请" not in html
+    token = get_manage_csrf(client)
+    approve_resp = client.post(
+        f"/manage/membership-applications/{application_id}/approve",
+        data={"csrf_token": token},
+        follow_redirects=False,
+    )
+    reject_resp = client.post(
+        f"/manage/membership-applications/{application_id}/reject",
+        data={"csrf_token": token},
+        follow_redirects=False,
+    )
+    assert approve_resp.status_code in {302, 403}
+    assert reject_resp.status_code in {302, 403}
+    with app.app_context():
+        saved = db.session.get(MembershipApplication, application_id)
+        assert saved.status == "pending"
+        assert MemberProfile.query.filter_by(student_id="20261601").count() == 0
+
+
+def test_membership_application_approve_creates_profile_and_bound_account(app_and_client):
+    app, client = app_and_client
+    submitted_at = datetime(2026, 7, 11, 10, 15, tzinfo=timezone.utc)
+    with app.app_context():
+        member = MemberUser(
+            student_id="20261602",
+            nickname="Approve Bound",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        db.session.add(member)
+        db.session.flush()
+        application = _membership_application(
+            member_user_id=member.id,
+            student_id="20261602",
+            full_name="Approved Bound Applicant",
+            gender="女",
+            entry_year=2026,
+            school="SSE",
+            college="shaw",
+            phone="+86 13800000002",
+            competition_interest="yes",
+            cycling_experience="competition",
+            bicycle_status="road_bike",
+            other_bicycle_description="should stay on application",
+            additional_note="private application note",
+            status="pending",
+            submitted_at=submitted_at,
+        )
+        db.session.add(application)
+        _create_membership_writer()
+        db.session.commit()
+        application_id = application.id
+        member_id = member.id
+
+    assert login(client, "application_writer", "writer123456789").status_code == 200
+    detail = client.get(f"/manage/membership-applications/{application_id}")
+    detail_html = detail.get_data(as_text=True)
+    assert "将绑定申请提交时使用的社员账号" in detail_html
+    token = _extract_csrf(detail_html)
+    resp = client.post(
+        f"/manage/membership-applications/{application_id}/approve",
+        data={"csrf_token": token, "review_note": "资料完整"},
+        follow_redirects=True,
+    )
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "入社申请已同意" in html
+    assert "查看档案" in html
+
+    with app.app_context():
+        application = db.session.get(MembershipApplication, application_id)
+        profile = MemberProfile.query.filter_by(student_id="20261602").first()
+        assert profile is not None
+        assert profile.member_user_id == member_id
+        assert profile.full_name == "Approved Bound Applicant"
+        assert profile.gender == "女"
+        assert profile.entry_year == 2026
+        assert profile.school == "SSE"
+        assert profile.college == "shaw"
+        assert profile.phone == "+86 13800000002"
+        assert profile.last_confirmed_at == submitted_at.date()
+        assert not hasattr(profile, "competition_interest")
+        assert application.status == "approved"
+        assert application.reviewed_by is not None
+        assert application.reviewed_at is not None
+        assert application.review_note == "资料完整"
+        assert application.approved_profile_id == profile.id
+        assert application.competition_interest == "yes"
+        assert application.cycling_experience == "competition"
+        assert application.bicycle_status == "road_bike"
+        assert application.additional_note == "private application note"
+        approve_log = AuditLog.query.filter_by(
+            action="membership_application.approve",
+            target_type="membership_application",
+            target_id=str(application_id),
+        ).first()
+        assert approve_log is not None
+        approve_detail = json.loads(approve_log.detail)
+        assert approve_detail["profile_id"] == profile.id
+        assert approve_detail["member_user_id"] == member_id
+        assert approve_detail["review_note_present"] is True
+        assert approve_detail["auto_matched_member_user"] is False
+        create_log = AuditLog.query.filter_by(action="member_profile.create", target_id=str(profile.id)).first()
+        bind_log = AuditLog.query.filter_by(action="member_profile.account_bind", target_id=str(profile.id)).first()
+        assert create_log is not None
+        assert bind_log is not None
+        assert profile.phone not in create_log.detail
+        assert "private application note" not in approve_log.detail
+
+
+def test_membership_application_approve_auto_matches_unbound_same_student_account(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20261603",
+            nickname="Auto Match",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        application = _membership_application(
+            student_id="20261603",
+            full_name="Auto Match Applicant",
+            member_user_id=None,
+            status="pending",
+        )
+        db.session.add_all([member, application])
+        _create_membership_writer("application_auto_writer")
+        db.session.commit()
+        application_id = application.id
+        member_id = member.id
+
+    assert login(client, "application_auto_writer", "writer123456789").status_code == 200
+    page = client.get(f"/manage/membership-applications/{application_id}")
+    assert "将自动匹配并绑定同学号社员账号" in page.get_data(as_text=True)
+    token = _extract_csrf(page.get_data(as_text=True))
+    resp = client.post(
+        f"/manage/membership-applications/{application_id}/approve",
+        data={"csrf_token": token},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    with app.app_context():
+        profile = MemberProfile.query.filter_by(student_id="20261603").first()
+        assert profile.member_user_id == member_id
+        application = db.session.get(MembershipApplication, application_id)
+        log = AuditLog.query.filter_by(action="membership_application.approve", target_id=str(application_id)).first()
+        detail = json.loads(log.detail)
+        assert detail["auto_matched_member_user"] is True
+        assert application.approved_profile_id == profile.id
+
+
+def test_membership_application_approve_blocks_profile_and_account_conflicts(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        existing = MemberProfile(student_id="20261604", full_name="Existing Profile")
+        bound_member = MemberUser(
+            student_id="20261605",
+            nickname="Already Bound",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        mismatched_member = MemberUser(
+            student_id="DIFFERENT61606",
+            nickname="Mismatch",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        db.session.add_all([existing, bound_member, mismatched_member])
+        db.session.flush()
+        db.session.add(MemberProfile(member_user_id=bound_member.id, student_id="OTHER61605", full_name="Other Bound"))
+        profile_conflict = _membership_application(student_id="20261604", full_name="Profile Conflict", status="pending")
+        bound_conflict = _membership_application(student_id="20261605", full_name="Bound Conflict", status="pending")
+        mismatch_conflict = _membership_application(
+            member_user_id=mismatched_member.id,
+            student_id="20261606",
+            full_name="Mismatch Conflict",
+            status="pending",
+        )
+        db.session.add_all([profile_conflict, bound_conflict, mismatch_conflict])
+        _create_membership_writer("application_conflict_writer")
+        db.session.commit()
+        ids = [profile_conflict.id, bound_conflict.id, mismatch_conflict.id]
+
+    assert login(client, "application_conflict_writer", "writer123456789").status_code == 200
+    expected_messages = ["已经存在社员档案", "已经关联其他社员档案", "学号与申请学号不一致"]
+    for application_id, message in zip(ids, expected_messages):
+        token = _extract_csrf(client.get(f"/manage/membership-applications/{application_id}").get_data(as_text=True))
+        resp = client.post(
+            f"/manage/membership-applications/{application_id}/approve",
+            data={"csrf_token": token},
+            follow_redirects=True,
+        )
+        html = resp.get_data(as_text=True)
+        assert resp.status_code == 200
+        assert message in html
+    with app.app_context():
+        for application_id in ids:
+            assert db.session.get(MembershipApplication, application_id).status == "pending"
+        assert MemberProfile.query.filter(MemberProfile.full_name.in_(["Profile Conflict", "Bound Conflict", "Mismatch Conflict"])).count() == 0
+
+
+def test_membership_application_reject_does_not_create_profile_and_updates_nav_count(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        application = _membership_application(student_id="20261607", full_name="Rejected Applicant", status="pending")
+        db.session.add(application)
+        _create_membership_writer("application_reject_writer")
+        db.session.commit()
+        application_id = application.id
+
+    assert login(client, "application_reject_writer", "writer123456789").status_code == 200
+    page = client.get(f"/manage/membership-applications/{application_id}")
+    token = _extract_csrf(page.get_data(as_text=True))
+    resp = client.post(
+        f"/manage/membership-applications/{application_id}/reject",
+        data={"csrf_token": token, "review_note": "暂不通过"},
+        follow_redirects=True,
+    )
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "入社申请已拒绝" in html
+    assert "同意申请" not in html
+    assert "入社申请（1）" not in html
+
+    with app.app_context():
+        application = db.session.get(MembershipApplication, application_id)
+        assert application.status == "rejected"
+        assert application.reviewed_by is not None
+        assert application.reviewed_at is not None
+        assert application.review_note == "暂不通过"
+        assert application.approved_profile_id is None
+        assert MemberProfile.query.filter_by(student_id="20261607").count() == 0
+        reject_log = AuditLog.query.filter_by(
+            action="membership_application.reject",
+            target_type="membership_application",
+            target_id=str(application_id),
+        ).first()
+        assert reject_log is not None
+        detail = json.loads(reject_log.detail)
+        assert detail["after_status"] == "rejected"
+        assert detail["review_note_present"] is True
+
+
+def test_membership_application_processed_records_cannot_be_reviewed_again(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        approved = _membership_application(student_id="20261608", full_name="Already Approved", status="approved")
+        rejected = _membership_application(student_id="20261609", full_name="Already Rejected", status="rejected")
+        db.session.add_all([approved, rejected])
+        _create_membership_writer("application_repeat_writer")
+        db.session.commit()
+        approved_id = approved.id
+        rejected_id = rejected.id
+
+    assert login(client, "application_repeat_writer", "writer123456789").status_code == 200
+    for application_id, route_suffix in ((approved_id, "approve"), (rejected_id, "reject")):
+        token = get_manage_csrf(client)
+        resp = client.post(
+            f"/manage/membership-applications/{application_id}/{route_suffix}",
+            data={"csrf_token": token},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert "该申请已处理" in resp.get_data(as_text=True)
+
+
+def test_membership_application_review_requires_csrf(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        application = _membership_application(student_id="20261610", full_name="CSRF Applicant", status="pending")
+        db.session.add(application)
+        _create_membership_writer("application_csrf_writer")
+        db.session.commit()
+        application_id = application.id
+
+    assert login(client, "application_csrf_writer", "writer123456789").status_code == 200
+    resp = client.post(f"/manage/membership-applications/{application_id}/approve", data={})
+    assert resp.status_code == 400
+
+
+def test_membership_application_approval_rolls_back_on_audit_failure(app_and_client, monkeypatch):
+    app, _client = app_and_client
+    with app.app_context():
+        application = _membership_application(student_id="20261611", full_name="Rollback Approval", status="pending")
+        writer = User(
+            username="rollback_writer",
+            password=generate_password_hash("writer123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add_all([application, writer])
+        db.session.commit()
+        application_id = application.id
+        writer_id = writer.id
+        audit_count_before = AuditLog.query.count()
+
+    def fail_audit(*_args, **_kwargs):
+        raise RuntimeError("audit failed")
+
+    monkeypatch.setattr("app.services.add_audit_log", fail_audit)
+    with app.app_context():
+        from app.services import approve_membership_application
+
+        with pytest.raises(RuntimeError):
+            approve_membership_application(application_id, writer_id)
+        application = db.session.get(MembershipApplication, application_id)
+        assert application.status == "pending"
+        assert application.approved_profile_id is None
+        assert MemberProfile.query.filter_by(student_id="20261611").count() == 0
+        assert AuditLog.query.count() == audit_count_before
+
+
+def test_manage_membership_applications_export_and_delete_require_permissions(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        _create_membership_reader("application_export_reader")
+        _create_membership_writer("application_export_writer")
+        _create_membership_admin("application_export_admin")
+        db.session.add_all(
+            [
+                _membership_application(student_id="20261750", full_name="Exported Pending", status="pending"),
+                _membership_application(student_id="20261751", full_name="Exported Approved", status="approved"),
+            ]
+        )
+        db.session.commit()
+
+    assert login(client, "application_export_reader", "reader123456789").status_code == 200
+    list_page = client.get("/manage/membership-applications")
+    assert list_page.status_code == 200
+    assert "导出当前条件" not in list_page.get_data(as_text=True)
+    export_forbidden = client.get("/manage/membership-applications/export.xlsx", follow_redirects=False)
+    assert export_forbidden.status_code in {302, 403}
+    _clear_manage_session(client)
+    assert login(client, "application_export_writer", "writer123456789").status_code == 200
+    write_list_page = client.get("/manage/membership-applications")
+    assert "导出当前条件" in write_list_page.get_data(as_text=True)
+
+
+def test_manage_membership_applications_export_filtering_and_excel_content(app_and_client):
+    app, client = app_and_client
+    base_local_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8)))
+    today = base_local_now.date()
+    recent_date = (today - timedelta(days=1)).isoformat()
+    with app.app_context():
+        db.session.add_all(
+            [
+                _membership_application(
+                    student_id="20261752",
+                    full_name="Very Old Pending",
+                    status="pending",
+                    submitted_at=datetime.combine(today - timedelta(days=40), time(10, 0), tzinfo=timezone(timedelta(hours=8))).astimezone(
+                        timezone.utc
+                    ),
+                ),
+                _membership_application(
+                    student_id="20261753",
+                    full_name="Recent Pending",
+                    status="pending",
+                    submitted_at=datetime.combine(today - timedelta(days=1), time(10, 0), tzinfo=timezone(timedelta(hours=8))).astimezone(
+                        timezone.utc
+                    ),
+                ),
+                _membership_application(
+                    student_id="20261754",
+                    full_name="Recent Approved",
+                    status="approved",
+                    submitted_at=datetime.combine(today - timedelta(days=1), time(12, 0), tzinfo=timezone(timedelta(hours=8))).astimezone(
+                        timezone.utc
+                    ),
+                ),
+            ]
+        )
+        _create_membership_writer("application_filter_export_writer")
+        db.session.commit()
+
+    assert login(client, "application_filter_export_writer", "writer123456789").status_code == 200
+    default_export = client.get("/manage/membership-applications/export.xlsx")
+    assert default_export.status_code == 200
+    assert (
+        default_export.headers["Content-Type"].startswith(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    )
+    default_workbook = __import__("openpyxl").load_workbook(BytesIO(default_export.data), data_only=True)
+    default_sheet = default_workbook.active
+    headers = list(default_sheet.iter_rows(min_row=1, max_row=1, values_only=True))[0]
+    expected_headers = [
+        "申请编号",
+        "学号",
+        "真实姓名",
+        "性别",
+        "入学年份",
+        "学院",
+        "书院",
+        "手机号",
+        "比赛意愿",
+        "骑行经验",
+        "车辆状况",
+        "其他车辆说明",
+        "补充说明",
+        "是否绑定账号",
+        "申请状态",
+        "表单版本",
+        "提交时间",
+        "审核时间",
+        "审核管理员",
+        "审核备注",
+        "关联社员档案 ID",
+    ]
+    assert headers[: len(expected_headers)] == tuple(expected_headers)
+    default_rows = list(default_sheet.iter_rows(min_row=2, values_only=True))
+    ids = [row[0] for row in default_rows]
+    with app.app_context():
+        old_application = MembershipApplication.query.filter_by(student_id="20261752").first()
+        recent_pending = MembershipApplication.query.filter_by(student_id="20261753").first()
+        assert old_application is not None and recent_pending is not None
+        assert old_application.id not in ids
+        assert recent_pending.id in ids
+
+    filtered = client.get(
+        f"/manage/membership-applications/export.xlsx?status=approved&start_date={recent_date}&end_date={recent_date}"
+    )
+    assert filtered.status_code == 200
+    filtered_sheet = __import__("openpyxl").load_workbook(BytesIO(filtered.data), data_only=True).active
+    filtered_headers = list(filtered_sheet.iter_rows(min_row=1, max_row=1, values_only=True))[0]
+    assert filtered_headers[0] == "申请编号"
+    filtered_rows = list(filtered_sheet.iter_rows(min_row=2, values_only=True))
+    with app.app_context():
+        approved_application = MembershipApplication.query.filter_by(student_id="20261754").first()
+        filtered_start = datetime.combine(datetime.fromisoformat(recent_date), time(0, 0), tzinfo=timezone(timedelta(hours=8))).astimezone(
+            timezone.utc
+        )
+        filtered_end = filtered_start + timedelta(days=1)
+        expected_filtered_ids = [
+            application.id
+            for application in (
+                MembershipApplication.query.filter(
+                    MembershipApplication.status == "approved",
+                    MembershipApplication.submitted_at >= filtered_start,
+                    MembershipApplication.submitted_at < filtered_end,
+                )
+                .order_by(MembershipApplication.submitted_at.desc(), MembershipApplication.id.desc())
+                .all()
+            )
+        ]
+        assert approved_application is not None
+        filtered_ids = [row[0] for row in filtered_rows]
+        assert approved_application.id in filtered_ids
+        assert set(filtered_ids) == set(expected_filtered_ids)
+
+
+def test_manage_membership_applications_export_audit_log_and_confirmation(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        _create_membership_writer("application_export_audit_writer")
+        admin = db.session.query(User).filter_by(username="application_export_audit_writer").first()
+        assert admin is not None
+        admin_id = admin.id
+        audit_before = AuditLog.query.count()
+        db.session.add(
+            _membership_application(
+                student_id="20261755",
+                full_name="Audit Logged Applicant",
+                status="pending",
+                submitted_at=datetime.now(timezone.utc),
+            )
+        )
+        db.session.commit()
+    assert login(client, "application_export_audit_writer", "writer123456789").status_code == 200
+    search = "Audit Logged"
+    export = client.get(
+        f"/manage/membership-applications/export.xlsx?status=pending&q={search}&start_date=2026-01-01&end_date=2030-01-01"
+    )
+    assert export.status_code == 200
+    with app.app_context():
+        log = (
+            AuditLog.query.filter_by(action="membership_application.export", target_type="membership_application")
+            .order_by(AuditLog.id.desc())
+            .first()
+        )
+        assert log is not None
+        assert log.actor_id == admin_id
+        assert log.target_id is None
+        detail = json.loads(log.detail)
+        assert detail["status"] == "pending"
+        assert detail["search_keyword"] == search
+        assert detail["start_date"] == "2026-01-01"
+        assert detail["end_date"] == "2030-01-01"
+        assert detail["count"] >= 1
+        assert AuditLog.query.count() > audit_before
+
+
+def test_manage_membership_applications_delete_requires_admin_and_confirmation(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        application = _membership_application(
+            student_id="20261760",
+            full_name="Delete Readonly Applicant",
+            status="pending",
+        )
+        _create_membership_reader("application_delete_reader")
+        _create_membership_admin("application_delete_admin")
+        db.session.add(application)
+        db.session.commit()
+        application_id = application.id
+
+    assert login(client, "application_delete_reader", "reader123456789").status_code == 200
+    detail = client.get(f"/manage/membership-applications/{application_id}")
+    assert "删除申请" not in detail.get_data(as_text=True)
+    token = get_manage_csrf(client)
+    refuse = client.post(
+        f"/manage/membership-applications/{application_id}/delete",
+        data={"csrf_token": token, "confirm_value": str(application_id)},
+        follow_redirects=False,
+    )
+    assert refuse.status_code in {302, 403}
+    with app.app_context():
+        assert db.session.get(MembershipApplication, application_id) is not None
+
+    _clear_manage_session(client)
+    assert login(client, "application_delete_admin", "admin123456789").status_code == 200
+    wrong = client.post(
+        f"/manage/membership-applications/{application_id}/delete",
+        data={"csrf_token": get_manage_csrf(client), "confirm_value": "wrong-value"},
+        follow_redirects=True,
+    )
+    assert wrong.status_code == 200
+    assert "确认内容不匹配" in wrong.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(MembershipApplication, application_id) is not None
+
+
+def test_manage_membership_application_delete_removes_only_application_and_audit(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20261761",
+            nickname="Delete Bound Member",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        profile = MemberProfile(
+            student_id="20261761",
+            full_name="Bound Profile",
+            school="SSE",
+            phone="13800000061",
+        )
+        db.session.add_all([member, profile])
+        db.session.flush()
+        application = _membership_application(
+            student_id="20261761",
+            full_name="Delete Approved Applicant",
+            status="approved",
+            member_user_id=member.id,
+            approved_profile_id=profile.id,
+            additional_note="hidden note for delete",
+            phone="+86 13800000061",
+            reviewed_at=datetime(2026, 7, 14, 10, 30, tzinfo=timezone.utc),
+            reviewed_by=1,
+            review_note="approved earlier",
+            form_version=1,
+        )
+        _create_membership_admin("application_delete_admin2")
+        db.session.add(application)
+        db.session.commit()
+        application_id = application.id
+        member_id = member.id
+        profile_id = profile.id
+
+    assert login(client, "application_delete_admin2", "admin123456789").status_code == 200
+    delete_page = client.get(f"/manage/membership-applications/{application_id}")
+    delete_token = _extract_csrf(delete_page.get_data(as_text=True))
+    resp = client.post(
+        f"/manage/membership-applications/{application_id}/delete",
+        data={"csrf_token": delete_token, "confirm_value": str(application_id)},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    with app.app_context():
+        assert db.session.get(MembershipApplication, application_id) is None
+        assert db.session.get(MemberUser, member_id) is not None
+        assert db.session.get(MemberProfile, profile_id) is not None
+        log = AuditLog.query.filter_by(
+            action="membership_application.delete",
+            target_type="membership_application",
+            target_id=str(application_id),
+        ).first()
+        assert log is not None
+        detail = json.loads(log.detail)
+        assert detail["status"] == "approved"
+        assert detail["approved_profile_id"] == profile_id
+        assert detail["has_linked_account"] is True
+        assert "13800000061" not in log.detail
+        assert "hidden note for delete" not in log.detail
+
+
+def test_manage_membership_application_delete_rolls_back_on_audit_failure(app_and_client, monkeypatch):
+    app, client = app_and_client
+    with app.app_context():
+        _create_membership_admin("application_delete_fail_admin")
+        application = _membership_application(student_id="20261762", full_name="Rollback Delete", status="pending")
+        db.session.add(application)
+        db.session.commit()
+        application_id = application.id
+        log_count_before = AuditLog.query.filter_by(
+            action="membership_application.delete",
+            target_type="membership_application",
+            target_id=str(application_id),
+        ).count()
+
+    assert login(client, "application_delete_fail_admin", "admin123456789").status_code == 200
+    token = get_manage_csrf(client)
+
+    def fail_add_audit_log(*_args, **_kwargs):
+        raise RuntimeError("delete audit failed")
+
+    monkeypatch.setattr("app.routes_admin.add_audit_log", fail_add_audit_log)
+    response = client.post(
+        f"/manage/membership-applications/{application_id}/delete",
+        data={"csrf_token": token, "confirm_value": str(application_id)},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "删除申请失败" in response.get_data(as_text=True)
+
+    with app.app_context():
+        assert db.session.get(MembershipApplication, application_id) is not None
+        assert (
+            AuditLog.query.filter_by(
+                action="membership_application.delete",
+                target_type="membership_application",
+                target_id=str(application_id),
+            ).count()
+            == log_count_before
+        )
 
 
 def test_membership_application_migration_upgrade_downgrade(tmp_path, monkeypatch):

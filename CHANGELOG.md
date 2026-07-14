@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+## [v4.11.5]
+
+### Added
+
+- Added filtered Excel export for membership applications.
+- Added audited dangerous deletion of membership application records without affecting member accounts or profiles.
+
+### Security
+
+- Restricted application export and deletion to management permissions, CSRF-protected delete actions, and explicit confirmation checks.
+
+## [v4.11.4]
+
+### Added
+
+- Added secure post-submission account linking for anonymous membership applications.
+- Added a member-facing application history and review-status view.
+
+### Security
+
+- Restricted application claiming to short-lived server-side context and exact student-ID matching.
+
+## [v4.11.3]
+
+### Added
+
+- Added membership application approval and rejection workflows.
+- Added transactional creation of member profiles and safe member-account binding after approval.
+- Added audit logging and permission checks for application reviews.
+
+## [v4.11.2]
+
+### Added
+
+- Added read-only management pages for browsing membership applications.
+- Added application search, status and submission-date filters, pagination, and pending-application navigation counts.
+
+## [v4.11.1]
+
+### Added
+
+- Added a public membership application form for anonymous and signed-in submissions.
+- Added authenticated submission binding to the current member account while keeping anonymous submissions unbound.
+- Added duplicate checks for existing member profiles, approved applications, and pending applications.
+- Added transactional audit logging for membership application submissions.
+
+### Security
+
+- Added server-side student ID binding for signed-in submissions, CSRF validation, fixed option validation, and IP/student-based rate limiting.
+
 ## [v4.11.0]
 
 ### Added

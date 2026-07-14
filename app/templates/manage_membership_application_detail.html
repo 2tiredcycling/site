@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>入社申请 #{{ application.id }} {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
+  <main class="container">
+    <header class="header">
+      <h1>入社申请 #{{ application.id }}</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.membership_applications_page', q=request.args.get('q', ''), status=request.args.get('status', 'pending'), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', ''), page=request.args.get('page', 1)) }}">返回列表</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+      </div>
+    </header>
+    {% include "_manage_nav.html" %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if application.status == 'pending' %}
+      <section class="card form-card manage-route-list-card">
+        <h2>审核操作</h2>
+        {% if can_review_application %}
+          <p class="hint">同意后将创建正式社员档案，并写入学号、姓名、性别、入学年份、学院、书院、联系电话和最近确认日期；骑行意向仍只保留在申请记录中。此操作不可逆。</p>
+          <div class="alert">{{ approval_preview.binding }}</div>
+          <form method="post" action="{{ url_for('admin.approve_membership_application_submit', application_id=application.id) }}" class="single-form" onsubmit="return confirm('确认同意该入社申请？系统将创建正式社员档案，此操作不可逆。');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>
+              审核备注（可选）
+              <textarea name="review_note" rows="3" maxlength="1000" placeholder="可填写给后台留存的审核备注。"></textarea>
+            </label>
+            <div class="row-actions">
+              <button class="btn" type="submit">同意申请</button>
+            </div>
+          </form>
+          <form method="post" action="{{ url_for('admin.reject_membership_application_submit', application_id=application.id) }}" class="single-form" onsubmit="return confirm('确认拒绝该入社申请？申请数据会保留。');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>
+              拒绝备注（可选）
+              <textarea name="review_note" rows="3" maxlength="1000" placeholder="可填写拒绝原因或后台备注。"></textarea>
+            </label>
+            <div class="row-actions">
+              <button class="btn btn-muted" type="submit">拒绝申请</button>
+            </div>
+          </form>
+        {% else %}
+          <p class="hint">当前申请待审核。你的权限为只读，只能查看申请内容。</p>
+        {% endif %}
+      </section>
+    {% endif %}
+
+    {% if can_delete_application %}
+      <section class="card form-card manage-route-list-card">
+        <h2>危险操作</h2>
+        <p class="hint">
+          申请编号：{{ application.id }}；姓名：{{ application.full_name }}；学号：{{ application.student_id }}；状态：{{ application_status_label(application.status) }}
+        </p>
+        {% if application.status == 'approved' %}
+          <p class="alert">删除申请记录不会删除已经生成的社员档案。</p>
+        {% endif %}
+        <form method="post" action="{{ url_for('admin.delete_membership_application_submit', application_id=application.id) }}" class="single-form" onsubmit="return confirm('确认删除该入社申请吗？该操作不可逆。');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>
+            确认内容
+            <input
+              type="text"
+              name="confirm_value"
+              required
+              minlength="1"
+              placeholder="请输入申请编号或学号"
+            >
+          </label>
+          <div class="row-actions">
+            <button class="btn btn-danger" type="submit">删除申请</button>
+          </div>
+        </form>
+      </section>
+    {% endif %}
+
+    <section class="card form-card manage-route-list-card">
+      <h2>基础资料</h2>
+      <table>
+        <tbody>
+          <tr><th>真实姓名</th><td>{{ application.full_name }}</td></tr>
+          <tr><th>学号</th><td>{{ application.student_id }}</td></tr>
+          <tr><th>性别</th><td>{{ display_gender(application.gender) }}</td></tr>
+          <tr><th>入学年份</th><td>{{ display_entry_year(application.entry_year) or '-' }}</td></tr>
+          <tr><th>学院</th><td>{{ display_school(application.school) or '-' }}</td></tr>
+          <tr><th>书院</th><td>{{ display_college(application.college) or '-' }}</td></tr>
+          <tr><th>联系电话</th><td>{{ application.phone or '-' }}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card form-card manage-route-list-card">
+      <h2>骑行与申请信息</h2>
+      <table>
+        <tbody>
+          <tr><th>比赛意愿</th><td>{{ competition_interest_label(application.competition_interest) or '-' }}</td></tr>
+          <tr><th>骑行经验</th><td>{{ cycling_experience_label(application.cycling_experience) or '-' }}</td></tr>
+          <tr><th>车辆状况</th><td>{{ bicycle_status_label(application.bicycle_status) or '-' }}</td></tr>
+          <tr><th>其他车辆说明</th><td>{{ application.other_bicycle_description or '-' }}</td></tr>
+          <tr><th>补充说明</th><td>{{ application.additional_note or '-' }}</td></tr>
+          <tr><th>表单版本</th><td>{{ application.form_version }}</td></tr>
+          <tr>
+            <th>账号绑定</th>
+            <td>
+              {% if application.member_user %}
+                {{ status_badge('active', '已绑定') }}
+                <span class="hint">{{ application.member_user.student_id }} · {{ application.member_user.nickname }} · ID {{ application.member_user.id }}</span>
+              {% else %}
+                {{ status_badge('pending', '未绑定') }}
+              {% endif %}
+            </td>
+          </tr>
+          <tr><th>当前状态</th><td>{{ status_badge(application.status, application_status_label(application.status)) }}</td></tr>
+          <tr><th>提交时间</th><td>{{ to_local_time(application.submitted_at).strftime('%Y-%m-%d %H:%M') if application.submitted_at else '-' }}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card form-card manage-route-list-card">
+      <h2>审核与关联</h2>
+      <table>
+        <tbody>
+          <tr><th>审核时间</th><td>{{ to_local_time(application.reviewed_at).strftime('%Y-%m-%d %H:%M') if application.reviewed_at else '-' }}</td></tr>
+          <tr><th>审核人</th><td>{{ application.reviewer.username if application.reviewer else '-' }}</td></tr>
+          <tr><th>审核备注</th><td>{{ application.review_note or '-' }}</td></tr>
+          <tr>
+            <th>已关联社员档案</th>
+            <td>
+              {% if application.approved_profile %}
+                {{ application.approved_profile.full_name }} · {{ application.approved_profile.student_id }} · ID {{ application.approved_profile.id }}
+                <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page', q=application.approved_profile.student_id) }}">查看档案</a>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

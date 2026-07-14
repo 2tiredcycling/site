@@ -1,6 +1,8 @@
 ﻿from datetime import timedelta, timezone
 import csv
+import json
 import re
+import secrets
 from io import StringIO
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -36,6 +38,7 @@ from app.models import (
     MerchPreorderBatch,
     MerchPreorderImage,
     MerchPreorderRegistration,
+    MembershipApplication,
     SiteFeedback,
     SitePage,
     db,
@@ -56,15 +59,44 @@ from app.member_profile_options import (
     normalize_school,
     parse_entry_year,
 )
+from app.membership_application_options import (
+    APPLICATION_STATUS_APPROVED,
+    APPLICATION_STATUS_PENDING,
+    APPLICATION_STATUS_REJECTED,
+    BICYCLE_STATUS_OTHER_BICYCLE,
+    BICYCLE_STATUS_OPTIONS,
+    COMPETITION_INTEREST_OPTIONS,
+    CYCLING_EXPERIENCE_OPTIONS,
+    application_status_label,
+)
 from app.querying import query_routes_from_request
 from app.security_limits import consume_fixed_window
-from app.services import add_member_profile_audit_log
+from app.services import (
+    MembershipApplicationBlocked,
+    MembershipApplicationFormError,
+    add_audit_log,
+    add_member_profile_audit_log,
+    create_membership_application,
+    membership_application_block_message,
+    membership_application_initial_values,
+    normalize_membership_application_form,
+)
 from app.gpx_utils import parse_gpx_points_and_stats
 
 bp = Blueprint("web", __name__)
 SH_TZ = timezone(timedelta(hours=8))
 SITE_FEEDBACK_LIMIT_PER_MINUTE = 5
 SITE_FEEDBACK_WINDOW_SECONDS = 60
+MEMBERSHIP_APPLICATION_LIMIT = 5
+MEMBERSHIP_APPLICATION_WINDOW_SECONDS = 30 * 60
+MEMBERSHIP_APPLICATION_LINK_CONTEXT_KEY = "membership_application_link_context"
+MEMBERSHIP_APPLICATION_LINK_NOTICE_KEY = "membership_application_link_notice"
+MEMBERSHIP_APPLICATION_LINK_TTL_SECONDS = 60 * 60
+MEMBERSHIP_APPLICATION_LINKABLE_STATUSES = (
+    APPLICATION_STATUS_PENDING,
+    APPLICATION_STATUS_APPROVED,
+    APPLICATION_STATUS_REJECTED,
+)
 MERCH_ACTIVE_ORDER_STATUSES = (
     MERCH_ORDER_PENDING,
     MERCH_ORDER_CONFIRMED,
@@ -347,6 +379,85 @@ def _validate_member_register_input(student_id: str, nickname: str, password: st
 
 def _member_login_redirect():
     return redirect(_url_for("web.member_login", next=request.path))
+
+
+def _store_membership_application_link_context(application: MembershipApplication | None) -> None:
+    if application is None or application.member_user_id is not None:
+        return
+    session[MEMBERSHIP_APPLICATION_LINK_CONTEXT_KEY] = {
+        "application_id": application.id,
+        "token": secrets.token_urlsafe(32),
+        "created_at": int(utcnow().timestamp()),
+    }
+
+
+def _clear_membership_application_link_context() -> None:
+    session.pop(MEMBERSHIP_APPLICATION_LINK_CONTEXT_KEY, None)
+
+
+def _store_membership_application_link_notice(message: str) -> None:
+    if message:
+        session[MEMBERSHIP_APPLICATION_LINK_NOTICE_KEY] = message
+
+
+def _pop_membership_application_link_notice() -> str:
+    return session.pop(MEMBERSHIP_APPLICATION_LINK_NOTICE_KEY, "")
+
+
+def _membership_application_link_context_valid() -> dict | None:
+    context = session.get(MEMBERSHIP_APPLICATION_LINK_CONTEXT_KEY)
+    if not isinstance(context, dict):
+        _clear_membership_application_link_context()
+        return None
+    application_id = context.get("application_id")
+    token = context.get("token")
+    created_at = context.get("created_at")
+    if not isinstance(application_id, int) or not isinstance(token, str) or not isinstance(created_at, int):
+        _clear_membership_application_link_context()
+        return None
+    if int(utcnow().timestamp()) - created_at > MEMBERSHIP_APPLICATION_LINK_TTL_SECONDS:
+        _clear_membership_application_link_context()
+        return None
+    return context
+
+
+def _try_link_recent_membership_application(member: MemberUser, link_method: str) -> str:
+    context = _membership_application_link_context_valid()
+    if not context:
+        return ""
+    application = db.session.get(MembershipApplication, context["application_id"])
+    if application is None or application.member_user_id is not None:
+        _clear_membership_application_link_context()
+        return ""
+    if application.status not in MEMBERSHIP_APPLICATION_LINKABLE_STATUSES:
+        _clear_membership_application_link_context()
+        return ""
+    if (application.student_id or "").upper() != (member.student_id or "").upper():
+        _clear_membership_application_link_context()
+        return "已登录账号与刚提交的申请信息不匹配，申请未关联到账号。"
+    try:
+        application.member_user_id = member.id
+        application.updated_at = utcnow()
+        add_audit_log(
+            actor_id=None,
+            action="membership_application.link_account",
+            target_type="membership_application",
+            target_id=str(application.id),
+            detail=json.dumps(
+                {
+                    "actor_type": "member_user",
+                    "member_user_id": member.id,
+                    "link_method": link_method,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return "账号已登录，但入社申请关联未完成。如需查看状态，请联系管理人员。"
+    _clear_membership_application_link_context()
+    return "刚提交的入社申请已关联到当前账号。"
 
 
 def _validate_member_password_update(member: MemberUser, current_password: str, new_password: str, password_confirm: str) -> str:
@@ -884,6 +995,97 @@ def contact_page() -> str:
 def site_feedback() -> str:
     source = (request.args.get("source") or "").strip()
     return render_template("site_feedback.html", source=source)
+
+
+def _render_membership_application_form(
+    *,
+    member: MemberUser | None,
+    form_data: dict | None = None,
+    field_errors: dict[str, str] | None = None,
+    blocked_message: str = "",
+    status_code: int = 200,
+):
+    field_errors = field_errors or {}
+    return render_template(
+        "membership_application_form.html",
+        member=member,
+        form_data=form_data or membership_application_initial_values(member),
+        field_errors=field_errors,
+        error_message=next(iter(field_errors.values()), ""),
+        blocked_message=blocked_message,
+        competition_interest_options=COMPETITION_INTEREST_OPTIONS,
+        cycling_experience_options=CYCLING_EXPERIENCE_OPTIONS,
+        bicycle_status_options=BICYCLE_STATUS_OPTIONS,
+        bicycle_status_other=BICYCLE_STATUS_OTHER_BICYCLE,
+        meta_description="提交 2Tired 骑行社常态化入社申请。",
+    ), status_code
+
+
+@bp.get("/join")
+def membership_application_form():
+    member = _current_member_user()
+    form_data = membership_application_initial_values(member)
+    blocked_message = ""
+    if member is not None:
+        blocked_message = membership_application_block_message(member.student_id, member)
+    return _render_membership_application_form(
+        member=member,
+        form_data=form_data,
+        blocked_message=blocked_message,
+    )
+
+
+@bp.post("/join")
+def membership_application_submit():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+
+    member = _current_member_user()
+    form_data = normalize_membership_application_form(request.form, member)
+    subject_student_id = str(form_data.get("student_id") or "_")
+    allowed, retry_after = consume_fixed_window(
+        "membership_application_submit",
+        f"{client_ip()}:{subject_student_id}",
+        limit=MEMBERSHIP_APPLICATION_LIMIT,
+        window_seconds=MEMBERSHIP_APPLICATION_WINDOW_SECONDS,
+    )
+    if not allowed:
+        return _render_membership_application_form(
+            member=member,
+            form_data=form_data,
+            field_errors={"rate_limit": f"提交过于频繁，请 {retry_after} 秒后再试。"},
+            status_code=429,
+        )
+
+    try:
+        application = create_membership_application(request.form, member)
+    except MembershipApplicationFormError as error:
+        return _render_membership_application_form(
+            member=member,
+            form_data=error.values,
+            field_errors=error.errors,
+            status_code=400,
+        )
+    except MembershipApplicationBlocked as error:
+        return _render_membership_application_form(
+            member=member,
+            form_data=error.values,
+            blocked_message=error.message,
+            status_code=409,
+        )
+
+    if member is None:
+        _store_membership_application_link_context(application)
+
+    return redirect(_url_for("web.membership_application_success"))
+
+
+@bp.get("/join/success")
+def membership_application_success():
+    return render_template(
+        "membership_application_success.html",
+        meta_description="2Tired 骑行社入社申请已提交。",
+    )
 
 
 @bp.get("/kit")
@@ -1760,6 +1962,9 @@ def member_register_submit():
     db.session.commit()
     _sync_member_profile_link(member)
     session["member_user_id"] = member.id
+    _store_membership_application_link_notice(
+        _try_link_recent_membership_application(member, "post_submission_register")
+    )
     return redirect(_member_auth_next())
 
 
@@ -1788,6 +1993,9 @@ def member_login_submit():
     member.updated_at = utcnow()
     db.session.commit()
     session["member_user_id"] = member.id
+    _store_membership_application_link_notice(
+        _try_link_recent_membership_application(member, "post_submission_login")
+    )
     return redirect(_member_auth_next())
 
 
@@ -1832,6 +2040,26 @@ def member_profile():
         member=member,
         profile=profile,
         meta_description="查看 2Tired 骑行社社员资料。",
+    )
+
+
+@bp.get("/account/membership-applications")
+def member_applications():
+    member = _current_member_user()
+    if not member:
+        return _member_login_redirect()
+    applications = (
+        MembershipApplication.query.filter_by(member_user_id=member.id)
+        .order_by(MembershipApplication.submitted_at.desc(), MembershipApplication.id.desc())
+        .all()
+    )
+    return render_template(
+        "member_applications.html",
+        member=member,
+        applications=applications,
+        link_notice=_pop_membership_application_link_notice(),
+        application_status_label=application_status_label,
+        meta_description="查看 2Tired 骑行社入社申请审核状态。",
     )
 
 

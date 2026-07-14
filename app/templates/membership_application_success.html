@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>入社申请已提交 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+
+    <section class="card form-card login-card member-auth-card">
+      <p class="hero-kicker">APPLICATION SUBMITTED</p>
+      <h1>入社申请已提交</h1>
+      <p class="hint">你的入社申请已经进入待审核状态。管理人员会统一审核，请勿重复提交。</p>
+      <p class="hint">你可以创建账号或登录已有账号，以便之后在个人中心查看审核状态。</p>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('web.member_register', next=url_for('web.member_applications')) }}"><span>创建账号</span></a>
+        <a class="btn btn-muted" href="{{ url_for('web.member_login', next=url_for('web.member_applications')) }}"><span>登录</span></a>
+        <a class="btn btn-muted" href="{{ url_for('web.index') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-home"></use></svg></span><span>返回首页</span></a>
+      </div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

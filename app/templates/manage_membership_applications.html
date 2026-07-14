@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>入社申请 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
+  <main class="container">
+    <header class="header">
+      <h1>入社申请</h1>
+      <div class="row-actions">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">返回总览</a>
+        <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page') }}">社员档案</a>
+      </div>
+    </header>
+    {% include "_manage_nav.html" %}
+
+    {% if error_message %}
+      <div class="alert">{{ error_message }}</div>
+    {% endif %}
+
+    <section class="card form-card manage-route-filter-card">
+      <h2 class="manage-route-filter-title">筛选</h2>
+      <form method="get" action="{{ url_for('admin.membership_applications_page') }}" class="single-form manage-route-filter-form">
+        <div class="manage-route-filter-basic">
+          <label class="manage-filter-field manage-filter-keyword">
+            <span>关键词</span>
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="姓名或学号">
+          </label>
+          <label class="manage-filter-field">
+            <span>状态</span>
+            <select name="status">
+              <option value="all" {% if filters.status == 'all' %}selected{% endif %}>全部</option>
+              {% for option in status_options %}
+                <option value="{{ option.code }}" {% if filters.status == option.code %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="manage-filter-field">
+            <span>开始日期</span>
+            <input type="date" name="start_date" value="{{ filters.start_date }}">
+          </label>
+          <label class="manage-filter-field">
+            <span>结束日期</span>
+            <input type="date" name="end_date" value="{{ filters.end_date }}">
+          </label>
+          <div class="manage-filter-actions">
+            <button class="btn" type="submit">应用</button>
+            <a class="btn btn-muted" href="{{ url_for('admin.membership_applications_page') }}">重置</a>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="card form-card manage-route-list-card">
+      <h2>申请列表</h2>
+      <div class="row-actions">
+        {% if can_write_members %}
+          <a class="btn" href="{{ url_for('admin.export_membership_applications_excel', q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date) }}">导出当前条件</a>
+        {% endif %}
+        <a class="btn btn-muted" href="{{ url_for('admin.membership_applications_page', q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date) }}">当前筛选</a>
+      </div>
+      <p class="hint">默认显示待审核申请；本页仅用于查看，不提供审核或修改操作。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>申请编号</th>
+            <th>姓名 / 学号</th>
+            <th>比赛意愿</th>
+            <th>骑行经验</th>
+            <th>车辆状况</th>
+            <th>账号绑定</th>
+            <th>状态</th>
+            <th>提交时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for application in applications %}
+            <tr>
+              <td>
+                <div class="manage-route-name-cell">
+                  <strong>#{{ application.id }}</strong>
+                  <div class="hint">版本 {{ application.form_version }}</div>
+                </div>
+              </td>
+              <td>
+                <strong>{{ application.full_name }}</strong>
+                <div class="hint">{{ application.student_id }}</div>
+              </td>
+              <td>{{ competition_interest_label(application.competition_interest) or '-' }}</td>
+              <td>{{ cycling_experience_label(application.cycling_experience) or '-' }}</td>
+              <td>{{ bicycle_status_label(application.bicycle_status) or '-' }}</td>
+              <td>
+                {% if application.member_user %}
+                  {{ status_badge('active', '已绑定') }}
+                  <div class="hint">{{ application.member_user.nickname }} · ID {{ application.member_user.id }}</div>
+                {% else %}
+                  {{ status_badge('pending', '未绑定') }}
+                {% endif %}
+              </td>
+              <td>{{ status_badge(application.status, application_status_label(application.status)) }}</td>
+              <td>{{ to_local_time(application.submitted_at).strftime('%Y-%m-%d %H:%M') if application.submitted_at else '-' }}</td>
+              <td>
+                <a class="btn btn-muted" href="{{ url_for('admin.membership_application_detail_page', application_id=application.id, q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date, page=pagination.page) }}">查看详情</a>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="9">暂无符合条件的入社申请</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="pagination row-actions">
+        {% if pagination.has_prev %}
+          <a class="btn btn-muted" href="{{ url_for('admin.membership_applications_page', page=pagination.prev_num, q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} / {{ pagination.pages or 1 }} 页，共 {{ pagination.total }} 条</span>
+        {% if pagination.has_next %}
+          <a class="btn btn-muted" href="{{ url_for('admin.membership_applications_page', page=pagination.next_num, q=filters.q, status=filters.status, start_date=filters.start_date, end_date=filters.end_date) }}">下一页</a>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

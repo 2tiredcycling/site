@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的入社申请 | 2Tired 骑行社</title>
+  <meta name="description" content="{{ meta_description }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% from "_status_badge.html" import status_badge %}
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+
+    <section class="card form-card member-account-shell">
+      <div class="section-head member-account-head">
+        <div>
+          <p class="hero-kicker">MEMBERSHIP APPLICATIONS</p>
+          <h1>我的入社申请</h1>
+          <p class="hint">{{ member.nickname or member.student_id }} · {{ member.student_id }}</p>
+        </div>
+        <a class="btn btn-muted" href="{{ url_for('web.member_account') }}">返回账号中心</a>
+      </div>
+
+      {% if link_notice %}
+        <div class="alert alert-ok">{{ link_notice }}</div>
+      {% endif %}
+
+      <div class="member-account-layout">
+        <article class="edit-item compact-item">
+          <strong>申请记录</strong>
+          <p class="hint">这里只显示与你当前账号关联的入社申请。</p>
+
+          <div class="detail-grid">
+            {% for application in applications %}
+              <div>
+                <strong>#{{ application.id }} · {{ application_status_label(application.status) }}</strong>
+                <span>
+                  提交时间：{{ to_local_time(application.submitted_at).strftime('%Y-%m-%d %H:%M') if application.submitted_at else '-' }}
+                  · 表单版本：{{ application.form_version }}
+                </span>
+                <span>
+                  审核时间：{{ to_local_time(application.reviewed_at).strftime('%Y-%m-%d %H:%M') if application.reviewed_at else '-' }}
+                </span>
+                {% if application.status == 'approved' %}
+                  <span>{{ status_badge(application.status, '已同意') }} 已成为正式社员。</span>
+                {% elif application.status == 'rejected' %}
+                  <span>{{ status_badge(application.status, '已拒绝') }}</span>
+                {% else %}
+                  <span>{{ status_badge(application.status, '待审核') }}</span>
+                {% endif %}
+                {% if application.review_note %}
+                  <span>审核备注：{{ application.review_note }}</span>
+                {% endif %}
+              </div>
+            {% else %}
+              <div>
+                <strong>暂无入社申请</strong>
+                <span>提交申请后，关联到当前账号的记录会显示在这里。</span>
+              </div>
+            {% endfor %}
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

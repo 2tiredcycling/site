@@ -10,6 +10,7 @@ import re
 import secrets
 
 from sqlalchemy import or_
+from sqlalchemy.orm import joinedload
 from flask import (
     Blueprint,
     abort,
@@ -104,6 +105,7 @@ from app.models import (
     MediaAsset,
     MemberProfile,
     MemberUser,
+    MembershipApplication,
     MerchPreorderBatch,
     MerchPreorderImage,
     MerchPreorderRegistration,
@@ -116,6 +118,16 @@ from app.models import (
     db,
     merch_batch_status_for_window,
     utcnow,
+)
+from app.membership_application_options import (
+    APPLICATION_STATUS_APPROVED,
+    APPLICATION_STATUS_OPTIONS,
+    APPLICATION_STATUS_PENDING,
+    APPLICATION_STATUS_REJECTED,
+    application_status_label,
+    bicycle_status_label,
+    competition_interest_label,
+    cycling_experience_label,
 )
 from app.querying import query_routes_from_request
 from app.gpx_utils import parse_gpx_points_and_stats, parse_gpx_waypoints
@@ -137,7 +149,9 @@ from app.route_ops import allowed_file, file_size_ok, parse_distance, save_gpx_f
 from app.security_monitor import WATCHLIST_PROBE_PATHS, build_non_probe_filters
 from app.security_limits import check_lock, clear_state, register_failure
 from app.services import (
+    add_audit_log,
     add_member_profile_audit_log,
+    approve_membership_application,
     approved_rating_summary,
     build_field_changes,
     create_route_version,
@@ -145,9 +159,11 @@ from app.services import (
     rollback_route_to_version,
     route_snapshot,
     save_import_report,
+    reject_membership_application,
     write_audit_log,
     write_field_audit_log,
 )
+from app.services import MembershipApplicationReviewError
 
 bp = Blueprint("admin", __name__, url_prefix="/manage")
 SH_TZ = timezone(timedelta(hours=8))
@@ -265,6 +281,14 @@ AUDIT_ACTION_LABELS = {
     "member_profile.self_update": "社员更新自己的档案",
     "member_profile.self_confirm": "社员确认自己的档案",
     "member_profile.import_excel": "Excel 导入社员档案",
+    "member_profile.create": "创建社员档案",
+    "member_profile.account_bind": "绑定社员账号",
+    "membership_application.submit": "提交入社申请",
+    "membership_application.link_account": "关联入社申请账号",
+    "membership_application.approve": "同意入社申请",
+    "membership_application.reject": "拒绝入社申请",
+    "membership_application.export": "导出入社申请",
+    "membership_application.delete": "删除入社申请",
 }
 
 
@@ -772,6 +796,14 @@ def _required_page_permission_for_request(path: str, method: str) -> tuple[str, 
         return PAGE_SECURITY, PERMISSION_READ
     if normalized.startswith("/manage/audit-logs"):
         return PAGE_AUDIT_LOGS, PERMISSION_READ
+    if normalized.startswith("/manage/membership-applications"):
+        if normalized.startswith("/manage/membership-applications/export.xlsx"):
+            return PAGE_MEMBERS, PERMISSION_WRITE
+        if is_post and "/delete" in normalized:
+            return PAGE_MEMBERS, PERMISSION_ADMIN
+        if is_post:
+            return PAGE_MEMBERS, PERMISSION_WRITE
+        return PAGE_MEMBERS, PERMISSION_READ
     if normalized.startswith("/manage/users"):
         if is_post and ("/delete" in normalized or "/deactivate" in normalized):
             return PAGE_ACCOUNTS, PERMISSION_ADMIN
@@ -883,6 +915,15 @@ def _inject_csrf_token():
         if can_read_page(user, PAGE_MEMBERS):
             nav_items.append({"label": "社员账号", "endpoint": "admin.member_users_page", "prefix": "/manage/members"})
             nav_items.append({"label": "社员档案", "endpoint": "admin.member_profiles_page", "prefix": "/manage/member-profiles"})
+            pending_applications_count = MembershipApplication.query.filter_by(status=APPLICATION_STATUS_PENDING).count()
+            applications_label = f"入社申请（{pending_applications_count}）" if pending_applications_count else "入社申请"
+            nav_items.append(
+                {
+                    "label": applications_label,
+                    "endpoint": "admin.membership_applications_page",
+                    "prefix": "/manage/membership-applications",
+                }
+            )
     return {
         "csrf_token": get_csrf_token,
         "to_local_time": _to_local_time,
@@ -897,7 +938,89 @@ def _inject_csrf_token():
         "display_college": display_college,
         "display_gender": display_gender,
         "display_entry_year": display_entry_year,
+        "application_status_label": application_status_label,
+        "competition_interest_label": competition_interest_label,
+        "cycling_experience_label": cycling_experience_label,
+        "bicycle_status_label": bicycle_status_label,
     }
+
+
+def _parse_membership_filter_date(raw: str) -> date | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _redact_student_id(student_id: str | None) -> str:
+    value = (student_id or "").strip()
+    if not value:
+        return "-"
+    if len(value) <= 4:
+        return "*" * len(value)
+    return f"{value[:2]}****"
+
+
+def _build_membership_application_query(
+    *,
+    default_status: str,
+    default_start_date: str = "",
+    default_end_date: str = "",
+) -> tuple[
+    int,
+    str,
+    dict[str, str],
+    db.Query,
+    str,
+]:
+    page = max(1, request.args.get("page", default=1, type=int))
+    q = (request.args.get("q") or "").strip()
+    status_filter = (request.args.get("status") or default_status).strip()
+    start_date = (request.args.get("start_date") or default_start_date).strip()
+    end_date = (request.args.get("end_date") or default_end_date).strip()
+    error_message = ""
+
+    allowed_statuses = {"all", APPLICATION_STATUS_PENDING, APPLICATION_STATUS_APPROVED, APPLICATION_STATUS_REJECTED}
+    if status_filter not in allowed_statuses:
+        status_filter = default_status
+
+    query = MembershipApplication.query
+    if q:
+        pattern = f"%{q}%"
+        query = query.filter(
+            or_(
+                MembershipApplication.full_name.ilike(pattern),
+                MembershipApplication.student_id.ilike(pattern),
+            )
+        )
+    if status_filter != "all":
+        query = query.filter(MembershipApplication.status == status_filter)
+
+    start_local = _parse_membership_filter_date(start_date)
+    end_local = _parse_membership_filter_date(end_date)
+    if start_local and end_local and start_local > end_local:
+        error_message = "开始日期不能晚于结束日期。"
+        query = query.filter(False)
+    else:
+        if start_local:
+            start_bound = datetime.combine(start_local, time(0, 0)).replace(tzinfo=SH_TZ).astimezone(timezone.utc)
+            query = query.filter(MembershipApplication.submitted_at >= start_bound)
+        if end_local:
+            end_bound = datetime.combine(end_local + timedelta(days=1), time(0, 0)).replace(
+                tzinfo=SH_TZ
+            ).astimezone(timezone.utc)
+            query = query.filter(MembershipApplication.submitted_at < end_bound)
+
+    return (
+        page,
+        q,
+        {"q": q, "status": status_filter, "start_date": start_date, "end_date": end_date},
+        query,
+        error_message,
+    )
 
 
 @bp.post("/activities/wechat-qr/preview")
@@ -2323,6 +2446,279 @@ def member_users_page():
         can_write_members=can_write_page(g.current_user, PAGE_MEMBERS),
         can_admin_members=can_admin_page(g.current_user, PAGE_MEMBERS),
     )
+
+
+@bp.get("/membership-applications")
+@login_required
+def membership_applications_page():
+    page, _q, filters, query, error_message = _build_membership_application_query(
+        default_status=APPLICATION_STATUS_PENDING,
+    )
+    query = query.options(joinedload(MembershipApplication.member_user))
+
+    pagination = query.order_by(MembershipApplication.submitted_at.desc(), MembershipApplication.id.desc()).paginate(
+        page=page,
+        per_page=20,
+        error_out=False,
+    )
+    return render_template(
+        "manage_membership_applications.html",
+        applications=pagination.items,
+        pagination=pagination,
+        filters=filters,
+        status_options=APPLICATION_STATUS_OPTIONS,
+        error_message=error_message,
+        can_write_members=can_write_page(g.current_user, PAGE_MEMBERS),
+    )
+
+
+@bp.get("/membership-applications/export.xlsx")
+@login_required
+def export_membership_applications_excel():
+    today = _to_local_time(utcnow()).date()
+    page, q, filters, query, error_message = _build_membership_application_query(
+        default_status="all",
+        default_start_date=(today - timedelta(days=30)).isoformat(),
+        default_end_date=today.isoformat(),
+    )
+    query = query.options(
+        joinedload(MembershipApplication.member_user), joinedload(MembershipApplication.reviewer)
+    )
+    if error_message:
+        flash(error_message, "error")
+        return redirect(url_for("admin.membership_applications_page", **filters))
+
+    applications = query.order_by(MembershipApplication.submitted_at.desc(), MembershipApplication.id.desc()).all()
+    try:
+        from openpyxl import Workbook
+    except Exception:
+        flash("导出失败：缺少 openpyxl 依赖，请先安装后重试。", "error")
+        return redirect(url_for("admin.membership_applications_page", **filters))
+
+    headers = [
+        "申请编号",
+        "学号",
+        "真实姓名",
+        "性别",
+        "入学年份",
+        "学院",
+        "书院",
+        "手机号",
+        "比赛意愿",
+        "骑行经验",
+        "车辆状况",
+        "其他车辆说明",
+        "补充说明",
+        "是否绑定账号",
+        "申请状态",
+        "表单版本",
+        "提交时间",
+        "审核时间",
+        "审核管理员",
+        "审核备注",
+        "关联社员档案 ID",
+    ]
+    rows = []
+    for item in applications:
+        submitted_local = _to_local_time(item.submitted_at)
+        reviewed_local = _to_local_time(item.reviewed_at)
+        rows.append(
+            [
+                item.id,
+                item.student_id,
+                item.full_name,
+                display_gender(item.gender) or "-",
+                display_entry_year(item.entry_year) or "-",
+                display_school(item.school) or "-",
+                display_college(item.college) or "-",
+                item.phone or "-",
+                competition_interest_label(item.competition_interest) or "-",
+                cycling_experience_label(item.cycling_experience) or "-",
+                bicycle_status_label(item.bicycle_status) or "-",
+                item.other_bicycle_description or "-",
+                item.additional_note or "-",
+                "是" if item.member_user_id else "否",
+                application_status_label(item.status),
+                item.form_version,
+                submitted_local.strftime("%Y-%m-%d %H:%M:%S") if submitted_local else "-",
+                reviewed_local.strftime("%Y-%m-%d %H:%M:%S") if reviewed_local else "-",
+                item.reviewer.username if item.reviewer else "-",
+                item.review_note or "-",
+                item.approved_profile_id or "-",
+            ]
+        )
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "入社申请"
+    sheet.append(headers)
+    for row in rows:
+        sheet.append(row)
+    for col in "ABCDEFGHIJKLMNOPQRST":
+        sheet.column_dimensions[col].width = 18
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    try:
+        add_audit_log(
+            actor_id=g.current_user.id,
+            action="membership_application.export",
+            target_type="membership_application",
+            target_id=None,
+            detail=json.dumps(
+                {
+                    "start_date": filters["start_date"],
+                    "end_date": filters["end_date"],
+                    "status": filters["status"],
+                    "count": len(rows),
+                    "search_keyword": q,
+                    "page": page,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("导出审计日志写入失败，请重试。", "error")
+        return redirect(url_for("admin.membership_applications_page", **filters))
+
+    filename = f"membership_applications_{filters['start_date']}_to_{filters['end_date']}.xlsx"
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+def _membership_application_approval_preview(application: MembershipApplication) -> dict[str, str]:
+    if application.status != APPLICATION_STATUS_PENDING:
+        return {"binding": "该申请已处理。", "conflict": ""}
+
+    normalized_student_id = (application.student_id or "").strip().upper()
+    existing_profile = MemberProfile.query.filter(db.func.upper(MemberProfile.student_id) == normalized_student_id).first()
+    if existing_profile is not None:
+        return {"binding": "无法同意：该学号已经存在社员档案。", "conflict": "existing_profile"}
+
+    if application.member_user_id is not None:
+        member_user = db.session.get(MemberUser, application.member_user_id)
+        if member_user is None:
+            return {"binding": "无法同意：申请绑定的社员账号不存在。", "conflict": "missing_member_user"}
+        if (member_user.student_id or "").upper() != normalized_student_id:
+            return {"binding": "无法同意：申请绑定账号的学号与申请学号不一致。", "conflict": "student_id_mismatch"}
+        if member_user.profile is not None:
+            return {"binding": "无法同意：申请绑定账号已经关联其他社员档案。", "conflict": "member_user_bound"}
+        return {"binding": f"将绑定申请提交时使用的社员账号：{member_user.student_id} · {member_user.nickname}", "conflict": ""}
+
+    member_user = MemberUser.query.filter(db.func.upper(MemberUser.student_id) == normalized_student_id).first()
+    if member_user is None:
+        return {"binding": "未找到同学号社员账号，将只创建社员档案。", "conflict": ""}
+    if member_user.profile is not None:
+        return {"binding": "无法同意：同学号社员账号已经关联其他社员档案。", "conflict": "matched_member_user_bound"}
+    return {"binding": f"将自动匹配并绑定同学号社员账号：{member_user.student_id} · {member_user.nickname}", "conflict": ""}
+
+
+@bp.get("/membership-applications/<int:application_id>")
+@login_required
+def membership_application_detail_page(application_id: int):
+    application = (
+        MembershipApplication.query.options(
+            joinedload(MembershipApplication.member_user),
+            joinedload(MembershipApplication.reviewer),
+            joinedload(MembershipApplication.approved_profile),
+        )
+        .filter_by(id=application_id)
+        .first()
+    )
+    if application is None:
+        abort(404, description="Membership application not found")
+    return render_template(
+        "manage_membership_application_detail.html",
+        application=application,
+        can_review_application=can_write_page(g.current_user, PAGE_MEMBERS),
+        can_delete_application=can_admin_page(g.current_user, PAGE_MEMBERS),
+        approval_preview=_membership_application_approval_preview(application),
+    )
+
+
+@bp.post("/membership-applications/<int:application_id>/approve")
+@login_required
+def approve_membership_application_submit(application_id: int):
+    review_note = request.form.get("review_note")
+    try:
+        approve_membership_application(application_id, g.current_user.id, review_note)
+        flash("入社申请已同意，并已创建社员档案。", "success")
+    except MembershipApplicationReviewError as error:
+        flash(error.message, "error")
+    return redirect(url_for("admin.membership_application_detail_page", application_id=application_id))
+
+
+@bp.post("/membership-applications/<int:application_id>/reject")
+@login_required
+def reject_membership_application_submit(application_id: int):
+    review_note = request.form.get("review_note")
+    try:
+        reject_membership_application(application_id, g.current_user.id, review_note)
+        flash("入社申请已拒绝。", "success")
+    except MembershipApplicationReviewError as error:
+        flash(error.message, "error")
+    return redirect(url_for("admin.membership_application_detail_page", application_id=application_id))
+
+
+@bp.post("/membership-applications/<int:application_id>/delete")
+@login_required
+def delete_membership_application_submit(application_id: int):
+    application = (
+        MembershipApplication.query.options(joinedload(MembershipApplication.member_user))
+        .filter_by(id=application_id)
+        .first()
+    )
+    if application is None:
+        flash("该申请不存在或已被处理。", "error")
+        return redirect(url_for("admin.membership_applications_page"))
+
+    confirm_value = (request.form.get("confirm_value") or "").strip()
+    normalized_student_id = (application.student_id or "").strip().upper()
+    if confirm_value not in {str(application.id), normalized_student_id}:
+        flash("确认内容不匹配，未执行删除。", "error")
+        return redirect(url_for("admin.membership_application_detail_page", application_id=application_id))
+
+    detail = json.dumps(
+        {
+            "application_id": application.id,
+            "student_id": _redact_student_id(application.student_id),
+            "status": application.status,
+            "approved_profile_id": application.approved_profile_id,
+            "has_linked_account": application.member_user_id is not None,
+            "was_linked_account_id": application.member_user_id,
+            "delete_as_admin": g.current_user.id,
+            "reviewed": application.reviewed_at is not None,
+            "reviewer_id": application.reviewed_by,
+            "has_binding_info": application.member_user is not None,
+            "student_id_matched_confirmation": confirm_value == normalized_student_id,
+            "id_matched_confirmation": confirm_value == str(application.id),
+        },
+        ensure_ascii=False,
+    )
+    try:
+        db.session.delete(application)
+        add_audit_log(
+            actor_id=g.current_user.id,
+            action="membership_application.delete",
+            target_type="membership_application",
+            target_id=str(application_id),
+            detail=detail,
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("删除申请失败，请重试。", "error")
+        return redirect(url_for("admin.membership_application_detail_page", application_id=application_id))
+
+    flash("入社申请已删除。", "success")
+    return redirect(url_for("admin.membership_applications_page"))
 
 
 @bp.get("/member-profiles")

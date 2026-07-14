@@ -24,7 +24,7 @@
     </a>
     {% set member_user = current_member_user() %}
     {% if member_user %}
-      <a class="quick-pill {% if ep.endswith('.member_account') or ep.endswith('.member_password') or ep.endswith('.member_profile') %}is-active{% endif %}" href="{{ url_for('web.member_account') }}" {% if ep.endswith('.member_account') or ep.endswith('.member_password') or ep.endswith('.member_profile') %}aria-current="page"{% endif %}>
+      <a class="quick-pill {% if ep.endswith('.member_account') or ep.endswith('.member_password') or ep.endswith('.member_profile') or ep.endswith('.member_applications') %}is-active{% endif %}" href="{{ url_for('web.member_account') }}" {% if ep.endswith('.member_account') or ep.endswith('.member_password') or ep.endswith('.member_profile') or ep.endswith('.member_applications') %}aria-current="page"{% endif %}>
         <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-user"></use></svg></span><span>{{ member_user.nickname or member_user.student_id }}</span>
       </a>
     {% else %}

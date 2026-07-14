@@ -1,5 +1,6 @@
 ﻿import csv
 import json
+import re
 import secrets
 from datetime import timedelta
 from pathlib import Path
@@ -32,6 +33,8 @@ from app.models import (
     AuditLog,
     ImportReport,
     MemberProfile,
+    MemberUser,
+    MembershipApplication,
     Route,
     RouteFeedback,
     RouteVersion,
@@ -40,6 +43,41 @@ from app.models import (
     db,
     utcnow,
 )
+from app.member_profile_options import normalize_college, normalize_gender, normalize_school, parse_entry_year
+from app.membership_application_options import (
+    APPLICATION_STATUS_APPROVED,
+    APPLICATION_STATUS_PENDING,
+    APPLICATION_STATUS_REJECTED,
+    BICYCLE_STATUS_OTHER_BICYCLE,
+    BICYCLE_STATUS_VALUES,
+    COMPETITION_INTEREST_VALUES,
+    CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION,
+    CYCLING_EXPERIENCE_VALUES,
+)
+
+MEMBERSHIP_APPLICATION_MEMBER_EXISTS_MESSAGE = "该学号已经存在正式社员档案，无需重复申请。如资料有误，请联系管理人员。"
+MEMBERSHIP_APPLICATION_PENDING_MESSAGE = "你已有一份待审核的入社申请，请勿重复提交。"
+MEMBERSHIP_APPLICATION_SUBMIT_ACTION = "membership_application.submit"
+
+
+class MembershipApplicationFormError(Exception):
+    def __init__(self, errors: dict[str, str], values: dict[str, object]):
+        super().__init__("membership application form validation failed")
+        self.errors = errors
+        self.values = values
+
+
+class MembershipApplicationBlocked(Exception):
+    def __init__(self, message: str, values: dict[str, object]):
+        super().__init__(message)
+        self.message = message
+        self.values = values
+
+
+class MembershipApplicationReviewError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
 
 
 def _is_sqlite() -> bool:
@@ -496,6 +534,432 @@ def add_audit_log(
     )
     db.session.add(log)
     return log
+
+
+def _clean_membership_application_text(value: object, *, max_length: int | None = None) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "").strip())
+    if max_length is not None and len(cleaned) > max_length:
+        return cleaned[:max_length]
+    return cleaned
+
+
+def membership_application_initial_values(member_user: MemberUser | None = None) -> dict[str, object]:
+    return {
+        "student_id": (member_user.student_id if member_user else "") or "",
+        "full_name": "",
+        "gender": "",
+        "entry_year": "",
+        "school": "",
+        "college": "",
+        "phone": "",
+        "competition_interest": "",
+        "cycling_experience": "",
+        "bicycle_status": "",
+        "other_bicycle_description": "",
+        "additional_note": "",
+        "confirm_info": "",
+    }
+
+
+def _normalized_application_student_id(form_data, member_user: MemberUser | None) -> str:
+    if member_user is not None:
+        return _clean_membership_application_text(member_user.student_id).upper()
+    return _clean_membership_application_text(form_data.get("student_id")).upper()
+
+
+def normalize_membership_application_form(form_data, member_user: MemberUser | None = None) -> dict[str, object]:
+    values = membership_application_initial_values(member_user)
+    values.update(
+        {
+            "student_id": _normalized_application_student_id(form_data, member_user),
+            "full_name": _clean_membership_application_text(form_data.get("full_name")),
+            "gender": _clean_membership_application_text(form_data.get("gender")),
+            "entry_year": _clean_membership_application_text(form_data.get("entry_year")),
+            "school": _clean_membership_application_text(form_data.get("school")),
+            "college": _clean_membership_application_text(form_data.get("college")),
+            "phone": _clean_membership_application_text(form_data.get("phone")),
+            "competition_interest": _clean_membership_application_text(form_data.get("competition_interest")),
+            "cycling_experience": _clean_membership_application_text(form_data.get("cycling_experience")),
+            "bicycle_status": _clean_membership_application_text(form_data.get("bicycle_status")),
+            "other_bicycle_description": _clean_membership_application_text(form_data.get("other_bicycle_description")),
+            "additional_note": str(form_data.get("additional_note") or "").strip(),
+            "confirm_info": _clean_membership_application_text(form_data.get("confirm_info")),
+        }
+    )
+    return values
+
+
+def validate_membership_application_form(form_data, member_user: MemberUser | None = None) -> dict[str, object]:
+    values = normalize_membership_application_form(form_data, member_user)
+    errors: dict[str, str] = {}
+
+    if not values["student_id"]:
+        errors["student_id"] = "请填写学号。"
+    elif len(str(values["student_id"])) > 32:
+        errors["student_id"] = "学号长度不能超过 32 个字符。"
+
+    if not values["full_name"]:
+        errors["full_name"] = "请填写真实姓名。"
+    elif len(str(values["full_name"])) > 64:
+        errors["full_name"] = "真实姓名长度不能超过 64 个字符。"
+
+    gender, gender_error = normalize_gender(values["gender"])
+    if gender_error:
+        errors["gender"] = gender_error
+    values["gender"] = gender
+
+    entry_year, entry_year_error = parse_entry_year(values["entry_year"])
+    if entry_year_error:
+        errors["entry_year"] = entry_year_error
+    elif entry_year is None:
+        errors["entry_year"] = "请选择入学年份。"
+    elif entry_year < 1900 or entry_year > 2100:
+        errors["entry_year"] = "入学年份格式不正确。"
+    values["entry_year"] = entry_year
+
+    school, school_error = normalize_school(values["school"])
+    if school_error:
+        errors["school"] = school_error
+    values["school"] = school
+
+    college, college_error = normalize_college(values["college"])
+    if college_error:
+        errors["college"] = college_error
+    values["college"] = college
+
+    phone = str(values["phone"])
+    if not phone:
+        errors["phone"] = "请填写手机号或常用联系电话。"
+    elif len(phone) > 32:
+        errors["phone"] = "联系电话长度不能超过 32 个字符。"
+    elif not re.fullmatch(r"[0-9+()\-\s]{5,32}", phone):
+        errors["phone"] = "联系电话格式不正确。"
+
+    if values["competition_interest"] not in COMPETITION_INTEREST_VALUES:
+        errors["competition_interest"] = "请选择参赛意愿。"
+    if values["cycling_experience"] not in CYCLING_EXPERIENCE_VALUES:
+        errors["cycling_experience"] = "请选择骑行经验。"
+    if values["bicycle_status"] not in BICYCLE_STATUS_VALUES:
+        errors["bicycle_status"] = "请选择车辆情况。"
+
+    if values["bicycle_status"] == BICYCLE_STATUS_OTHER_BICYCLE:
+        other_description = str(values["other_bicycle_description"])
+        if not other_description:
+            errors["other_bicycle_description"] = "请补充说明自行车类型。"
+        elif len(other_description) > 255:
+            errors["other_bicycle_description"] = "自行车类型说明不能超过 255 个字符。"
+    else:
+        values["other_bicycle_description"] = None
+
+    note = str(values["additional_note"]).strip()
+    if len(note) > 1000:
+        errors["additional_note"] = "补充说明不能超过 1000 个字符。"
+    values["additional_note"] = note or None
+
+    if values["confirm_info"] != "1":
+        errors["confirm_info"] = "请先确认提交的信息真实有效。"
+
+    if errors:
+        raise MembershipApplicationFormError(errors, values)
+    return values
+
+
+def membership_application_block_message(student_id: str | None, member_user: MemberUser | None = None) -> str:
+    normalized_student_id = _clean_membership_application_text(student_id).upper()
+    if not normalized_student_id:
+        return ""
+
+    if member_user is not None and member_user.profile is not None:
+        return MEMBERSHIP_APPLICATION_MEMBER_EXISTS_MESSAGE
+
+    profile = MemberProfile.query.filter(db.func.upper(MemberProfile.student_id) == normalized_student_id.upper()).first()
+    if profile is not None:
+        return MEMBERSHIP_APPLICATION_MEMBER_EXISTS_MESSAGE
+
+    approved_application = MembershipApplication.query.filter(
+        db.func.upper(MembershipApplication.student_id) == normalized_student_id.upper(),
+        MembershipApplication.status == APPLICATION_STATUS_APPROVED,
+    ).first()
+    if approved_application is not None:
+        return MEMBERSHIP_APPLICATION_MEMBER_EXISTS_MESSAGE
+
+    pending_student_application = MembershipApplication.query.filter(
+        db.func.upper(MembershipApplication.student_id) == normalized_student_id.upper(),
+        MembershipApplication.status == APPLICATION_STATUS_PENDING,
+    ).first()
+    if pending_student_application is not None:
+        return MEMBERSHIP_APPLICATION_PENDING_MESSAGE
+
+    if member_user is not None:
+        pending_member_application = MembershipApplication.query.filter_by(
+            member_user_id=member_user.id,
+            status=APPLICATION_STATUS_PENDING,
+        ).first()
+        if pending_member_application is not None:
+            return MEMBERSHIP_APPLICATION_PENDING_MESSAGE
+
+    return ""
+
+
+def create_membership_application(form_data, member_user: MemberUser | None = None) -> MembershipApplication:
+    values = validate_membership_application_form(form_data, member_user)
+    block_message = membership_application_block_message(str(values["student_id"]), member_user)
+    if block_message:
+        raise MembershipApplicationBlocked(block_message, values)
+
+    now_value = utcnow()
+    application = MembershipApplication(
+        member_user_id=member_user.id if member_user is not None else None,
+        student_id=str(values["student_id"]),
+        full_name=str(values["full_name"]),
+        gender=values["gender"],
+        entry_year=values["entry_year"],
+        school=values["school"],
+        college=values["college"],
+        phone=str(values["phone"]),
+        competition_interest=str(values["competition_interest"]),
+        cycling_experience=str(values["cycling_experience"]),
+        bicycle_status=str(values["bicycle_status"]),
+        other_bicycle_description=values["other_bicycle_description"],
+        additional_note=values["additional_note"],
+        status=APPLICATION_STATUS_PENDING,
+        form_version=CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION,
+        submitted_at=now_value,
+        created_at=now_value,
+        updated_at=now_value,
+    )
+
+    try:
+        db.session.add(application)
+        db.session.flush()
+        detail = {
+            "actor_type": "member_user" if member_user is not None else "anonymous",
+            "submission_type": "authenticated" if member_user is not None else "public",
+            "form_version": CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION,
+        }
+        if member_user is not None:
+            detail["member_user_id"] = member_user.id
+        add_audit_log(
+            actor_id=None,
+            action=MEMBERSHIP_APPLICATION_SUBMIT_ACTION,
+            target_type="membership_application",
+            target_id=str(application.id),
+            detail=json.dumps(detail, ensure_ascii=False),
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return application
+
+
+def _clean_review_note(value: object) -> str | None:
+    cleaned = str(value or "").strip()
+    if len(cleaned) > 1000:
+        cleaned = cleaned[:1000]
+    return cleaned or None
+
+
+def _membership_application_submitted_date(application: MembershipApplication):
+    if application.submitted_at is None:
+        return None
+    return application.submitted_at.date()
+
+
+def _find_safe_member_user_for_application(application: MembershipApplication) -> tuple[MemberUser | None, bool]:
+    normalized_student_id = _clean_membership_application_text(application.student_id).upper()
+    if not normalized_student_id:
+        raise MembershipApplicationReviewError("申请学号为空，无法创建社员档案。")
+
+    if application.member_user_id is not None:
+        member_user = db.session.get(MemberUser, application.member_user_id)
+        if member_user is None:
+            raise MembershipApplicationReviewError("申请绑定的社员账号不存在，无法自动绑定。")
+        if (member_user.student_id or "").upper() != normalized_student_id:
+            raise MembershipApplicationReviewError("申请绑定账号的学号与申请学号不一致，无法同意。")
+        if member_user.profile is not None:
+            raise MembershipApplicationReviewError("申请绑定账号已经关联其他社员档案，无法同意。")
+        return member_user, False
+
+    member_user = MemberUser.query.filter(db.func.upper(MemberUser.student_id) == normalized_student_id).first()
+    if member_user is None:
+        return None, False
+    if member_user.profile is not None:
+        raise MembershipApplicationReviewError("同学号社员账号已经关联其他社员档案，无法同意。")
+    return member_user, True
+
+
+def _profile_create_audit_detail(profile: MemberProfile, application: MembershipApplication, actor_user_id: int) -> str:
+    detail = {
+        "source": "membership_application_approve",
+        "actor_type": "admin_user",
+        "actor_user_id": actor_user_id,
+        "application_id": application.id,
+        "student_id": profile.student_id,
+        "changes": {
+            "student_id": {"before": None, "after": profile.student_id},
+            "full_name": {"before": None, "after": profile.full_name},
+            "gender": {"before": None, "after": profile.gender},
+            "entry_year": {"before": None, "after": profile.entry_year},
+            "school": {"before": None, "after": profile.school},
+            "college": {"before": None, "after": profile.college},
+            "last_confirmed_at": {
+                "before": None,
+                "after": profile.last_confirmed_at.isoformat() if profile.last_confirmed_at else None,
+            },
+        },
+        "extra": {"phone_provided": bool(profile.phone)},
+    }
+    return json.dumps(detail, ensure_ascii=False)
+
+
+def _profile_bind_audit_detail(
+    profile: MemberProfile,
+    application: MembershipApplication,
+    actor_user_id: int,
+    member_user_id: int,
+    auto_matched: bool,
+) -> str:
+    detail = {
+        "source": "membership_application_approve",
+        "actor_type": "admin_user",
+        "actor_user_id": actor_user_id,
+        "application_id": application.id,
+        "student_id": profile.student_id,
+        "changes": {
+            "member_user_id": {"before": None, "after": member_user_id},
+        },
+        "extra": {"auto_matched": auto_matched},
+    }
+    return json.dumps(detail, ensure_ascii=False)
+
+
+def approve_membership_application(
+    application_id: int,
+    actor_user_id: int,
+    review_note: object = None,
+) -> MembershipApplication:
+    application = db.session.get(MembershipApplication, application_id)
+    if application is None:
+        raise MembershipApplicationReviewError("入社申请不存在。")
+    if application.status != APPLICATION_STATUS_PENDING:
+        raise MembershipApplicationReviewError("该申请已处理。")
+
+    normalized_student_id = _clean_membership_application_text(application.student_id).upper()
+    existing_profile = MemberProfile.query.filter(db.func.upper(MemberProfile.student_id) == normalized_student_id).first()
+    if existing_profile is not None:
+        raise MembershipApplicationReviewError("该学号已经存在社员档案，无法同意并覆盖。")
+
+    try:
+        member_user, auto_matched = _find_safe_member_user_for_application(application)
+        now_value = utcnow()
+        note = _clean_review_note(review_note)
+        profile = MemberProfile(
+            member_user_id=member_user.id if member_user is not None else None,
+            student_id=normalized_student_id,
+            full_name=application.full_name,
+            gender=application.gender,
+            entry_year=application.entry_year,
+            school=application.school,
+            college=application.college,
+            phone=application.phone,
+            last_confirmed_at=_membership_application_submitted_date(application),
+            created_at=now_value,
+            updated_at=now_value,
+        )
+        db.session.add(profile)
+        db.session.flush()
+
+        application.status = APPLICATION_STATUS_APPROVED
+        application.reviewed_at = now_value
+        application.reviewed_by = actor_user_id
+        application.review_note = note
+        application.approved_profile_id = profile.id
+        application.updated_at = now_value
+
+        add_audit_log(
+            actor_id=actor_user_id,
+            action="membership_application.approve",
+            target_type="membership_application",
+            target_id=str(application.id),
+            detail=json.dumps(
+                {
+                    "before_status": APPLICATION_STATUS_PENDING,
+                    "after_status": APPLICATION_STATUS_APPROVED,
+                    "review_note_present": bool(note),
+                    "profile_id": profile.id,
+                    "member_user_id": member_user.id if member_user is not None else None,
+                    "auto_matched_member_user": auto_matched,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        add_audit_log(
+            actor_id=actor_user_id,
+            action="member_profile.create",
+            target_type="member_profile",
+            target_id=str(profile.id),
+            detail=_profile_create_audit_detail(profile, application, actor_user_id),
+        )
+        if member_user is not None:
+            add_audit_log(
+                actor_id=actor_user_id,
+                action="member_profile.account_bind",
+                target_type="member_profile",
+                target_id=str(profile.id),
+                detail=_profile_bind_audit_detail(profile, application, actor_user_id, member_user.id, auto_matched),
+            )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return application
+
+
+def reject_membership_application(
+    application_id: int,
+    actor_user_id: int,
+    review_note: object = None,
+) -> MembershipApplication:
+    application = db.session.get(MembershipApplication, application_id)
+    if application is None:
+        raise MembershipApplicationReviewError("入社申请不存在。")
+    if application.status != APPLICATION_STATUS_PENDING:
+        raise MembershipApplicationReviewError("该申请已处理。")
+
+    try:
+        now_value = utcnow()
+        note = _clean_review_note(review_note)
+        application.status = APPLICATION_STATUS_REJECTED
+        application.reviewed_at = now_value
+        application.reviewed_by = actor_user_id
+        application.review_note = note
+        application.updated_at = now_value
+        add_audit_log(
+            actor_id=actor_user_id,
+            action="membership_application.reject",
+            target_type="membership_application",
+            target_id=str(application.id),
+            detail=json.dumps(
+                {
+                    "before_status": APPLICATION_STATUS_PENDING,
+                    "after_status": APPLICATION_STATUS_REJECTED,
+                    "review_note_present": bool(note),
+                    "profile_id": None,
+                    "member_user_id": application.member_user_id,
+                    "auto_matched_member_user": False,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return application
 
 
 def build_field_changes(before: dict, after: dict) -> dict:
