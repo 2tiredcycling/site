@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.10.5]
+
+### Chore
+
+- Ignored local instance log files and member profile import preview/report runtime caches.
+
 ## [v4.10.4]
 
 ### Changed
