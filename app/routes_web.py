@@ -44,6 +44,7 @@ from app.models import (
 )
 from app.querying import query_routes_from_request
 from app.security_limits import consume_fixed_window
+from app.services import add_member_profile_audit_log
 from app.gpx_utils import parse_gpx_points_and_stats
 
 bp = Blueprint("web", __name__)
@@ -353,6 +354,21 @@ def _sync_member_profile_link(member: MemberUser) -> MemberProfile | None:
         profile.updated_at = utcnow()
         db.session.commit()
     return profile
+
+
+def _member_profile_self_snapshot(profile: MemberProfile) -> dict:
+    return {
+        "gender": profile.gender,
+        "school": profile.school,
+        "college": profile.college,
+        "phone": profile.phone,
+        "last_confirmed_at": profile.last_confirmed_at.isoformat() if profile.last_confirmed_at else None,
+    }
+
+
+def _clean_optional_member_profile_text(value: str | None) -> str | None:
+    cleaned = re.sub(r"\s+", " ", (value or "").strip())
+    return cleaned or None
 
 
 def _rating_summary_map(route_ids: list[int]) -> dict[int, dict]:
@@ -1794,6 +1810,69 @@ def member_profile():
         profile=profile,
         meta_description="查看 2Tired 骑行社社员资料。",
     )
+
+
+@bp.get("/member/profile/edit")
+def member_profile_edit():
+    member = _current_member_user()
+    if not member:
+        return _member_login_redirect()
+    profile = _sync_member_profile_link(member)
+    if not profile:
+        return render_template(
+            "member_profile.html",
+            member=member,
+            profile=None,
+            error_message="暂未匹配到社员档案，无法修改资料。",
+            meta_description="查看 2Tired 骑行社社员资料。",
+        ), 404
+    return render_template(
+        "member_profile_edit.html",
+        member=member,
+        profile=profile,
+        error_message="",
+    )
+
+
+@bp.post("/member/profile/edit")
+def member_profile_edit_submit():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+    member = _current_member_user()
+    if not member:
+        return _member_login_redirect()
+    profile = _sync_member_profile_link(member)
+    if not profile:
+        return render_template(
+            "member_profile.html",
+            member=member,
+            profile=None,
+            error_message="暂未匹配到社员档案，无法修改资料。",
+            meta_description="查看 2Tired 骑行社社员资料。",
+        ), 404
+
+    before = _member_profile_self_snapshot(profile)
+    editable_before = {key: before.get(key) for key in ("gender", "school", "college", "phone")}
+    profile.gender = _clean_optional_member_profile_text(request.form.get("gender"))
+    profile.school = _clean_optional_member_profile_text(request.form.get("school"))
+    profile.college = _clean_optional_member_profile_text(request.form.get("college"))
+    profile.phone = _clean_optional_member_profile_text(request.form.get("phone"))
+    profile.last_confirmed_at = _to_local_time(utcnow()).date()
+    profile.updated_at = utcnow()
+    after = _member_profile_self_snapshot(profile)
+    editable_after = {key: after.get(key) for key in editable_before}
+    action = "member_profile.self_update" if editable_before != editable_after else "member_profile.self_confirm"
+    add_member_profile_audit_log(
+        action,
+        profile,
+        before,
+        after,
+        source="self_update" if action == "member_profile.self_update" else "self_confirm",
+        actor_member_user_id=member.id,
+        extra={"member_user_id": member.id},
+    )
+    db.session.commit()
+    return redirect(_url_for("web.member_profile", updated="profile"))
 
 
 @bp.post("/member/account/nickname")

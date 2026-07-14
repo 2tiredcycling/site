@@ -552,6 +552,113 @@ def test_manage_member_profiles_page_allows_member_read_permission(app_and_clien
     assert page.status_code == 200
     assert "Reader Visible Person" in html
     assert "社员档案" in html
+    assert "编辑</a>" not in html
+
+
+def test_manage_member_profile_edit_updates_profile_and_writes_audit_log(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        member = MemberUser(
+            student_id="20260204",
+            nickname="Editable Bound Rider",
+            password_hash=generate_password_hash("memberpass123"),
+            account_status=MEMBER_ACCOUNT_ACTIVE,
+        )
+        profile = MemberProfile(
+            student_id="20260204",
+            full_name="Editable Person",
+            school="旧学院",
+            phone="13800000004",
+            last_confirmed_at=date(2026, 7, 11),
+        )
+        db.session.add_all([member, profile])
+        db.session.commit()
+        member_id = member.id
+        profile_id = profile.id
+
+    assert login_admin(client).status_code == 200
+    edit_page = client.get(f"/manage/member-profiles/{profile_id}/edit")
+    assert edit_page.status_code == 200
+    token = _extract_csrf(edit_page.get_data(as_text=True))
+    updated = client.post(
+        f"/manage/member-profiles/{profile_id}/edit",
+        data={
+            "csrf_token": token,
+            "student_id": "20260204",
+            "full_name": "Editable Person Updated",
+            "entry_year": "2026",
+            "gender": "女",
+            "school": "新学院",
+            "college": "新书院",
+            "phone": "13900000004",
+            "last_confirmed_at": "2026-07-11",
+            "member_user_id": str(member_id),
+        },
+        follow_redirects=True,
+    )
+    html = updated.get_data(as_text=True)
+    assert updated.status_code == 200
+    assert "社员档案已更新" in html
+
+    with app.app_context():
+        profile = db.session.get(MemberProfile, profile_id)
+        assert profile.full_name == "Editable Person Updated"
+        assert profile.school == "新学院"
+        assert profile.member_user_id == member_id
+        log = AuditLog.query.filter_by(action="member_profile.admin_update", target_type="member_profile", target_id=str(profile_id)).first()
+        assert log is not None
+        assert '"source": "admin_update"' in log.detail
+        assert '"school": {"before": "旧学院", "after": "新学院"}' in log.detail
+
+
+def test_member_can_update_own_profile_fields_and_audit_log(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        profile = MemberProfile(
+            student_id="20260205",
+            full_name="Self Editable Person",
+            gender="男",
+            school="旧学院",
+            college="旧书院",
+            phone="13800000005",
+            last_confirmed_at=date(2026, 7, 11),
+        )
+        db.session.add(profile)
+        db.session.commit()
+        profile_id = profile.id
+
+    assert register_member(client, "20260205", "Self Edit Rider", "memberpass123").status_code == 200
+    edit_page = client.get("/member/profile/edit")
+    assert edit_page.status_code == 200
+    token = _extract_csrf(edit_page.get_data(as_text=True))
+    updated = client.post(
+        "/member/profile/edit",
+        data={
+            "csrf_token": token,
+            "gender": "女",
+            "school": "新学院",
+            "college": "新书院",
+            "phone": "13900000005",
+        },
+        follow_redirects=True,
+    )
+    html = updated.get_data(as_text=True)
+    assert updated.status_code == 200
+    assert "社员资料已保存并确认" in html
+    assert "新学院" in html
+
+    with app.app_context():
+        profile = db.session.get(MemberProfile, profile_id)
+        member = MemberUser.query.filter_by(student_id="20260205").first()
+        assert profile.gender == "女"
+        assert profile.school == "新学院"
+        assert profile.college == "新书院"
+        assert profile.phone == "13900000005"
+        assert profile.last_confirmed_at is not None
+        log = AuditLog.query.filter_by(action="member_profile.self_update", target_type="member_profile", target_id=str(profile_id)).first()
+        assert log is not None
+        assert f'"actor_member_user_id": {member.id}' in log.detail
+        assert '"source": "self_update"' in log.detail
 
 
 def test_manage_member_write_permission_can_update_but_not_delete(app_and_client):

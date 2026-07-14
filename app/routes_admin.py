@@ -123,6 +123,7 @@ from app.route_ops import allowed_file, file_size_ok, parse_distance, save_gpx_f
 from app.security_monitor import WATCHLIST_PROBE_PATHS, build_non_probe_filters
 from app.security_limits import check_lock, clear_state, register_failure
 from app.services import (
+    add_member_profile_audit_log,
     approved_rating_summary,
     create_route_version,
     ensure_user_page_permissions,
@@ -224,6 +225,9 @@ AUDIT_ACTION_LABELS = {
     "member_user.disable": "禁用社员账号",
     "member_user.password_reset": "重置社员密码",
     "member_user.delete": "删除社员账号",
+    "member_profile.admin_update": "管理员更新社员档案",
+    "member_profile.self_update": "社员更新自己的档案",
+    "member_profile.self_confirm": "社员确认自己的档案",
 }
 
 
@@ -740,6 +744,10 @@ def _required_page_permission_for_request(path: str, method: str) -> tuple[str, 
             return PAGE_ACCOUNTS, PERMISSION_ADMIN
         return PAGE_ACCOUNTS, PERMISSION_READ
     if normalized.startswith("/manage/member-profiles"):
+        if is_post:
+            return PAGE_MEMBERS, PERMISSION_WRITE
+        if normalized.endswith("/edit"):
+            return PAGE_MEMBERS, PERMISSION_WRITE
         return PAGE_MEMBERS, PERMISSION_READ
     if normalized.startswith("/manage/members"):
         if is_post and "/delete" in normalized:
@@ -2307,7 +2315,148 @@ def member_profiles_page():
         pagination=pagination,
         q=q,
         link_status=link_status,
+        can_write_members=can_write_page(g.current_user, PAGE_MEMBERS),
     )
+
+
+def _member_profile_snapshot(profile: MemberProfile) -> dict:
+    return {
+        "student_id": profile.student_id,
+        "full_name": profile.full_name,
+        "gender": profile.gender,
+        "entry_year": profile.entry_year,
+        "school": profile.school,
+        "college": profile.college,
+        "phone": profile.phone,
+        "member_user_id": profile.member_user_id,
+        "last_confirmed_at": profile.last_confirmed_at.isoformat() if profile.last_confirmed_at else None,
+    }
+
+
+def _clean_optional_text(value: str | None) -> str | None:
+    cleaned = re.sub(r"\s+", " ", (value or "").strip())
+    return cleaned or None
+
+
+def _parse_optional_int(value: str | None, label: str = "数字字段") -> tuple[int | None, str]:
+    raw = (value or "").strip()
+    if not raw:
+        return None, ""
+    try:
+        return int(raw), ""
+    except ValueError:
+        return None, f"{label}需为数字。"
+
+
+def _parse_optional_date(value: str | None) -> tuple[date | None, str]:
+    raw = (value or "").strip()
+    if not raw:
+        return None, ""
+    try:
+        return date.fromisoformat(raw), ""
+    except ValueError:
+        return None, "最近确认日期格式无效。"
+
+
+def _admin_member_profile_form_values(profile: MemberProfile) -> tuple[dict, str]:
+    student_id = (request.form.get("student_id") or "").strip().upper()
+    full_name = _clean_optional_text(request.form.get("full_name")) or ""
+    entry_year, year_error = _parse_optional_int(request.form.get("entry_year"), "入学年份")
+    last_confirmed_at, date_error = _parse_optional_date(request.form.get("last_confirmed_at"))
+    member_user_id, account_error = _parse_optional_int(request.form.get("member_user_id"), "绑定账号 ID")
+    error_message = year_error or date_error or account_error
+    if not student_id:
+        error_message = "请填写学号。"
+    elif not full_name:
+        error_message = "请填写真实姓名。"
+
+    values = {
+        "student_id": student_id,
+        "full_name": full_name,
+        "gender": _clean_optional_text(request.form.get("gender")),
+        "entry_year": entry_year,
+        "school": _clean_optional_text(request.form.get("school")),
+        "college": _clean_optional_text(request.form.get("college")),
+        "phone": _clean_optional_text(request.form.get("phone")),
+        "last_confirmed_at": last_confirmed_at,
+        "member_user_id": member_user_id,
+    }
+    if error_message:
+        return values, error_message
+
+    duplicate_student = MemberProfile.query.filter(
+        db.func.upper(MemberProfile.student_id) == student_id.upper(),
+        MemberProfile.id != profile.id,
+    ).first()
+    if duplicate_student:
+        return values, "该学号已存在社员档案。"
+
+    if member_user_id is not None:
+        member_user = db.session.get(MemberUser, member_user_id)
+        if not member_user:
+            return values, "绑定账号不存在。"
+        duplicate_link = MemberProfile.query.filter(
+            MemberProfile.member_user_id == member_user_id,
+            MemberProfile.id != profile.id,
+        ).first()
+        if duplicate_link:
+            return values, "该账号已绑定其他社员档案。"
+    return values, ""
+
+
+@bp.get("/member-profiles/<int:profile_id>/edit")
+@login_required
+def member_profile_edit_page(profile_id: int):
+    profile = MemberProfile.query.filter_by(id=profile_id).first()
+    if not profile:
+        flash("社员档案不存在", "error")
+        return redirect(url_for("admin.member_profiles_page"))
+    member_users = MemberUser.query.order_by(MemberUser.student_id.asc(), MemberUser.id.asc()).all()
+    return render_template(
+        "manage_member_profile_form.html",
+        profile=profile,
+        member_users=member_users,
+        error_message="",
+    )
+
+
+@bp.post("/member-profiles/<int:profile_id>/edit")
+@login_required
+def update_member_profile(profile_id: int):
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+    profile = MemberProfile.query.filter_by(id=profile_id).first()
+    if not profile:
+        flash("社员档案不存在", "error")
+        return redirect(url_for("admin.member_profiles_page"))
+
+    values, error_message = _admin_member_profile_form_values(profile)
+    member_users = MemberUser.query.order_by(MemberUser.student_id.asc(), MemberUser.id.asc()).all()
+    if error_message:
+        return render_template(
+            "manage_member_profile_form.html",
+            profile=profile,
+            member_users=member_users,
+            error_message=error_message,
+            form_values=values,
+        ), 400
+
+    before = _member_profile_snapshot(profile)
+    for key, value in values.items():
+        setattr(profile, key, value)
+    profile.updated_at = utcnow()
+    after = _member_profile_snapshot(profile)
+    add_member_profile_audit_log(
+        "member_profile.admin_update",
+        profile,
+        before,
+        after,
+        source="admin_update",
+        actor_user_id=g.current_user.id,
+    )
+    db.session.commit()
+    flash("社员档案已更新", "success")
+    return redirect(url_for("admin.member_profile_edit_page", profile_id=profile.id))
 
 
 @bp.post("/members/<int:member_id>/status")

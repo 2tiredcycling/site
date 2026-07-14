@@ -55,6 +55,7 @@
             <th>联系方式</th>
             <th>确认日期</th>
             <th>账号绑定</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -84,9 +85,16 @@
                   {{ status_badge('pending', '未绑定') }}
                 {% endif %}
               </td>
+              <td>
+                {% if can_write_members %}
+                  <a class="btn btn-muted" href="{{ url_for('admin.member_profile_edit_page', profile_id=profile.id) }}">编辑</a>
+                {% else %}
+                  <span class="hint">只读</span>
+                {% endif %}
+              </td>
             </tr>
           {% else %}
-            <tr><td colspan="6">暂无社员档案</td></tr>
+            <tr><td colspan="7">暂无社员档案</td></tr>
           {% endfor %}
         </tbody>
       </table>

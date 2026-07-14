@@ -1254,6 +1254,13 @@ body {
   margin-top: 4px;
 }
 
+.member-profile-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .detail-grid strong,
 .detail-grid span {
   display: block;
@@ -3040,7 +3047,8 @@ td {
   form,
   .filter-grid,
   .detail-grid,
-  .member-nickname-form {
+  .member-nickname-form,
+  .member-profile-edit-grid {
     grid-template-columns: 1fr;
   }
 

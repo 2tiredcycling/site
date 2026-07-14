@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>修改社员资料 | 2Tired 骑行社</title>
+  <meta name="description" content="修改 2Tired 骑行社社员资料。">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  {% include '_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    {% include '_site_icon_sprite.html' %}
+    {% include '_site_nav.html' %}
+
+    <section class="card form-card member-account-shell">
+      <div class="section-head member-account-head">
+        <div>
+          <p class="hero-kicker">MEMBER PROFILE</p>
+          <h1>修改社员资料</h1>
+          <p class="hint">{{ profile.full_name }} · {{ profile.student_id }}</p>
+        </div>
+        <a class="btn btn-muted" href="{{ url_for('web.member_profile') }}">返回资料页</a>
+      </div>
+
+      {% if error_message %}
+        <div class="alert">{{ error_message }}</div>
+      {% endif %}
+
+      <section class="edit-item compact-item">
+        <strong>只读信息</strong>
+        <p class="hint">学号、真实姓名和入学年份暂不支持本人修改，如有误请联系管理员。</p>
+        <div class="detail-grid">
+          <div><strong>学号</strong><span>{{ profile.student_id }}</span></div>
+          <div><strong>真实姓名</strong><span>{{ profile.full_name }}</span></div>
+          <div><strong>入学年份</strong><span>{{ profile.entry_year or '待补充' }}</span></div>
+          <div><strong>最近确认</strong><span>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '待确认' }}</span></div>
+        </div>
+      </section>
+
+      <form method="post" action="{{ url_for('web.member_profile_edit_submit') }}" class="single-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <section class="edit-item compact-item">
+          <strong>可修改资料</strong>
+          <p class="hint">保存后会记录为本人确认资料，并更新最近确认日期。</p>
+          <div class="member-profile-edit-grid">
+            <label>
+              性别
+              <input type="text" name="gender" value="{{ profile.gender or '' }}" placeholder="可留空">
+            </label>
+            <label>
+              学院
+              <input type="text" name="school" value="{{ profile.school or '' }}" placeholder="例如 理工学院">
+            </label>
+            <label>
+              书院
+              <input type="text" name="college" value="{{ profile.college or '' }}" placeholder="研究生或未填写者可留空">
+            </label>
+            <label>
+              手机号
+              <input type="text" name="phone" value="{{ profile.phone or '' }}" autocomplete="tel" placeholder="仅本人和管理端可见">
+            </label>
+          </div>
+        </section>
+
+        <div class="row-actions">
+          <button class="btn" type="submit">保存并确认</button>
+          <a class="btn btn-muted" href="{{ url_for('web.member_profile') }}">取消</a>
+        </div>
+      </form>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+</body>
+</html>

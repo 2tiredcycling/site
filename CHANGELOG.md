@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v4.10.2]
+
+### Added
+
+- Added transaction-safe member profile audit helpers with explicit source/action metadata.
+- Added management-side member profile editing with account binding controls and audit logging.
+- Added self-service member profile editing for gender, school, college, and phone with confirmation audit logging.
+
 ## [v4.10.1]
 
 ### Added

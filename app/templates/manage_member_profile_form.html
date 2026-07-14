@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>编辑社员档案 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="manage-page">
+  {% set values = form_values if form_values is defined else {} %}
+  <main class="container">
+    <header class="header manage-dashboard-header">
+      <div class="manage-dashboard-title">
+        <h1>编辑社员档案：{{ profile.full_name }}</h1>
+        <p>{{ profile.student_id }} · 档案 ID {{ profile.id }}</p>
+      </div>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page') }}">返回档案列表</a>
+      </div>
+    </header>
+    {% include "_manage_nav.html" %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% if error_message %}
+      <div class="alert">{{ error_message }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('admin.update_member_profile', profile_id=profile.id) }}" class="manage-account-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <section class="card form-card">
+        <h2>基本资料</h2>
+        <div class="manage-account-basic-grid">
+          <label>学号<input type="text" name="student_id" value="{{ values.get('student_id', profile.student_id) }}" required></label>
+          <label>真实姓名<input type="text" name="full_name" value="{{ values.get('full_name', profile.full_name) }}" required></label>
+          <label>入学年份<input type="number" name="entry_year" min="2000" max="2100" value="{{ values.get('entry_year', profile.entry_year) or '' }}"></label>
+          <label>性别<input type="text" name="gender" value="{{ values.get('gender', profile.gender) or '' }}"></label>
+          <label>学院<input type="text" name="school" value="{{ values.get('school', profile.school) or '' }}"></label>
+          <label>书院<input type="text" name="college" value="{{ values.get('college', profile.college) or '' }}"></label>
+          <label>手机号<input type="text" name="phone" value="{{ values.get('phone', profile.phone) or '' }}"></label>
+          <label>最近确认日期<input type="date" name="last_confirmed_at" value="{{ values.get('last_confirmed_at', profile.last_confirmed_at).isoformat() if values.get('last_confirmed_at', profile.last_confirmed_at) else '' }}"></label>
+        </div>
+        <p class="hint">管理员修改资料不会自动更新最近确认日期；需要时可以手动设置该日期。</p>
+      </section>
+
+      <section class="card form-card">
+        <h2>账号绑定</h2>
+        <label>绑定前台账号
+          {% set selected_member_user_id = values.get('member_user_id', profile.member_user_id) %}
+          <select name="member_user_id">
+            <option value="" {% if not selected_member_user_id %}selected{% endif %}>不绑定账号</option>
+            {% for member_user in member_users %}
+              <option value="{{ member_user.id }}" {% if selected_member_user_id == member_user.id %}selected{% endif %}>{{ member_user.student_id }} · {{ member_user.nickname }} · ID {{ member_user.id }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <p class="hint">一个前台账号只能绑定一个社员档案；解除绑定不会删除账号或档案。</p>
+      </section>
+
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page') }}">取消</a>
+        <button class="btn" type="submit">保存档案</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

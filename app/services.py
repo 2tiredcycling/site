@@ -31,6 +31,7 @@ from app.models import (
     Activity,
     AuditLog,
     ImportReport,
+    MemberProfile,
     Route,
     RouteFeedback,
     RouteVersion,
@@ -479,6 +480,33 @@ def write_audit_log(
     db.session.commit()
 
 
+def add_audit_log(
+    actor_id: int | None,
+    action: str,
+    target_type: str,
+    target_id: str | None,
+    detail: str = "",
+) -> AuditLog:
+    log = AuditLog(
+        actor_id=actor_id,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        detail=detail,
+    )
+    db.session.add(log)
+    return log
+
+
+def build_field_changes(before: dict, after: dict) -> dict:
+    changed = {}
+    for key, before_value in before.items():
+        after_value = after.get(key)
+        if before_value != after_value:
+            changed[key] = {"before": before_value, "after": after_value}
+    return changed
+
+
 def write_field_audit_log(
     actor_id: int | None,
     target_type: str,
@@ -486,11 +514,7 @@ def write_field_audit_log(
     before: dict,
     after: dict,
 ) -> None:
-    changed = {}
-    for key, before_value in before.items():
-        after_value = after.get(key)
-        if before_value != after_value:
-            changed[key] = {"before": before_value, "after": after_value}
+    changed = build_field_changes(before, after)
     if not changed:
         return
 
@@ -500,6 +524,38 @@ def write_field_audit_log(
         target_type=target_type,
         target_id=target_id,
         detail=json.dumps(changed, ensure_ascii=False),
+    )
+
+
+def add_member_profile_audit_log(
+    action: str,
+    profile: MemberProfile,
+    before: dict,
+    after: dict,
+    *,
+    source: str,
+    actor_user_id: int | None = None,
+    actor_member_user_id: int | None = None,
+    extra: dict | None = None,
+) -> AuditLog | None:
+    changes = build_field_changes(before, after)
+    if not changes and not extra:
+        return None
+    detail = {
+        "source": source,
+        "actor_type": "admin_user" if actor_user_id is not None else ("member_user" if actor_member_user_id is not None else "system"),
+        "actor_user_id": actor_user_id,
+        "actor_member_user_id": actor_member_user_id,
+        "student_id": profile.student_id,
+        "changes": changes,
+        "extra": extra or {},
+    }
+    return add_audit_log(
+        actor_id=actor_user_id,
+        action=action,
+        target_type="member_profile",
+        target_id=str(profile.id) if profile.id is not None else None,
+        detail=json.dumps(detail, ensure_ascii=False),
     )
 
 
