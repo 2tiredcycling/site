@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [v4.10.4]
+
+### Changed
+
+- Allowed members to update their own entry year alongside school, college, gender, and phone.
+- Changed member profile gender editing to a controlled male/female/blank option set, with blank stored as undisclosed.
+- Changed member profile entry-year choices to use a dynamic range from `2022 and earlier` through the current intake year.
+- Changed blank/undisclosed member profile display text to `-`.
+
 ## [v4.10.3]
 
 ### Added

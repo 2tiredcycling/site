@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from datetime import date
+
 
 ENTRY_YEAR_EARLIEST_BUCKET = 2022
+
+GENDER_OPTIONS = (
+    {"code": "男", "label": "男", "aliases": ("男", "male", "m")},
+    {"code": "女", "label": "女", "aliases": ("女", "female", "f")},
+)
 
 SCHOOL_OPTIONS = (
     {"code": "SME", "label": "经管学院 | SME", "aliases": ("经管学院", "SME")},
@@ -57,6 +64,26 @@ def _build_alias_map(options: tuple[dict, ...]) -> dict[str, str]:
 
 SCHOOL_ALIAS_MAP = _build_alias_map(SCHOOL_OPTIONS)
 COLLEGE_ALIAS_MAP = _build_alias_map(COLLEGE_OPTIONS)
+GENDER_ALIAS_MAP = _build_alias_map(GENDER_OPTIONS)
+
+
+def normalize_gender(value: object) -> tuple[str | None, str]:
+    raw = " ".join(str(value or "").strip().split())
+    if not raw:
+        return None, ""
+    if _normalize_lookup_key(raw) in {
+        _normalize_lookup_key("不愿透露"),
+        _normalize_lookup_key("不透露"),
+        _normalize_lookup_key("保密"),
+        _normalize_lookup_key("-"),
+        _normalize_lookup_key("prefer not to say"),
+        _normalize_lookup_key("none"),
+    }:
+        return None, ""
+    code = GENDER_ALIAS_MAP.get(_normalize_lookup_key(raw))
+    if not code:
+        return None, "性别不在允许范围内。"
+    return code, ""
 
 
 def normalize_school(value: object) -> tuple[str | None, str]:
@@ -96,6 +123,20 @@ def display_school(value: object) -> str:
 
 def display_college(value: object) -> str:
     return _display_option(value, COLLEGE_OPTIONS, COLLEGE_ALIAS_MAP)
+
+
+def display_gender(value: object) -> str:
+    normalized, error = normalize_gender(value)
+    if error:
+        return str(value or "").strip()
+    return normalized or "-"
+
+
+def current_entry_year_options(today: date | None = None) -> list[int]:
+    current = today or date.today()
+    latest_year = current.year if current.month >= 7 else current.year - 1
+    latest_year = max(latest_year, ENTRY_YEAR_EARLIEST_BUCKET)
+    return list(range(ENTRY_YEAR_EARLIEST_BUCKET, latest_year + 1))
 
 
 def parse_entry_year(value: object) -> tuple[int | None, str]:

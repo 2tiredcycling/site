@@ -30,12 +30,11 @@
 
       <section class="edit-item compact-item">
         <strong>只读信息</strong>
-        <p class="hint">学号、真实姓名和入学年份暂不支持本人修改，如有误请联系管理员。</p>
+        <p class="hint">学号和真实姓名暂不支持本人修改，如有误请联系管理员。</p>
         <div class="detail-grid">
           <div><strong>学号</strong><span>{{ profile.student_id }}</span></div>
           <div><strong>真实姓名</strong><span>{{ profile.full_name }}</span></div>
-          <div><strong>入学年份</strong><span>{{ display_entry_year(profile.entry_year) or '待补充' }}</span></div>
-          <div><strong>最近确认</strong><span>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '待确认' }}</span></div>
+          <div><strong>最近确认</strong><span>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '-' }}</span></div>
         </div>
       </section>
 
@@ -47,12 +46,27 @@
           <div class="member-profile-edit-grid">
             <label>
               性别
-              <input type="text" name="gender" value="{{ profile.gender or '' }}" placeholder="可留空">
+              <select name="gender">
+                <option value="" {% if not profile.gender %}selected{% endif %}>-</option>
+                {% for option in gender_options %}
+                  <option value="{{ option.code }}" {% if profile.gender == option.code %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              入学年份
+              <select name="entry_year">
+                <option value="" {% if not profile.entry_year %}selected{% endif %}>-</option>
+                <option value="2022级及以前" {% if profile.entry_year and profile.entry_year <= 2022 %}selected{% endif %}>2022级及以前</option>
+                {% for year in entry_year_options if year > 2022 %}
+                  <option value="{{ year }}" {% if profile.entry_year == year %}selected{% endif %}>{{ year }}级</option>
+                {% endfor %}
+              </select>
             </label>
             <label>
               学院
               <select name="school">
-                <option value="" {% if not profile.school %}selected{% endif %}>待补充</option>
+                <option value="" {% if not profile.school %}selected{% endif %}>-</option>
                 {% for option in school_options %}
                   <option value="{{ option.code }}" {% if profile.school == option.code %}selected{% endif %}>{{ option.label }}</option>
                 {% endfor %}
@@ -61,7 +75,7 @@
             <label>
               书院
               <select name="college">
-                <option value="" {% if not profile.college %}selected{% endif %}>待补充</option>
+                <option value="" {% if not profile.college %}selected{% endif %}>-</option>
                 {% for option in college_options %}
                   <option value="{{ option.code }}" {% if profile.college == option.code %}selected{% endif %}>{{ option.label }}</option>
                 {% endfor %}

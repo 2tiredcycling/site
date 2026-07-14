@@ -44,12 +44,17 @@ from app.models import (
 )
 from app.member_profile_options import (
     COLLEGE_OPTIONS,
+    GENDER_OPTIONS,
     SCHOOL_OPTIONS,
+    current_entry_year_options,
     display_college,
     display_entry_year,
+    display_gender,
     display_school,
     normalize_college,
+    normalize_gender,
     normalize_school,
+    parse_entry_year,
 )
 from app.querying import query_routes_from_request
 from app.security_limits import consume_fixed_window
@@ -271,8 +276,11 @@ def _inject_time_helpers():
         "current_member_user": _current_member_user,
         "school_options": SCHOOL_OPTIONS,
         "college_options": COLLEGE_OPTIONS,
+        "gender_options": GENDER_OPTIONS,
+        "entry_year_options": current_entry_year_options(_to_local_time(utcnow()).date()),
         "display_school": display_school,
         "display_college": display_college,
+        "display_gender": display_gender,
         "display_entry_year": display_entry_year,
     }
 
@@ -373,6 +381,7 @@ def _sync_member_profile_link(member: MemberUser) -> MemberProfile | None:
 def _member_profile_self_snapshot(profile: MemberProfile) -> dict:
     return {
         "gender": profile.gender,
+        "entry_year": profile.entry_year,
         "school": profile.school,
         "college": profile.college,
         "phone": profile.phone,
@@ -1866,17 +1875,20 @@ def member_profile_edit_submit():
         ), 404
 
     before = _member_profile_self_snapshot(profile)
-    editable_before = {key: before.get(key) for key in ("gender", "school", "college", "phone")}
-    profile.gender = _clean_optional_member_profile_text(request.form.get("gender"))
+    editable_before = {key: before.get(key) for key in ("gender", "entry_year", "school", "college", "phone")}
+    entry_year, entry_year_error = parse_entry_year(request.form.get("entry_year"))
+    gender, gender_error = normalize_gender(request.form.get("gender"))
     school, school_error = normalize_school(request.form.get("school"))
     college, college_error = normalize_college(request.form.get("college"))
-    if school_error or college_error:
+    if entry_year_error or gender_error or school_error or college_error:
         return render_template(
             "member_profile_edit.html",
             member=member,
             profile=profile,
-            error_message=school_error or college_error,
+            error_message=entry_year_error or gender_error or school_error or college_error,
         ), 400
+    profile.entry_year = entry_year
+    profile.gender = gender
     profile.school = school
     profile.college = college
     profile.phone = _clean_optional_member_profile_text(request.form.get("phone"))

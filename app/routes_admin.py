@@ -121,11 +121,15 @@ from app.querying import query_routes_from_request
 from app.gpx_utils import parse_gpx_points_and_stats, parse_gpx_waypoints
 from app.member_profile_options import (
     COLLEGE_OPTIONS,
+    GENDER_OPTIONS,
     SCHOOL_OPTIONS,
+    current_entry_year_options,
     display_college,
     display_entry_year,
+    display_gender,
     display_school,
     normalize_college,
+    normalize_gender,
     normalize_school,
     parse_entry_year,
 )
@@ -887,8 +891,11 @@ def _inject_csrf_token():
         "audit_action_label": _audit_action_label,
         "school_options": SCHOOL_OPTIONS,
         "college_options": COLLEGE_OPTIONS,
+        "gender_options": GENDER_OPTIONS,
+        "entry_year_options": current_entry_year_options(_to_local_time(utcnow()).date()),
         "display_school": display_school,
         "display_college": display_college,
+        "display_gender": display_gender,
         "display_entry_year": display_entry_year,
     }
 
@@ -2390,8 +2397,9 @@ def member_profile_import_template():
     options_sheet = workbook.create_sheet("选项")
     school_labels = [option["label"] for option in SCHOOL_OPTIONS]
     college_labels = [option["label"] for option in COLLEGE_OPTIONS]
-    entry_year_labels = ["2022级及以前"] + [f"{year}级" for year in range(2023, 2036)]
-    option_sets = (("A", school_labels), ("B", college_labels), ("C", entry_year_labels))
+    gender_labels = [option["label"] for option in GENDER_OPTIONS] + ["-"]
+    entry_year_labels = [display_entry_year(year) for year in current_entry_year_options(_to_local_time(utcnow()).date())]
+    option_sets = (("A", school_labels), ("B", college_labels), ("C", entry_year_labels), ("D", gender_labels))
     for column, labels in option_sets:
         for row_index, label in enumerate(labels, start=1):
             options_sheet[f"{column}{row_index}"] = label
@@ -2399,8 +2407,10 @@ def member_profile_import_template():
     school_validation = DataValidation(type="list", formula1=f"='选项'!$A$1:$A${len(school_labels)}", allow_blank=True)
     college_validation = DataValidation(type="list", formula1=f"='选项'!$B$1:$B${len(college_labels)}", allow_blank=True)
     entry_year_validation = DataValidation(type="list", formula1=f"='选项'!$C$1:$C${len(entry_year_labels)}", allow_blank=True)
+    gender_validation = DataValidation(type="list", formula1=f"='选项'!$D$1:$D${len(gender_labels)}", allow_blank=True)
     for validation, range_ref in (
         (entry_year_validation, "C2:C501"),
+        (gender_validation, "D2:D501"),
         (school_validation, "E2:E501"),
         (college_validation, "F2:F501"),
     ):
@@ -2620,12 +2630,15 @@ def _normalize_member_profile_import_row(row_map: dict) -> tuple[dict, list[str]
     full_name = _clean_optional_text(_member_profile_import_value(row_map, "full_name")) or ""
     entry_year, year_error = _parse_member_profile_import_year(row_map.get("entry_year"))
     last_confirmed_at, date_error = _parse_member_profile_import_date(row_map.get("last_confirmed_at"))
+    gender, gender_error = normalize_gender(_member_profile_import_value(row_map, "gender"))
     school, school_error = normalize_school(_member_profile_import_value(row_map, "school"))
     college, college_error = normalize_college(_member_profile_import_value(row_map, "college"))
     if year_error:
         errors.append(year_error)
     if date_error:
         errors.append(date_error)
+    if gender_error:
+        errors.append(gender_error)
     if school_error:
         errors.append(school_error)
     if college_error:
@@ -2638,7 +2651,7 @@ def _normalize_member_profile_import_row(row_map: dict) -> tuple[dict, list[str]
         "student_id": student_id,
         "full_name": full_name,
         "entry_year": entry_year,
-        "gender": _clean_optional_text(_member_profile_import_value(row_map, "gender")),
+        "gender": gender,
         "school": school,
         "college": college,
         "phone": _clean_optional_text(_member_profile_import_value(row_map, "phone")),
@@ -2748,9 +2761,10 @@ def _admin_member_profile_form_values(profile: MemberProfile) -> tuple[dict, str
     entry_year, year_error = parse_entry_year(request.form.get("entry_year"))
     last_confirmed_at, date_error = _parse_optional_date(request.form.get("last_confirmed_at"))
     member_user_id, account_error = _parse_optional_int(request.form.get("member_user_id"), "绑定账号 ID")
+    gender, gender_error = normalize_gender(request.form.get("gender"))
     school, school_error = normalize_school(request.form.get("school"))
     college, college_error = normalize_college(request.form.get("college"))
-    error_message = year_error or date_error or account_error or school_error or college_error
+    error_message = year_error or date_error or account_error or gender_error or school_error or college_error
     if not student_id:
         error_message = "请填写学号。"
     elif not full_name:
@@ -2759,7 +2773,7 @@ def _admin_member_profile_form_values(profile: MemberProfile) -> tuple[dict, str
     values = {
         "student_id": student_id,
         "full_name": full_name,
-        "gender": _clean_optional_text(request.form.get("gender")),
+        "gender": gender,
         "entry_year": entry_year,
         "school": school,
         "college": college,

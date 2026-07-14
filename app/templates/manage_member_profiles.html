@@ -100,11 +100,11 @@
               </td>
               <td>
                 <strong>{{ profile.full_name }}</strong>
-                <div class="hint">{{ profile.gender or '性别待补充' }} · {{ display_entry_year(profile.entry_year) or '入学年份待补充' }}</div>
+                <div class="hint">{{ display_gender(profile.gender) }} · {{ display_entry_year(profile.entry_year) or '-' }}</div>
               </td>
               <td>
                 <div>{{ display_school(profile.school) or '-' }}</div>
-                <div class="hint">{{ display_college(profile.college) or '书院未填写' }}</div>
+                <div class="hint">{{ display_college(profile.college) or '-' }}</div>
               </td>
               <td>{{ profile.phone or '-' }}</td>
               <td>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '-' }}</td>

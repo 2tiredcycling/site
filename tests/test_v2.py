@@ -780,6 +780,7 @@ def test_member_can_update_own_profile_fields_and_audit_log(app_and_client):
             student_id="20260205",
             full_name="Self Editable Person",
             gender="男",
+            entry_year=2026,
             school="SSE",
             college="shaw",
             phone="13800000005",
@@ -797,7 +798,8 @@ def test_member_can_update_own_profile_fields_and_audit_log(app_and_client):
         "/member/profile/edit",
         data={
             "csrf_token": token,
-            "gender": "女",
+            "gender": "",
+            "entry_year": "2022级及以前",
             "school": "SDS",
             "college": "muse",
             "phone": "13900000005",
@@ -812,7 +814,8 @@ def test_member_can_update_own_profile_fields_and_audit_log(app_and_client):
     with app.app_context():
         profile = db.session.get(MemberProfile, profile_id)
         member = MemberUser.query.filter_by(student_id="20260205").first()
-        assert profile.gender == "女"
+        assert profile.gender is None
+        assert profile.entry_year == 2022
         assert profile.school == "SDS"
         assert profile.college == "muse"
         assert profile.phone == "13900000005"
