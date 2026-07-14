@@ -24,6 +24,28 @@
     {% endif %}
 
     <section class="card form-card manage-route-filter-card">
+      <h2 class="manage-route-filter-title">入社申请开关</h2>
+      <p class="hint">
+        当前状态：{{ "开启" if membership_applications_open else "关闭（前台 /join 暂不开放提交）" }}
+      </p>
+      {% if can_write_members %}
+        <p class="hint">开启后，用户可提交入社申请；关闭后仅保留审核、导出与历史管理功能。</p>
+        <div class="row-actions">
+          <form method="post" action="{{ url_for('admin.set_membership_applications_setting') }}" onsubmit="return confirm('确定开启入社申请吗？开启后前台将恢复可提交。');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="application_open" value="1">
+            <button class="btn" type="submit" {% if membership_applications_open %}disabled{% endif %}>开启入社申请</button>
+          </form>
+          <form method="post" action="{{ url_for('admin.set_membership_applications_setting') }}" onsubmit="return confirm('确定关闭入社申请吗？关闭后前台 /join 不再接受新提交。');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="application_open" value="0">
+            <button class="btn btn-muted" type="submit" {% if not membership_applications_open %}disabled{% endif %}>关闭入社申请</button>
+          </form>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card form-card manage-route-filter-card">
       <h2 class="manage-route-filter-title">筛选</h2>
       <form method="get" action="{{ url_for('admin.membership_applications_page') }}" class="single-form manage-route-filter-form">
         <div class="manage-route-filter-basic">

@@ -15,6 +15,7 @@ from app import create_app
 from app.membership_application_options import APPLICATION_STATUSES, BICYCLE_STATUS_VALUES, COMPETITION_INTEREST_VALUES, CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION, CYCLING_EXPERIENCE_VALUES
 from app.models import AccessLog, Activity, ActivityRouteOption, Announcement, AuditLog, EventRegistration, MediaAsset, MEMBER_ACCOUNT_ACTIVE, MEMBER_ACCOUNT_DISABLED, MERCH_BATCH_ACTIVE, MERCH_BATCH_ENDED, MERCH_BATCH_UPCOMING, MERCH_ORDER_CANCELLED, MERCH_ORDER_PENDING, MembershipApplication, MemberProfile, MemberUser, MerchPreorderBatch, MerchPreorderRegistration, PAGE_ACCOUNTS, PAGE_ANALYTICS, PAGE_AUDIT_LOGS, PAGE_FEEDBACK, PAGE_MEMBERS, PAGE_ROUTES, PAGE_SECURITY, PERMISSION_ADMIN, PERMISSION_NONE, PERMISSION_READ, PERMISSION_WRITE, ROLE_OPS_ADMIN, ROLE_VIEWER, Route, RouteFeedback, RouteVersion, SiteFeedback, User, UserPagePermission, db
 from app.security_monitor import is_watchlist_probe_path
+from app.services import is_membership_application_enabled, set_membership_application_enabled
 
 
 def _extract_csrf(html: str) -> str:
@@ -1211,6 +1212,91 @@ def test_join_page_for_logged_in_member_uses_readonly_account_student_id(app_and
     assert "已登录账号将使用当前账号学号" in html
 
 
+def test_join_page_and_submit_are_blocked_when_application_switch_is_off(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        set_membership_application_enabled(False)
+        db.session.commit()
+
+    page = client.get("/join")
+    page_html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "入社申请暂时关闭，请稍后关注网站通知。" in page_html
+    assert 'name="student_id"' not in page_html
+
+    token = _extract_csrf(client.get("/member/register").get_data(as_text=True))
+    closed_post = client.post(
+        "/join",
+        data={**_join_form_data(student_id="20269001"), "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert closed_post.status_code == 302
+    assert "/join" in (closed_post.headers.get("Location") or "")
+
+    with app.app_context():
+        assert MembershipApplication.query.filter_by(student_id="20269001").count() == 0
+
+
+def test_membership_application_switch_requires_write_permission_for_admin_update(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        _create_membership_reader("membership_setting_reader")
+        _create_membership_admin("membership_setting_admin")
+        db.session.commit()
+
+    assert login(client, "membership_setting_reader", "reader123456789").status_code == 200
+    reader_token = get_manage_csrf(client)
+    reader_close = client.post(
+        "/manage/membership-applications/settings",
+        data={"csrf_token": reader_token, "application_open": "0"},
+        follow_redirects=False,
+    )
+    assert reader_close.status_code in {302, 403}
+
+    with app.app_context():
+        assert MembershipApplication.query.filter_by(status="pending").count() == 0
+        assert is_membership_application_enabled() is True
+
+    _clear_manage_session(client)
+    assert login(client, "membership_setting_admin", "admin123456789").status_code == 200
+    admin_token = get_manage_csrf(client)
+    admin_close = client.post(
+        "/manage/membership-applications/settings",
+        data={"csrf_token": admin_token, "application_open": "0"},
+        follow_redirects=True,
+    )
+    assert admin_close.status_code == 200
+
+    with app.app_context():
+        assert is_membership_application_enabled() is False
+        close_log = AuditLog.query.filter_by(action="membership_application.close").order_by(AuditLog.id.desc()).first()
+        assert close_log is not None
+
+
+def test_membership_application_switch_reflects_frontend_pages(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        set_membership_application_enabled(True)
+        db.session.commit()
+
+    home_open = client.get("/")
+    about_open = client.get("/about")
+    home_open_html = home_open.get_data(as_text=True)
+    about_open_html = about_open.get_data(as_text=True)
+    assert "想一起骑车？" in home_open_html
+    assert "申请加入社团" in about_open_html
+
+    with app.app_context():
+        set_membership_application_enabled(False)
+        db.session.commit()
+
+    home_closed = client.get("/")
+    about_closed = client.get("/about")
+    home_closed_html = home_closed.get_data(as_text=True)
+    about_closed_html = about_closed.get_data(as_text=True)
+    assert "想一起骑车？" not in home_closed_html
+    assert "入社申请暂时关闭，请稍后关注网站通知。" in about_closed_html
+    assert "申请加入社团" not in about_closed_html
 def test_anonymous_join_post_creates_pending_application_and_audit(app_and_client):
     app, client = app_and_client
     resp = _post_join(client, student_id="sid-join-01", follow_redirects=False)

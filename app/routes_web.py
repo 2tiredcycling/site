@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, send_from_directory, session, url_for as flask_url_for
+from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, send_from_directory, session, url_for as flask_url_for, flash
 from markupsafe import Markup, escape as html_escape
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -77,6 +77,7 @@ from app.services import (
     add_audit_log,
     add_member_profile_audit_log,
     create_membership_application,
+    is_membership_application_enabled,
     membership_application_block_message,
     membership_application_initial_values,
     normalize_membership_application_form,
@@ -933,6 +934,7 @@ def index() -> str:
         latest_routes=latest_routes,
         route_total=route_total,
         announcements=announcements,
+        membership_application_enabled=is_membership_application_enabled(),
         meta_description="2Tired 骑行社官网：活动信息、路线共享、社团介绍与反馈入口。",
     )
 
@@ -972,6 +974,7 @@ def about_page() -> str:
     return render_template(
         "about.html",
         page=page,
+        membership_application_enabled=is_membership_application_enabled(),
         meta_description="2Tired 骑行社社团介绍：宗旨、发展历程与加入方式。",
     )
 
@@ -1002,6 +1005,7 @@ def _render_membership_application_form(
     member: MemberUser | None,
     form_data: dict | None = None,
     field_errors: dict[str, str] | None = None,
+    application_open: bool = True,
     blocked_message: str = "",
     status_code: int = 200,
 ):
@@ -1011,6 +1015,7 @@ def _render_membership_application_form(
         member=member,
         form_data=form_data or membership_application_initial_values(member),
         field_errors=field_errors,
+        application_open=application_open,
         error_message=next(iter(field_errors.values()), ""),
         blocked_message=blocked_message,
         competition_interest_options=COMPETITION_INTEREST_OPTIONS,
@@ -1026,11 +1031,15 @@ def membership_application_form():
     member = _current_member_user()
     form_data = membership_application_initial_values(member)
     blocked_message = ""
-    if member is not None:
+    application_open = is_membership_application_enabled()
+    if not application_open:
+        blocked_message = "入社申请暂时关闭，请稍后关注网站通知。"
+    elif member is not None:
         blocked_message = membership_application_block_message(member.student_id, member)
     return _render_membership_application_form(
         member=member,
         form_data=form_data,
+        application_open=application_open,
         blocked_message=blocked_message,
     )
 
@@ -1039,6 +1048,10 @@ def membership_application_form():
 def membership_application_submit():
     if not validate_csrf_token(request.form.get("csrf_token")):
         abort(400, description="Invalid CSRF token")
+
+    if not is_membership_application_enabled():
+        flash("入社申请暂时关闭，请稍后关注网站通知。", "error")
+        return redirect(flask_url_for("web.membership_application_form"))
 
     member = _current_member_user()
     form_data = normalize_membership_application_form(request.form, member)

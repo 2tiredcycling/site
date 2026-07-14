@@ -151,6 +151,8 @@ from app.security_limits import check_lock, clear_state, register_failure
 from app.services import (
     add_audit_log,
     add_member_profile_audit_log,
+    is_membership_application_enabled,
+    set_membership_application_enabled,
     approve_membership_application,
     approved_rating_summary,
     build_field_changes,
@@ -289,6 +291,8 @@ AUDIT_ACTION_LABELS = {
     "membership_application.reject": "拒绝入社申请",
     "membership_application.export": "导出入社申请",
     "membership_application.delete": "删除入社申请",
+    "membership_application.open": "开启入社申请",
+    "membership_application.close": "关闭入社申请",
 }
 
 
@@ -797,6 +801,8 @@ def _required_page_permission_for_request(path: str, method: str) -> tuple[str, 
     if normalized.startswith("/manage/audit-logs"):
         return PAGE_AUDIT_LOGS, PERMISSION_READ
     if normalized.startswith("/manage/membership-applications"):
+        if normalized.startswith("/manage/membership-applications/settings"):
+            return PAGE_MEMBERS, PERMISSION_WRITE
         if normalized.startswith("/manage/membership-applications/export.xlsx"):
             return PAGE_MEMBERS, PERMISSION_WRITE
         if is_post and "/delete" in normalized:
@@ -894,6 +900,7 @@ def _enforce_permission_matrix():
 def _inject_csrf_token():
     user = getattr(g, "current_user", None)
     nav_items = []
+    membership_applications_open = is_membership_application_enabled()
     if user:
         nav_items.append({"label": "总览", "endpoint": "admin.dashboard", "prefix": "/manage"})
         if can_read_page(user, PAGE_ROUTES):
@@ -928,6 +935,7 @@ def _inject_csrf_token():
         "csrf_token": get_csrf_token,
         "to_local_time": _to_local_time,
         "app_version": _display_app_version(),
+        "membership_applications_open": membership_applications_open,
         "manage_nav_items": nav_items,
         "audit_action_label": _audit_action_label,
         "school_options": SCHOOL_OPTIONS,
@@ -2468,8 +2476,60 @@ def membership_applications_page():
         filters=filters,
         status_options=APPLICATION_STATUS_OPTIONS,
         error_message=error_message,
+        membership_applications_open=is_membership_application_enabled(),
         can_write_members=can_write_page(g.current_user, PAGE_MEMBERS),
     )
+
+
+def _parse_membership_application_setting_request(raw_value: str | None) -> bool | None:
+    normalized = (raw_value or "").strip().lower()
+    if normalized in {"1", "true", "yes", "on", "open", "enabled"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "close", "closed"}:
+        return False
+    return None
+
+
+@bp.post("/membership-applications/settings")
+@login_required
+def set_membership_applications_setting():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+
+    next_state = _parse_membership_application_setting_request(request.form.get("application_open"))
+    if next_state is None:
+        flash("无效的申请开关参数。", "error")
+        return redirect(url_for("admin.membership_applications_page"))
+
+    current_state = is_membership_application_enabled()
+    if current_state == next_state:
+        flash("入社申请状态未发生变更。", "info")
+        return redirect(url_for("admin.membership_applications_page"))
+
+    try:
+        set_membership_application_enabled(next_state, actor_user_id=g.current_user.id)
+        add_audit_log(
+            actor_id=g.current_user.id,
+            action="membership_application.open" if next_state else "membership_application.close",
+            target_type="membership_application",
+            target_id=None,
+            detail=json.dumps(
+                {
+                    "from": current_state,
+                    "to": next_state,
+                    "member": g.current_user.username,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("入社开关设置失败，请重试。", "error")
+        return redirect(url_for("admin.membership_applications_page"))
+
+    flash("入社申请开关已更新。", "success")
+    return redirect(url_for("admin.membership_applications_page"))
 
 
 @bp.get("/membership-applications/export.xlsx")

@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [v4.11.6]
+
+### Added
+
+- Added a persistent application switch for opening and closing membership applications.
+- Added membership application entry points on the homepage and About page with disabled-state messages.
+- Added a dismissible homepage application card with local storage hide preference.
+
+### Security
+
+- Enforced the membership application switch on both GET rendering and POST submission for `/join`.
+- Restricted application open/close operations to management write permission with CSRF protection and audit logging.
+
 ## [v4.11.5]
 
 ### Added

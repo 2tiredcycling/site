@@ -35,6 +35,7 @@ from app.models import (
     MemberProfile,
     MemberUser,
     MembershipApplication,
+    SiteSetting,
     Route,
     RouteFeedback,
     RouteVersion,
@@ -58,6 +59,8 @@ from app.membership_application_options import (
 MEMBERSHIP_APPLICATION_MEMBER_EXISTS_MESSAGE = "该学号已经存在正式社员档案，无需重复申请。如资料有误，请联系管理人员。"
 MEMBERSHIP_APPLICATION_PENDING_MESSAGE = "你已有一份待审核的入社申请，请勿重复提交。"
 MEMBERSHIP_APPLICATION_SUBMIT_ACTION = "membership_application.submit"
+MEMBERSHIP_APPLICATION_ENABLED_SETTING_KEY = "membership_application_enabled"
+MEMBERSHIP_APPLICATION_ENABLED_DEFAULT = True
 
 
 class MembershipApplicationFormError(Exception):
@@ -78,6 +81,51 @@ class MembershipApplicationReviewError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message
+
+
+def _coerce_bool(value: str | bool | int | None, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on", "y", "enabled", "open"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "disabled", "close", "closed", "n"}:
+        return False
+    return default
+
+
+def is_membership_application_enabled(default: bool = MEMBERSHIP_APPLICATION_ENABLED_DEFAULT) -> bool:
+    try:
+        setting = SiteSetting.query.filter_by(key=MEMBERSHIP_APPLICATION_ENABLED_SETTING_KEY).first()
+    except Exception:
+        return default
+    if not setting:
+        return default
+    return _coerce_bool(setting.value, default=default)
+
+
+def set_membership_application_enabled(enabled: bool, actor_user_id: int | None = None) -> bool:
+    normalized = "1" if bool(enabled) else "0"
+    setting = SiteSetting.query.filter_by(key=MEMBERSHIP_APPLICATION_ENABLED_SETTING_KEY).first()
+    if setting is None:
+        setting = SiteSetting(
+            key=MEMBERSHIP_APPLICATION_ENABLED_SETTING_KEY,
+            value=normalized,
+            description="是否开放入社申请入口",
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        db.session.add(setting)
+        db.session.flush()
+        return bool(enabled)
+
+    if setting.value == normalized:
+        return bool(enabled)
+    setting.value = normalized
+    setting.updated_at = utcnow()
+    return bool(enabled)
 
 
 def _is_sqlite() -> bool:

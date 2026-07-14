@@ -60,6 +60,23 @@
       </div>
     </section>
 
+    {% if membership_application_enabled %}
+      <section class="membership-join-fab" id="membership-join-card" aria-label="入社申请入口">
+        <div>
+          <p class="membership-join-fab-kicker">想一起骑车？</p>
+          <h2>申请加入 2Tired</h2>
+          <p class="hint">长期欢迎新社员。</p>
+        </div>
+        <div class="row-actions">
+          <a class="btn btn-solid" href="{{ url_for('web.membership_application_form') }}">
+            <span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span>
+            <span>申请加入</span>
+          </a>
+          <button class="btn btn-muted" id="dismiss-membership-join-card">今天不再提示</button>
+        </div>
+      </section>
+    {% endif %}
+
     <section class="portal-grid">
       <a class="card form-card portal-card" href="{{ url_for('web.about_page') }}">
         <h3><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-book"></use></svg></span>社团介绍</h3>
@@ -147,11 +164,33 @@
       </div>
     </section>
 
-    <footer class="site-disclaimer" role="contentinfo">
+  <footer class="site-disclaimer" role="contentinfo">
       本网站由 2Tired 骑行社学生成员维护，用于社团活动与路线信息展示，非学校官方网站。
     </footer>
 
   </main>
+  {% if membership_application_enabled %}
+    <script>
+      (() => {
+        const card = document.getElementById("membership-join-card");
+        const dismiss = document.getElementById("dismiss-membership-join-card");
+        if (!card || !dismiss) {
+          return;
+        }
+        const dismissedDate = window.localStorage.getItem("dismissed_membership_join_card_date");
+        const today = new Date().toISOString().slice(0, 10);
+        if (dismissedDate === today) {
+          card.remove();
+          return;
+        }
+        dismiss.addEventListener("click", () => {
+          window.localStorage.setItem("dismissed_membership_join_card_date", today);
+          window.localStorage.removeItem("dismissed_membership_join_card");
+          card.remove();
+        });
+      })();
+    </script>
+  {% endif %}
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
 </body>
 </html>

@@ -289,6 +289,28 @@ class MemberProfile(db.Model):
         }
 
 
+class SiteSetting(db.Model):
+    __tablename__ = "site_settings"
+    __table_args__ = (Index("idx_site_settings_key", "key"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(128), nullable=False, unique=True)
+    value = db.Column(db.Text, nullable=False, default="")
+    description = db.Column(db.String(255), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    def as_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "key": self.key,
+            "value": self.value,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class MembershipApplication(db.Model):
     __tablename__ = "membership_applications"
     __table_args__ = (

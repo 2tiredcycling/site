@@ -10,6 +10,13 @@ from pathlib import Path
 from flask import Flask, Response, redirect, request, url_for as flask_url_for
 from dotenv import load_dotenv
 
+from config import (
+    BASE_DIR,
+    _resolve_app_version,
+    _resolve_database_uri,
+    _resolve_media_upload_folder,
+    _resolve_upload_folder,
+)
 from app.auth import client_ip
 from app.models import AccessLog, db
 from app.routes_admin import bp as admin_bp
@@ -31,6 +38,7 @@ def create_app() -> Flask:
         app.config.from_object("config.ProductionConfig")
     else:
         app.config.from_object("config.DevelopmentConfig")
+    _refresh_env_config(app)
     _validate_production_security(app, env)
 
     os.makedirs(app.instance_path, exist_ok=True)
@@ -135,6 +143,31 @@ def create_app() -> Flask:
         return redirect(flask_url_for("static", filename="favicon.svg"), code=302)
 
     return app
+
+
+def _refresh_env_config(app: Flask) -> None:
+    admin_password = os.getenv("ADMIN_PASSWORD", "change-me-admin")
+    app.config.update(
+        APP_VERSION=_resolve_app_version(),
+        APP_DEPLOYED_AT=os.getenv("APP_DEPLOYED_AT", ""),
+        SECRET_KEY=os.getenv("SECRET_KEY", "change-this-in-production"),
+        ADMIN_PASSWORD=admin_password,
+        DEFAULT_ADMIN_USERNAME=os.getenv("DEFAULT_ADMIN_USERNAME", "admin"),
+        DEFAULT_ADMIN_PASSWORD=os.getenv("DEFAULT_ADMIN_PASSWORD", admin_password),
+        SQLALCHEMY_DATABASE_URI=_resolve_database_uri(),
+        UPLOAD_FOLDER=_resolve_upload_folder(),
+        MEDIA_UPLOAD_FOLDER=_resolve_media_upload_folder(),
+        BACKUP_DIR=os.getenv("BACKUP_DIR", str(BASE_DIR / "backups")),
+        MAX_GPX_BYTES=int(os.getenv("MAX_GPX_BYTES", str(5 * 1024 * 1024))),
+        MAX_MEDIA_BYTES=int(os.getenv("MAX_MEDIA_BYTES", str(10 * 1024 * 1024))),
+        SESSION_COOKIE_SAMESITE=os.getenv("SESSION_COOKIE_SAMESITE", "Lax"),
+        SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "false").strip().lower() == "true",
+        REQUEST_CONSOLE_LOG_ENABLED=os.getenv("REQUEST_CONSOLE_LOG_ENABLED", "false").strip().lower() == "true",
+        ACCESS_LOG_ASYNC=os.getenv("ACCESS_LOG_ASYNC", "true").strip().lower() == "true",
+        ACCESS_LOG_BATCH_SIZE=int(os.getenv("ACCESS_LOG_BATCH_SIZE", "100")),
+        ACCESS_LOG_FLUSH_INTERVAL=float(os.getenv("ACCESS_LOG_FLUSH_INTERVAL", "1.0")),
+        ACCESS_LOG_QUEUE_MAX=int(os.getenv("ACCESS_LOG_QUEUE_MAX", "5000")),
+    )
 
 
 def _setup_template_url_router(app: Flask) -> None:

@@ -71,7 +71,11 @@
 
       <article class="card form-card about-panel">
         <h2><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span>加入方式</h2>
-        <p>欢迎对校园骑行感兴趣的同学加入 2Tired。当前采用线上统一登记的方式接收加入咨询。</p>
+        {% if membership_application_enabled %}
+          <p>欢迎对校园骑行感兴趣的同学加入 2Tired。当前采用线上统一登记的方式接收加入咨询。</p>
+        {% else %}
+          <p>入社申请暂时关闭，请稍后关注网站通知。</p>
+        {% endif %}
         <ul class="about-goals">
           <li>
             <strong>步骤一：了解社团活动</strong>
@@ -79,12 +83,20 @@
           </li>
           <li>
             <strong>步骤二：提交加入意向</strong>
-            <span>通过“联系我们”页面发送基础信息与加入意向，我们会在收到后尽快与你对接。</span>
+            {% if membership_application_enabled %}
+              <span>请直接通过“申请加入”入口提交入社申请，并填写基础信息与加入意向。</span>
+            {% else %}
+              <span>目前关闭新成员线上入口，可关注官网公告与社团动态。</span>
+            {% endif %}
           </li>
         </ul>
         <p class="hint">说明：合作交流、活动建议等事项也可通过同一渠道联系。</p>
         <div class="row-actions">
-          <a class="btn btn-solid" href="{{ url_for('web.contact_page') }}">前往联系页面</a>
+          {% if membership_application_enabled %}
+            <a class="btn btn-solid" href="{{ url_for('web.membership_application_form') }}">申请加入社团</a>
+          {% else %}
+            <a class="btn btn-muted" href="{{ url_for('web.contact_page') }}">联系社团</a>
+          {% endif %}
         </div>
       </article>
     </section>
