@@ -34,7 +34,7 @@
         <div class="detail-grid">
           <div><strong>学号</strong><span>{{ profile.student_id }}</span></div>
           <div><strong>真实姓名</strong><span>{{ profile.full_name }}</span></div>
-          <div><strong>入学年份</strong><span>{{ profile.entry_year or '待补充' }}</span></div>
+          <div><strong>入学年份</strong><span>{{ display_entry_year(profile.entry_year) or '待补充' }}</span></div>
           <div><strong>最近确认</strong><span>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '待确认' }}</span></div>
         </div>
       </section>
@@ -51,11 +51,21 @@
             </label>
             <label>
               学院
-              <input type="text" name="school" value="{{ profile.school or '' }}" placeholder="例如 理工学院">
+              <select name="school">
+                <option value="" {% if not profile.school %}selected{% endif %}>待补充</option>
+                {% for option in school_options %}
+                  <option value="{{ option.code }}" {% if profile.school == option.code %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+              </select>
             </label>
             <label>
               书院
-              <input type="text" name="college" value="{{ profile.college or '' }}" placeholder="研究生或未填写者可留空">
+              <select name="college">
+                <option value="" {% if not profile.college %}selected{% endif %}>待补充</option>
+                {% for option in college_options %}
+                  <option value="{{ option.code }}" {% if profile.college == option.code %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+              </select>
             </label>
             <label>
               手机号

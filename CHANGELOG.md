@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [v4.10.3]
+
+### Added
+
+- Added member profile Excel template download, upload preview, and confirm-import workflow.
+- Added duplicate student ID validation with skip-by-default behavior and admin-only overwrite support.
+- Added Excel import audit logging for created and overwritten member profiles.
+- Added standardized school and college option handling with code-based storage and Chinese/English display labels.
+- Added `2022级及以前` entry-year import/display handling while storing the value as `2022`.
+
 ## [v4.10.2]
 
 ### Added

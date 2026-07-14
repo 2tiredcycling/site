@@ -19,6 +19,37 @@
     </header>
     {% include "_manage_nav.html" %}
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-ok' if category == 'success' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if can_write_members %}
+      <section class="card form-card manage-route-filter-card">
+        <div class="section-head">
+          <div>
+            <h2 class="manage-route-filter-title">Excel 导入</h2>
+            <p class="hint">上传后先预览；默认只新增，不覆盖已有学号。覆盖重复档案需要完全管理权限。</p>
+          </div>
+          <a class="btn btn-muted" href="{{ url_for('admin.member_profile_import_template') }}">下载模板</a>
+        </div>
+        <form method="post" action="{{ url_for('admin.member_profile_import_preview') }}" enctype="multipart/form-data" class="single-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>
+            Excel 文件
+            <input type="file" name="excel_file" accept=".xlsx" required>
+            <span class="field-hint">支持 .xlsx；必填列为学号、真实姓名。</span>
+          </label>
+          <div class="row-actions">
+            <button class="btn" type="submit">上传并预览</button>
+          </div>
+        </form>
+      </section>
+    {% endif %}
+
     <section class="card form-card manage-route-filter-card">
       <h2 class="manage-route-filter-title">筛选</h2>
       <form method="get" action="{{ url_for('admin.member_profiles_page') }}" class="single-form manage-route-filter-form">
@@ -69,11 +100,11 @@
               </td>
               <td>
                 <strong>{{ profile.full_name }}</strong>
-                <div class="hint">{{ profile.gender or '性别待补充' }} · {{ profile.entry_year or '入学年份待补充' }}</div>
+                <div class="hint">{{ profile.gender or '性别待补充' }} · {{ display_entry_year(profile.entry_year) or '入学年份待补充' }}</div>
               </td>
               <td>
-                <div>{{ profile.school or '-' }}</div>
-                <div class="hint">{{ profile.college or '书院未填写' }}</div>
+                <div>{{ display_school(profile.school) or '-' }}</div>
+                <div class="hint">{{ display_college(profile.college) or '书院未填写' }}</div>
               </td>
               <td>{{ profile.phone or '-' }}</td>
               <td>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '-' }}</td>

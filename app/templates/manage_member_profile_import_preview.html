@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>社员档案导入预览 {{ app_version }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="manage-page">
+  {% from "_status_badge.html" import status_badge %}
+  <main class="container">
+    <header class="header">
+      <h1>导入预览</h1>
+      <div class="row-actions">
+        <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page') }}">返回档案列表</a>
+      </div>
+    </header>
+    {% include "_manage_nav.html" %}
+
+    <section class="card form-card">
+      <h2>{{ preview.filename }}</h2>
+      <p class="hint">新增 {{ preview.counts.create }} 条，重复 {{ preview.counts.duplicate }} 条，无效 {{ preview.counts.invalid }} 条，重复且无变化 {{ preview.counts.unchanged }} 条。</p>
+      <form method="post" action="{{ url_for('admin.member_profile_import_confirm') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="preview_token" value="{{ preview.token }}">
+        <div class="edit-item compact-item">
+          <strong>导入方式</strong>
+          <label>
+            <input type="radio" name="import_mode" value="skip" checked>
+            跳过重复学号，只新增不存在的档案
+          </label>
+          {% if can_admin_members %}
+            <label>
+              <input type="radio" name="import_mode" value="overwrite">
+              覆盖重复学号的档案（危险操作）
+            </label>
+          {% else %}
+            <p class="hint">你当前不是完全管理权限，重复学号只能跳过。</p>
+          {% endif %}
+        </div>
+        <div class="row-actions">
+          <button class="btn" type="submit">确认导入</button>
+          <a class="btn btn-muted" href="{{ url_for('admin.member_profiles_page') }}">取消</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="card form-card">
+      <h2>逐行校验</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>行号</th>
+            <th>状态</th>
+            <th>学号</th>
+            <th>Excel 数据</th>
+            <th>原有数据 / 差异</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in preview.rows %}
+            <tr>
+              <td>{{ row.row_number }}</td>
+              <td>
+                {% if row.status == 'create' %}
+                  {{ status_badge('active', '新增') }}
+                {% elif row.status == 'duplicate' %}
+                  {{ status_badge('pending', '重复') }}
+                {% else %}
+                  {{ status_badge('error', '无效') }}
+                {% endif %}
+                {% if row.errors %}
+                  <div class="hint">{{ row.errors|join('；') }}</div>
+                {% endif %}
+              </td>
+              <td>{{ row.incoming.student_id or '-' }}</td>
+              <td>
+                <div><strong>{{ row.incoming.full_name or '-' }}</strong></div>
+                <div class="hint">性别：{{ row.incoming.gender or '-' }}；入学：{{ display_entry_year(row.incoming.entry_year) or '-' }}</div>
+                <div class="hint">学院：{{ display_school(row.incoming.school) or '-' }}；书院：{{ display_college(row.incoming.college) or '-' }}</div>
+                <div class="hint">手机：{{ row.incoming.phone or '-' }}；确认：{{ row.incoming.last_confirmed_at or '-' }}</div>
+              </td>
+              <td>
+                {% if row.status == 'duplicate' %}
+                  <div><strong>{{ row.original.full_name or '-' }}</strong> · 档案 ID {{ row.profile_id }}</div>
+                  <div class="hint">学院：{{ display_school(row.original.school) or '-' }}；书院：{{ display_college(row.original.college) or '-' }}</div>
+                  <div class="hint">手机：{{ row.original.phone or '-' }}；确认：{{ row.original.last_confirmed_at or '-' }}</div>
+                  {% if row.changes %}
+                    <div class="hint">将变更：
+                      {% for key, change in row.changes.items() %}
+                        {{ key }}：{{ change.before or '-' }} -> {{ change.after or '-' }}{% if not loop.last %}；{% endif %}
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <div class="hint">无字段变化。</div>
+                  {% endif %}
+                {% else %}
+                  <span class="hint">-</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

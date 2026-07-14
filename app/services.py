@@ -500,7 +500,8 @@ def add_audit_log(
 
 def build_field_changes(before: dict, after: dict) -> dict:
     changed = {}
-    for key, before_value in before.items():
+    for key in sorted(set(before) | set(after)):
+        before_value = before.get(key)
         after_value = after.get(key)
         if before_value != after_value:
             changed[key] = {"before": before_value, "after": after_value}

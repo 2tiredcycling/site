@@ -567,7 +567,7 @@ def test_manage_member_profile_edit_updates_profile_and_writes_audit_log(app_and
         profile = MemberProfile(
             student_id="20260204",
             full_name="Editable Person",
-            school="旧学院",
+            school="SSE",
             phone="13800000004",
             last_confirmed_at=date(2026, 7, 11),
         )
@@ -588,8 +588,8 @@ def test_manage_member_profile_edit_updates_profile_and_writes_audit_log(app_and
             "full_name": "Editable Person Updated",
             "entry_year": "2026",
             "gender": "女",
-            "school": "新学院",
-            "college": "新书院",
+            "school": "SDS",
+            "college": "muse",
             "phone": "13900000004",
             "last_confirmed_at": "2026-07-11",
             "member_user_id": str(member_id),
@@ -603,12 +603,174 @@ def test_manage_member_profile_edit_updates_profile_and_writes_audit_log(app_and
     with app.app_context():
         profile = db.session.get(MemberProfile, profile_id)
         assert profile.full_name == "Editable Person Updated"
-        assert profile.school == "新学院"
+        assert profile.school == "SDS"
+        assert profile.college == "muse"
         assert profile.member_user_id == member_id
         log = AuditLog.query.filter_by(action="member_profile.admin_update", target_type="member_profile", target_id=str(profile_id)).first()
         assert log is not None
         assert '"source": "admin_update"' in log.detail
-        assert '"school": {"before": "旧学院", "after": "新学院"}' in log.detail
+        assert '"school": {"before": "SSE", "after": "SDS"}' in log.detail
+
+
+def _member_profile_import_workbook(rows: list[list]) -> bytes:
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["学号", "真实姓名", "入学年份", "性别", "学院", "书院", "手机号", "最近确认日期"])
+    for row in rows:
+        sheet.append(row)
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def test_manage_member_profile_import_template_downloads(app_and_client):
+    _app, client = app_and_client
+    assert login_admin(client).status_code == 200
+    resp = client.get("/manage/member-profiles/import-template.xlsx")
+    assert resp.status_code == 200
+    assert resp.headers["Content-Type"].startswith("application/vnd.openxmlformats-officedocument")
+    assert len(resp.data) > 100
+
+
+def test_manage_member_profile_import_requires_write_permission(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        reader = User(
+            username="member_import_reader",
+            password=generate_password_hash("reader123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add(reader)
+        db.session.flush()
+        grant_page_permission(reader, PAGE_MEMBERS, PERMISSION_READ)
+        db.session.commit()
+
+    assert login(client, "member_import_reader", "reader123456789").status_code == 200
+    page = client.get("/manage/member-profiles")
+    assert page.status_code == 200
+    resp = client.get("/manage/member-profiles/import-template.xlsx")
+    assert resp.status_code in {302, 403}
+    assert not resp.headers.get("Content-Type", "").startswith("application/vnd.openxmlformats-officedocument")
+
+
+def test_manage_member_profile_import_write_permission_skips_duplicates(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        db.session.add(
+            MemberProfile(
+                student_id="20260301",
+                full_name="Existing Person",
+                school="SSE",
+                phone="13800000001",
+                last_confirmed_at=date(2026, 7, 11),
+            )
+        )
+        writer = User(
+            username="member_import_writer",
+            password=generate_password_hash("writer123456789"),
+            role=ROLE_VIEWER,
+            is_active=True,
+        )
+        db.session.add(writer)
+        db.session.flush()
+        grant_page_permission(writer, PAGE_MEMBERS, PERMISSION_WRITE)
+        db.session.commit()
+
+    assert login(client, "member_import_writer", "writer123456789").status_code == 200
+    page = client.get("/manage/member-profiles")
+    token = _extract_csrf(page.get_data(as_text=True))
+    workbook_bytes = _member_profile_import_workbook(
+        [
+            ["20260301", "Existing Person Updated", 2026, "女", "数据科学学院", "思廷书院", "13900000001", "2026-07-12"],
+            ["20260302", "Created Person", "2022级及以前", "", "理工学院", "", "13800000002", "2026-07-11"],
+        ]
+    )
+    preview = client.post(
+        "/manage/member-profiles/import-preview",
+        data={"csrf_token": token, "excel_file": (BytesIO(workbook_bytes), "members.xlsx")},
+        content_type="multipart/form-data",
+    )
+    preview_html = preview.get_data(as_text=True)
+    assert preview.status_code == 200
+    assert "Existing Person Updated" in preview_html
+    assert "理工学院 | SSE" in preview_html
+    assert "数据科学学院 | SDS" in preview_html
+    assert 'value="overwrite"' not in preview_html
+    preview_token = re.search(r'name="preview_token" value="([^"]+)"', preview_html).group(1)
+    confirm_token = _extract_csrf(preview_html)
+    confirmed = client.post(
+        "/manage/member-profiles/import-confirm",
+        data={"csrf_token": confirm_token, "preview_token": preview_token, "import_mode": "skip"},
+        follow_redirects=True,
+    )
+    assert confirmed.status_code == 200
+    assert "新增 1 条，覆盖 0 条，跳过 1 条" in confirmed.get_data(as_text=True)
+
+    with app.app_context():
+        existing = MemberProfile.query.filter_by(student_id="20260301").first()
+        created = MemberProfile.query.filter_by(student_id="20260302").first()
+        assert existing.full_name == "Existing Person"
+        assert existing.school == "SSE"
+        assert created is not None
+        assert created.full_name == "Created Person"
+        assert created.entry_year == 2022
+        assert created.school == "SSE"
+        log = AuditLog.query.filter_by(action="member_profile.import_excel", target_id=str(created.id)).first()
+        assert log is not None
+        assert '"source": "excel_import"' in log.detail
+
+
+def test_manage_member_profile_import_admin_can_overwrite_duplicates(app_and_client):
+    app, client = app_and_client
+    with app.app_context():
+        profile = MemberProfile(
+            student_id="20260303",
+            full_name="Overwrite Person",
+            school="SSE",
+            phone="13800000003",
+            last_confirmed_at=date(2026, 7, 11),
+        )
+        db.session.add(profile)
+        db.session.commit()
+        profile_id = profile.id
+
+    assert login_admin(client).status_code == 200
+    page = client.get("/manage/member-profiles")
+    token = _extract_csrf(page.get_data(as_text=True))
+    workbook_bytes = _member_profile_import_workbook(
+        [["20260303", "Overwrite Person Updated", 2026, "女", "数据科学学院", "思廷书院", "13900000003", "2026-07-12"]]
+    )
+    preview = client.post(
+        "/manage/member-profiles/import-preview",
+        data={"csrf_token": token, "excel_file": (BytesIO(workbook_bytes), "members.xlsx")},
+        content_type="multipart/form-data",
+    )
+    preview_html = preview.get_data(as_text=True)
+    assert preview.status_code == 200
+    assert 'value="overwrite"' in preview_html
+    preview_token = re.search(r'name="preview_token" value="([^"]+)"', preview_html).group(1)
+    confirm_token = _extract_csrf(preview_html)
+    confirmed = client.post(
+        "/manage/member-profiles/import-confirm",
+        data={"csrf_token": confirm_token, "preview_token": preview_token, "import_mode": "overwrite"},
+        follow_redirects=True,
+    )
+    assert confirmed.status_code == 200
+    assert "新增 0 条，覆盖 1 条，跳过 0 条" in confirmed.get_data(as_text=True)
+
+    with app.app_context():
+        profile = db.session.get(MemberProfile, profile_id)
+        assert profile.full_name == "Overwrite Person Updated"
+        assert profile.school == "SDS"
+        assert profile.college == "muse"
+        assert profile.phone == "13900000003"
+        log = AuditLog.query.filter_by(action="member_profile.import_excel", target_type="member_profile", target_id=str(profile_id)).first()
+        assert log is not None
+        assert '"mode": "overwrite"' in log.detail
+        assert '"school": {"before": "SSE", "after": "SDS"}' in log.detail
 
 
 def test_member_can_update_own_profile_fields_and_audit_log(app_and_client):
@@ -618,8 +780,8 @@ def test_member_can_update_own_profile_fields_and_audit_log(app_and_client):
             student_id="20260205",
             full_name="Self Editable Person",
             gender="男",
-            school="旧学院",
-            college="旧书院",
+            school="SSE",
+            college="shaw",
             phone="13800000005",
             last_confirmed_at=date(2026, 7, 11),
         )
@@ -636,8 +798,8 @@ def test_member_can_update_own_profile_fields_and_audit_log(app_and_client):
         data={
             "csrf_token": token,
             "gender": "女",
-            "school": "新学院",
-            "college": "新书院",
+            "school": "SDS",
+            "college": "muse",
             "phone": "13900000005",
         },
         follow_redirects=True,
@@ -645,14 +807,14 @@ def test_member_can_update_own_profile_fields_and_audit_log(app_and_client):
     html = updated.get_data(as_text=True)
     assert updated.status_code == 200
     assert "社员资料已保存并确认" in html
-    assert "新学院" in html
+    assert "数据科学学院 | SDS" in html
 
     with app.app_context():
         profile = db.session.get(MemberProfile, profile_id)
         member = MemberUser.query.filter_by(student_id="20260205").first()
         assert profile.gender == "女"
-        assert profile.school == "新学院"
-        assert profile.college == "新书院"
+        assert profile.school == "SDS"
+        assert profile.college == "muse"
         assert profile.phone == "13900000005"
         assert profile.last_confirmed_at is not None
         log = AuditLog.query.filter_by(action="member_profile.self_update", target_type="member_profile", target_id=str(profile_id)).first()

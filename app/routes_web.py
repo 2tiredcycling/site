@@ -42,6 +42,15 @@ from app.models import (
     merch_batch_status_for_window,
     utcnow,
 )
+from app.member_profile_options import (
+    COLLEGE_OPTIONS,
+    SCHOOL_OPTIONS,
+    display_college,
+    display_entry_year,
+    display_school,
+    normalize_college,
+    normalize_school,
+)
 from app.querying import query_routes_from_request
 from app.security_limits import consume_fixed_window
 from app.services import add_member_profile_audit_log
@@ -260,6 +269,11 @@ def _inject_time_helpers():
         "to_local_time": _to_local_time,
         "csrf_token": get_csrf_token,
         "current_member_user": _current_member_user,
+        "school_options": SCHOOL_OPTIONS,
+        "college_options": COLLEGE_OPTIONS,
+        "display_school": display_school,
+        "display_college": display_college,
+        "display_entry_year": display_entry_year,
     }
 
 
@@ -1854,8 +1868,17 @@ def member_profile_edit_submit():
     before = _member_profile_self_snapshot(profile)
     editable_before = {key: before.get(key) for key in ("gender", "school", "college", "phone")}
     profile.gender = _clean_optional_member_profile_text(request.form.get("gender"))
-    profile.school = _clean_optional_member_profile_text(request.form.get("school"))
-    profile.college = _clean_optional_member_profile_text(request.form.get("college"))
+    school, school_error = normalize_school(request.form.get("school"))
+    college, college_error = normalize_college(request.form.get("college"))
+    if school_error or college_error:
+        return render_template(
+            "member_profile_edit.html",
+            member=member,
+            profile=profile,
+            error_message=school_error or college_error,
+        ), 400
+    profile.school = school
+    profile.college = college
     profile.phone = _clean_optional_member_profile_text(request.form.get("phone"))
     profile.last_confirmed_at = _to_local_time(utcnow()).date()
     profile.updated_at = utcnow()

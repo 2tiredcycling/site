@@ -119,12 +119,23 @@ from app.models import (
 )
 from app.querying import query_routes_from_request
 from app.gpx_utils import parse_gpx_points_and_stats, parse_gpx_waypoints
+from app.member_profile_options import (
+    COLLEGE_OPTIONS,
+    SCHOOL_OPTIONS,
+    display_college,
+    display_entry_year,
+    display_school,
+    normalize_college,
+    normalize_school,
+    parse_entry_year,
+)
 from app.route_ops import allowed_file, file_size_ok, parse_distance, save_gpx_file
 from app.security_monitor import WATCHLIST_PROBE_PATHS, build_non_probe_filters
 from app.security_limits import check_lock, clear_state, register_failure
 from app.services import (
     add_member_profile_audit_log,
     approved_rating_summary,
+    build_field_changes,
     create_route_version,
     ensure_user_page_permissions,
     rollback_route_to_version,
@@ -162,6 +173,27 @@ PERMISSION_LEVEL_LABELS = {
     PERMISSION_READ: "可读",
     PERMISSION_WRITE: "可修改",
     PERMISSION_ADMIN: "完全管理",
+}
+MEMBER_PROFILE_IMPORT_HEADERS = ["学号", "真实姓名", "入学年份", "性别", "学院", "书院", "手机号", "最近确认日期"]
+MEMBER_PROFILE_IMPORT_HEADER_ALIASES = {
+    "学号": "student_id",
+    "student_id": "student_id",
+    "真实姓名": "full_name",
+    "姓名": "full_name",
+    "full_name": "full_name",
+    "入学年份": "entry_year",
+    "entry_year": "entry_year",
+    "性别": "gender",
+    "gender": "gender",
+    "学院": "school",
+    "school": "school",
+    "书院": "college",
+    "college": "college",
+    "手机号": "phone",
+    "手机": "phone",
+    "phone": "phone",
+    "最近确认日期": "last_confirmed_at",
+    "last_confirmed_at": "last_confirmed_at",
 }
 ACTIVITY_ROUTE_LEVELS = (
     ("beginner", "初级"),
@@ -228,6 +260,7 @@ AUDIT_ACTION_LABELS = {
     "member_profile.admin_update": "管理员更新社员档案",
     "member_profile.self_update": "社员更新自己的档案",
     "member_profile.self_confirm": "社员确认自己的档案",
+    "member_profile.import_excel": "Excel 导入社员档案",
 }
 
 
@@ -744,6 +777,8 @@ def _required_page_permission_for_request(path: str, method: str) -> tuple[str, 
             return PAGE_ACCOUNTS, PERMISSION_ADMIN
         return PAGE_ACCOUNTS, PERMISSION_READ
     if normalized.startswith("/manage/member-profiles"):
+        if normalized.startswith("/manage/member-profiles/import"):
+            return PAGE_MEMBERS, PERMISSION_WRITE
         if is_post:
             return PAGE_MEMBERS, PERMISSION_WRITE
         if normalized.endswith("/edit"):
@@ -850,6 +885,11 @@ def _inject_csrf_token():
         "app_version": _display_app_version(),
         "manage_nav_items": nav_items,
         "audit_action_label": _audit_action_label,
+        "school_options": SCHOOL_OPTIONS,
+        "college_options": COLLEGE_OPTIONS,
+        "display_school": display_school,
+        "display_college": display_college,
+        "display_entry_year": display_entry_year,
     }
 
 
@@ -2287,14 +2327,23 @@ def member_profiles_page():
     query = MemberProfile.query.outerjoin(MemberUser, MemberProfile.member_user_id == MemberUser.id)
     if q:
         like_value = f"%{q}%"
+        school_code, _school_error = normalize_school(q)
+        college_code, _college_error = normalize_college(q)
+        filters = [
+            MemberProfile.student_id.ilike(like_value),
+            MemberProfile.full_name.ilike(like_value),
+            MemberProfile.school.ilike(like_value),
+            MemberProfile.college.ilike(like_value),
+            MemberProfile.phone.ilike(like_value),
+            MemberUser.nickname.ilike(like_value),
+        ]
+        if school_code:
+            filters.append(MemberProfile.school == school_code)
+        if college_code:
+            filters.append(MemberProfile.college == college_code)
         query = query.filter(
             db.or_(
-                MemberProfile.student_id.ilike(like_value),
-                MemberProfile.full_name.ilike(like_value),
-                MemberProfile.school.ilike(like_value),
-                MemberProfile.college.ilike(like_value),
-                MemberProfile.phone.ilike(like_value),
-                MemberUser.nickname.ilike(like_value),
+                *filters,
             )
         )
     if link_status == "linked":
@@ -2316,7 +2365,160 @@ def member_profiles_page():
         q=q,
         link_status=link_status,
         can_write_members=can_write_page(g.current_user, PAGE_MEMBERS),
+        can_admin_members=can_admin_page(g.current_user, PAGE_MEMBERS),
     )
+
+
+@bp.get("/member-profiles/import-template.xlsx")
+@login_required
+def member_profile_import_template():
+    try:
+        from openpyxl import Workbook
+        from openpyxl.worksheet.datavalidation import DataValidation
+    except ImportError:
+        flash("模板生成失败：缺少 openpyxl 依赖。", "error")
+        return redirect(url_for("admin.member_profiles_page"))
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "社员档案导入"
+    sheet.append(MEMBER_PROFILE_IMPORT_HEADERS)
+    sheet.append(["20250001", "张三", "2025级", "", display_school("SSE"), display_college("shaw"), "13800000000", "2026-07-11"])
+    sheet.append(["20220001", "李四", "2022级及以前", "", display_school("SME"), display_college("not_applicable"), "13900000000", "2026-07-11"])
+    widths = [14, 14, 12, 10, 18, 18, 16, 16]
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[chr(64 + index)].width = width
+    options_sheet = workbook.create_sheet("选项")
+    school_labels = [option["label"] for option in SCHOOL_OPTIONS]
+    college_labels = [option["label"] for option in COLLEGE_OPTIONS]
+    entry_year_labels = ["2022级及以前"] + [f"{year}级" for year in range(2023, 2036)]
+    option_sets = (("A", school_labels), ("B", college_labels), ("C", entry_year_labels))
+    for column, labels in option_sets:
+        for row_index, label in enumerate(labels, start=1):
+            options_sheet[f"{column}{row_index}"] = label
+    options_sheet.sheet_state = "hidden"
+    school_validation = DataValidation(type="list", formula1=f"='选项'!$A$1:$A${len(school_labels)}", allow_blank=True)
+    college_validation = DataValidation(type="list", formula1=f"='选项'!$B$1:$B${len(college_labels)}", allow_blank=True)
+    entry_year_validation = DataValidation(type="list", formula1=f"='选项'!$C$1:$C${len(entry_year_labels)}", allow_blank=True)
+    for validation, range_ref in (
+        (entry_year_validation, "C2:C501"),
+        (school_validation, "E2:E501"),
+        (college_validation, "F2:F501"),
+    ):
+        validation.error = "请选择模板提供的选项，或填入系统支持的等价中文/英文/代码。"
+        validation.errorTitle = "选项不在范围内"
+        sheet.add_data_validation(validation)
+        validation.add(range_ref)
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="member_profiles_import_template.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@bp.post("/member-profiles/import-preview")
+@login_required
+def member_profile_import_preview():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+    payload, error_message = _parse_member_profile_import_upload(request.files.get("excel_file"))
+    if error_message:
+        flash(error_message, "error")
+        return redirect(url_for("admin.member_profiles_page"))
+    return render_template(
+        "manage_member_profile_import_preview.html",
+        preview=payload,
+        can_admin_members=can_admin_page(g.current_user, PAGE_MEMBERS),
+    )
+
+
+@bp.post("/member-profiles/import-confirm")
+@login_required
+def member_profile_import_confirm():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+    token = (request.form.get("preview_token") or "").strip()
+    mode = (request.form.get("import_mode") or "skip").strip()
+    if mode not in {"skip", "overwrite"}:
+        mode = "skip"
+    if mode == "overwrite" and not can_admin_page(g.current_user, PAGE_MEMBERS):
+        abort(403)
+    payload = _load_member_profile_import_preview(token)
+    if not payload:
+        flash("导入预览已失效，请重新上传 Excel。", "error")
+        return redirect(url_for("admin.member_profiles_page"))
+
+    created = 0
+    updated = 0
+    skipped = 0
+    invalid = 0
+    for row in payload.get("rows", []):
+        status = row.get("status")
+        incoming = row.get("incoming") or {}
+        if status == "invalid":
+            invalid += 1
+            continue
+        if status == "create":
+            profile = MemberProfile(
+                student_id=incoming.get("student_id") or "",
+                full_name=incoming.get("full_name") or "",
+                gender=incoming.get("gender"),
+                entry_year=incoming.get("entry_year"),
+                school=incoming.get("school"),
+                college=incoming.get("college"),
+                phone=incoming.get("phone"),
+                last_confirmed_at=date.fromisoformat(incoming["last_confirmed_at"]) if incoming.get("last_confirmed_at") else None,
+                created_at=utcnow(),
+                updated_at=utcnow(),
+            )
+            db.session.add(profile)
+            db.session.flush()
+            add_member_profile_audit_log(
+                "member_profile.import_excel",
+                profile,
+                _member_profile_import_snapshot(None),
+                _member_profile_snapshot(profile),
+                source="excel_import",
+                actor_user_id=g.current_user.id,
+                extra={"row_number": row.get("row_number"), "mode": "create", "filename": payload.get("filename")},
+            )
+            created += 1
+            continue
+        if status == "duplicate":
+            if mode != "overwrite":
+                skipped += 1
+                continue
+            profile = db.session.get(MemberProfile, row.get("profile_id"))
+            if not profile:
+                skipped += 1
+                continue
+            before = _member_profile_snapshot(profile)
+            profile.full_name = incoming.get("full_name") or profile.full_name
+            profile.gender = incoming.get("gender")
+            profile.entry_year = incoming.get("entry_year")
+            profile.school = incoming.get("school")
+            profile.college = incoming.get("college")
+            profile.phone = incoming.get("phone")
+            profile.last_confirmed_at = date.fromisoformat(incoming["last_confirmed_at"]) if incoming.get("last_confirmed_at") else None
+            profile.updated_at = utcnow()
+            after = _member_profile_snapshot(profile)
+            add_member_profile_audit_log(
+                "member_profile.import_excel",
+                profile,
+                before,
+                after,
+                source="excel_import",
+                actor_user_id=g.current_user.id,
+                extra={"row_number": row.get("row_number"), "mode": "overwrite", "filename": payload.get("filename")},
+            )
+            updated += 1
+    db.session.commit()
+    _delete_member_profile_import_preview(token)
+    flash(f"导入完成：新增 {created} 条，覆盖 {updated} 条，跳过 {skipped} 条，无效 {invalid} 条。", "success")
+    return redirect(url_for("admin.member_profiles_page"))
 
 
 def _member_profile_snapshot(profile: MemberProfile) -> dict:
@@ -2358,13 +2560,197 @@ def _parse_optional_date(value: str | None) -> tuple[date | None, str]:
         return None, "最近确认日期格式无效。"
 
 
+def _member_profile_import_preview_dir() -> Path:
+    path = Path(current_app.instance_path) / "member_profile_import_previews"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _member_profile_import_preview_path(token: str) -> Path:
+    safe_token = re.sub(r"[^a-zA-Z0-9_-]", "", token or "")
+    return _member_profile_import_preview_dir() / f"{safe_token}.json"
+
+
+def _member_profile_import_snapshot(profile: MemberProfile | None) -> dict:
+    if profile is None:
+        return {
+            "student_id": None,
+            "full_name": None,
+            "gender": None,
+            "entry_year": None,
+            "school": None,
+            "college": None,
+            "phone": None,
+            "last_confirmed_at": None,
+            "member_user_id": None,
+        }
+    return _member_profile_snapshot(profile)
+
+
+def _parse_member_profile_import_date(value) -> tuple[str | None, str]:
+    if value is None or value == "":
+        return None, ""
+    if isinstance(value, datetime):
+        return value.date().isoformat(), ""
+    if isinstance(value, date):
+        return value.isoformat(), ""
+    raw = str(value).strip()
+    if not raw:
+        return None, ""
+    try:
+        return date.fromisoformat(raw).isoformat(), ""
+    except ValueError:
+        return None, "最近确认日期格式无效，请使用 YYYY-MM-DD。"
+
+
+def _parse_member_profile_import_year(value) -> tuple[int | None, str]:
+    return parse_entry_year(value)
+
+
+def _member_profile_import_value(row_map: dict, key: str) -> str | None:
+    value = row_map.get(key)
+    if value is None:
+        return None
+    return str(value).strip()
+
+
+def _normalize_member_profile_import_row(row_map: dict) -> tuple[dict, list[str]]:
+    errors: list[str] = []
+    student_id = (_member_profile_import_value(row_map, "student_id") or "").upper()
+    full_name = _clean_optional_text(_member_profile_import_value(row_map, "full_name")) or ""
+    entry_year, year_error = _parse_member_profile_import_year(row_map.get("entry_year"))
+    last_confirmed_at, date_error = _parse_member_profile_import_date(row_map.get("last_confirmed_at"))
+    school, school_error = normalize_school(_member_profile_import_value(row_map, "school"))
+    college, college_error = normalize_college(_member_profile_import_value(row_map, "college"))
+    if year_error:
+        errors.append(year_error)
+    if date_error:
+        errors.append(date_error)
+    if school_error:
+        errors.append(school_error)
+    if college_error:
+        errors.append(college_error)
+    if not student_id:
+        errors.append("学号不能为空。")
+    if not full_name:
+        errors.append("真实姓名不能为空。")
+    incoming = {
+        "student_id": student_id,
+        "full_name": full_name,
+        "entry_year": entry_year,
+        "gender": _clean_optional_text(_member_profile_import_value(row_map, "gender")),
+        "school": school,
+        "college": college,
+        "phone": _clean_optional_text(_member_profile_import_value(row_map, "phone")),
+        "last_confirmed_at": last_confirmed_at,
+    }
+    return incoming, errors
+
+
+def _parse_member_profile_import_upload(upload) -> tuple[dict | None, str]:
+    if not upload or not (upload.filename or "").strip():
+        return None, "请上传 Excel 文件。"
+    if not (upload.filename or "").lower().endswith(".xlsx"):
+        return None, "请上传 .xlsx 格式的 Excel 文件。"
+    try:
+        from openpyxl import load_workbook
+    except ImportError:
+        return None, "导入失败：缺少 openpyxl 依赖。"
+
+    try:
+        workbook = load_workbook(upload, data_only=True, read_only=True)
+    except Exception:
+        return None, "Excel 文件无法读取，请检查格式。"
+    sheet = workbook.active
+    rows = list(sheet.iter_rows(values_only=True))
+    if not rows:
+        return None, "Excel 文件为空。"
+    header_cells = [str(item or "").strip() for item in rows[0]]
+    field_indexes: dict[str, int] = {}
+    for index, header in enumerate(header_cells):
+        field = MEMBER_PROFILE_IMPORT_HEADER_ALIASES.get(header)
+        if field:
+            field_indexes[field] = index
+    missing = [label for label, field in (("学号", "student_id"), ("真实姓名", "full_name")) if field not in field_indexes]
+    if missing:
+        return None, f"Excel 缺少必要列：{'、'.join(missing)}。"
+
+    existing_profiles = {profile.student_id.upper(): profile for profile in MemberProfile.query.all()}
+    seen_student_ids: set[str] = set()
+    preview_rows = []
+    counts = {"create": 0, "duplicate": 0, "invalid": 0, "unchanged": 0}
+    for excel_row_number, cells in enumerate(rows[1:], start=2):
+        if not any(cell not in (None, "") for cell in cells):
+            continue
+        row_map = {field: cells[index] if index < len(cells) else None for field, index in field_indexes.items()}
+        incoming, errors = _normalize_member_profile_import_row(row_map)
+        student_id_key = incoming["student_id"].upper() if incoming.get("student_id") else ""
+        if student_id_key and student_id_key in seen_student_ids:
+            errors.append("Excel 内部学号重复。")
+        if student_id_key:
+            seen_student_ids.add(student_id_key)
+
+        existing = existing_profiles.get(student_id_key) if student_id_key else None
+        original = _member_profile_import_snapshot(existing)
+        comparable_original = {key: original.get(key) for key in incoming}
+        changes = build_field_changes(comparable_original, incoming)
+        if errors:
+            status = "invalid"
+        elif existing:
+            status = "duplicate"
+            if not changes:
+                counts["unchanged"] += 1
+        else:
+            status = "create"
+        counts[status] += 1
+        preview_rows.append(
+            {
+                "row_number": excel_row_number,
+                "status": status,
+                "errors": errors,
+                "profile_id": existing.id if existing else None,
+                "incoming": incoming,
+                "original": original,
+                "changes": changes,
+            }
+        )
+    if not preview_rows:
+        return None, "Excel 没有可导入的数据行。"
+
+    token = secrets.token_urlsafe(24)
+    payload = {
+        "token": token,
+        "filename": Path(upload.filename or "member_profiles.xlsx").name,
+        "created_by": g.current_user.id,
+        "created_at": utcnow().isoformat(),
+        "counts": counts,
+        "rows": preview_rows,
+    }
+    path = _member_profile_import_preview_path(token)
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return payload, ""
+
+
+def _load_member_profile_import_preview(token: str) -> dict | None:
+    path = _member_profile_import_preview_path(token)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _delete_member_profile_import_preview(token: str) -> None:
+    _member_profile_import_preview_path(token).unlink(missing_ok=True)
+
+
 def _admin_member_profile_form_values(profile: MemberProfile) -> tuple[dict, str]:
     student_id = (request.form.get("student_id") or "").strip().upper()
     full_name = _clean_optional_text(request.form.get("full_name")) or ""
-    entry_year, year_error = _parse_optional_int(request.form.get("entry_year"), "入学年份")
+    entry_year, year_error = parse_entry_year(request.form.get("entry_year"))
     last_confirmed_at, date_error = _parse_optional_date(request.form.get("last_confirmed_at"))
     member_user_id, account_error = _parse_optional_int(request.form.get("member_user_id"), "绑定账号 ID")
-    error_message = year_error or date_error or account_error
+    school, school_error = normalize_school(request.form.get("school"))
+    college, college_error = normalize_college(request.form.get("college"))
+    error_message = year_error or date_error or account_error or school_error or college_error
     if not student_id:
         error_message = "请填写学号。"
     elif not full_name:
@@ -2375,8 +2761,8 @@ def _admin_member_profile_form_values(profile: MemberProfile) -> tuple[dict, str
         "full_name": full_name,
         "gender": _clean_optional_text(request.form.get("gender")),
         "entry_year": entry_year,
-        "school": _clean_optional_text(request.form.get("school")),
-        "college": _clean_optional_text(request.form.get("college")),
+        "school": school,
+        "college": college,
         "phone": _clean_optional_text(request.form.get("phone")),
         "last_confirmed_at": last_confirmed_at,
         "member_user_id": member_user_id,

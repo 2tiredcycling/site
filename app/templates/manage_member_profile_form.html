@@ -40,10 +40,35 @@
         <div class="manage-account-basic-grid">
           <label>学号<input type="text" name="student_id" value="{{ values.get('student_id', profile.student_id) }}" required></label>
           <label>真实姓名<input type="text" name="full_name" value="{{ values.get('full_name', profile.full_name) }}" required></label>
-          <label>入学年份<input type="number" name="entry_year" min="2000" max="2100" value="{{ values.get('entry_year', profile.entry_year) or '' }}"></label>
+          {% set selected_entry_year = values.get('entry_year', profile.entry_year) %}
+          <label>入学年份
+            <select name="entry_year">
+              <option value="" {% if not selected_entry_year %}selected{% endif %}>待补充</option>
+              <option value="2022级及以前" {% if selected_entry_year and selected_entry_year <= 2022 %}selected{% endif %}>2022级及以前</option>
+              {% for year in range(2023, 2036) %}
+                <option value="{{ year }}" {% if selected_entry_year == year %}selected{% endif %}>{{ year }}级</option>
+              {% endfor %}
+            </select>
+          </label>
           <label>性别<input type="text" name="gender" value="{{ values.get('gender', profile.gender) or '' }}"></label>
-          <label>学院<input type="text" name="school" value="{{ values.get('school', profile.school) or '' }}"></label>
-          <label>书院<input type="text" name="college" value="{{ values.get('college', profile.college) or '' }}"></label>
+          {% set selected_school = values.get('school', profile.school) %}
+          <label>学院
+            <select name="school">
+              <option value="" {% if not selected_school %}selected{% endif %}>待补充</option>
+              {% for option in school_options %}
+                <option value="{{ option.code }}" {% if selected_school == option.code %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          {% set selected_college = values.get('college', profile.college) %}
+          <label>书院
+            <select name="college">
+              <option value="" {% if not selected_college %}selected{% endif %}>待补充</option>
+              {% for option in college_options %}
+                <option value="{{ option.code }}" {% if selected_college == option.code %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
           <label>手机号<input type="text" name="phone" value="{{ values.get('phone', profile.phone) or '' }}"></label>
           <label>最近确认日期<input type="date" name="last_confirmed_at" value="{{ values.get('last_confirmed_at', profile.last_confirmed_at).isoformat() if values.get('last_confirmed_at', profile.last_confirmed_at) else '' }}"></label>
         </div>

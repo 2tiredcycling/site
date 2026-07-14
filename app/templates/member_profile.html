@@ -48,9 +48,9 @@
             <div><strong>真实姓名</strong><span>{{ profile.full_name }}</span></div>
             <div><strong>学号</strong><span>{{ profile.student_id }}</span></div>
             <div><strong>性别</strong><span>{{ profile.gender or '待补充' }}</span></div>
-            <div><strong>入学年份</strong><span>{{ profile.entry_year or '待补充' }}</span></div>
-            <div><strong>学院</strong><span>{{ profile.school or '待补充' }}</span></div>
-            <div><strong>书院</strong><span>{{ profile.college or '待补充' }}</span></div>
+            <div><strong>入学年份</strong><span>{{ display_entry_year(profile.entry_year) or '待补充' }}</span></div>
+            <div><strong>学院</strong><span>{{ display_school(profile.school) or '待补充' }}</span></div>
+            <div><strong>书院</strong><span>{{ display_college(profile.college) or '待补充' }}</span></div>
             <div><strong>手机号</strong><span>{{ profile.phone or '待补充' }}</span></div>
             <div><strong>最近确认</strong><span>{{ profile.last_confirmed_at.strftime('%Y-%m-%d') if profile.last_confirmed_at else '待确认' }}</span></div>
           </div>
