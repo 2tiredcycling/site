@@ -14,11 +14,11 @@
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
 
-    <section class="card form-card feedback-hero">
+    <section class="card form-card feedback-hero membership-application-hero">
       <div class="feedback-hero-main">
         <p class="feedback-eyebrow">MEMBERSHIP APPLICATION</p>
         <h1>加入 2Tired 骑行社</h1>
-        <p class="hint">这里用于提交常态化入社申请。管理员审核通过后，稳定身份字段会进入社员档案；骑行相关信息只用于了解需求与安排活动。</p>
+        <p class="hint">填写一次即可进入待审核队列。审核通过后，稳定身份字段会进入社员档案；骑行相关信息只用于了解需求与安排活动。</p>
       </div>
       <div class="feedback-hero-points">
         <div>
@@ -36,9 +36,10 @@
       </div>
     </section>
 
-    <section class="card form-card feedback-form-card">
+    <section class="card form-card feedback-form-card membership-application-card">
       <div class="section-head">
         <h2>入社申请</h2>
+        <p class="hint">带星号的信息用于审核和建立社员档案；可选信息有助于我们更好地安排活动。</p>
       </div>
 
       {% if blocked_message %}
@@ -51,128 +52,161 @@
           <div class="alert">{{ error_message }}</div>
         {% endif %}
 
-        <form method="post" action="{{ url_for('web.membership_application_submit') }}" class="single-form">
+        <form method="post" action="{{ url_for('web.membership_application_submit') }}" class="single-form membership-application-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-          <div class="member-profile-edit-grid">
-            <label>
-              学号
-              {% if member %}
-                <input type="text" value="{{ member.student_id }}" disabled aria-disabled="true">
-                <span class="field-hint">已登录账号将使用当前账号学号。</span>
-              {% else %}
-                <input type="text" name="student_id" value="{{ form_data.student_id or '' }}" maxlength="32" autocomplete="username" required>
-              {% endif %}
-              {% if field_errors.student_id %}<span class="field-hint">{{ field_errors.student_id }}</span>{% endif %}
-            </label>
+          <div class="membership-form-section">
+            <div class="membership-form-section-head">
+              <span>1</span>
+              <div>
+                <strong>身份信息</strong>
+                <p class="hint">这些信息会在审核通过后用于建立正式社员档案。</p>
+              </div>
+            </div>
 
-            <label>
-              真实姓名
-              <input type="text" name="full_name" value="{{ form_data.full_name or '' }}" maxlength="64" required>
-              {% if field_errors.full_name %}<span class="field-hint">{{ field_errors.full_name }}</span>{% endif %}
-            </label>
+            <div class="member-profile-edit-grid">
+              <label>
+                学号 <span class="required-mark">*</span>
+                {% if member %}
+                  <input type="text" value="{{ member.student_id }}" disabled aria-disabled="true">
+                  <span class="field-hint">已登录账号将使用当前账号学号。</span>
+                {% else %}
+                  <input type="text" name="student_id" value="{{ form_data.student_id or '' }}" maxlength="32" autocomplete="username" placeholder="例如：20261234" required>
+                {% endif %}
+                {% if field_errors.student_id %}<span class="field-hint">{{ field_errors.student_id }}</span>{% endif %}
+              </label>
 
-            <label>
-              性别
-              <select name="gender">
-                <option value="" {% if not form_data.gender %}selected{% endif %}>-</option>
-                {% for option in gender_options %}
-                  <option value="{{ option.code }}" {% if form_data.gender == option.code %}selected{% endif %}>{{ option.label }}</option>
-                {% endfor %}
-              </select>
-              {% if field_errors.gender %}<span class="field-hint">{{ field_errors.gender }}</span>{% endif %}
-            </label>
+              <label>
+                真实姓名 <span class="required-mark">*</span>
+                <input type="text" name="full_name" value="{{ form_data.full_name or '' }}" maxlength="64" autocomplete="name" placeholder="请填写证件或校内常用姓名" required>
+                {% if field_errors.full_name %}<span class="field-hint">{{ field_errors.full_name }}</span>{% endif %}
+              </label>
 
-            <label>
-              入学年份
-              <select name="entry_year" required>
-                <option value="" {% if not form_data.entry_year %}selected{% endif %}>请选择</option>
-                {% for year in entry_year_options %}
-                  <option value="{{ year }}" {% if form_data.entry_year|string == year|string %}selected{% endif %}>{{ display_entry_year(year) }}</option>
-                {% endfor %}
-              </select>
-              {% if field_errors.entry_year %}<span class="field-hint">{{ field_errors.entry_year }}</span>{% endif %}
-            </label>
+              <label>
+                性别
+                <select name="gender">
+                  <option value="" {% if not form_data.gender %}selected{% endif %}>-</option>
+                  {% for option in gender_options %}
+                    <option value="{{ option.code }}" {% if form_data.gender == option.code %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                {% if field_errors.gender %}<span class="field-hint">{{ field_errors.gender }}</span>{% endif %}
+              </label>
 
-            <label>
-              学院
-              <select name="school">
-                <option value="" {% if not form_data.school %}selected{% endif %}>-</option>
-                {% for option in school_options %}
-                  <option value="{{ option.code }}" {% if form_data.school == option.code %}selected{% endif %}>{{ option.label }}</option>
-                {% endfor %}
-              </select>
-              {% if field_errors.school %}<span class="field-hint">{{ field_errors.school }}</span>{% endif %}
-            </label>
+              <label>
+                入学年份 <span class="required-mark">*</span>
+                <select name="entry_year" required>
+                  <option value="" {% if not form_data.entry_year %}selected{% endif %}>请选择</option>
+                  {% for year in entry_year_options %}
+                    <option value="{{ year }}" {% if form_data.entry_year|string == year|string %}selected{% endif %}>{{ display_entry_year(year) }}</option>
+                  {% endfor %}
+                </select>
+                {% if field_errors.entry_year %}<span class="field-hint">{{ field_errors.entry_year }}</span>{% endif %}
+              </label>
 
-            <label>
-              书院
-              <select name="college">
-                <option value="" {% if not form_data.college %}selected{% endif %}>-</option>
-                {% for option in college_options %}
-                  <option value="{{ option.code }}" {% if form_data.college == option.code %}selected{% endif %}>{{ option.label }}</option>
-                {% endfor %}
-              </select>
-              {% if field_errors.college %}<span class="field-hint">{{ field_errors.college }}</span>{% endif %}
-            </label>
+              <label>
+                学院
+                <select name="school">
+                  <option value="" {% if not form_data.school %}selected{% endif %}>-</option>
+                  {% for option in school_options %}
+                    <option value="{{ option.code }}" {% if form_data.school == option.code %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                {% if field_errors.school %}<span class="field-hint">{{ field_errors.school }}</span>{% endif %}
+              </label>
 
-            <label>
-              联系电话
-              <input type="text" name="phone" value="{{ form_data.phone or '' }}" maxlength="32" autocomplete="tel" required>
-              {% if field_errors.phone %}<span class="field-hint">{{ field_errors.phone }}</span>{% endif %}
-            </label>
+              <label>
+                书院
+                <select name="college">
+                  <option value="" {% if not form_data.college %}selected{% endif %}>-</option>
+                  {% for option in college_options %}
+                    <option value="{{ option.code }}" {% if form_data.college == option.code %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                {% if field_errors.college %}<span class="field-hint">{{ field_errors.college }}</span>{% endif %}
+              </label>
 
-            <label>
-              参赛意愿
-              <select name="competition_interest" required>
-                <option value="" {% if not form_data.competition_interest %}selected{% endif %}>请选择</option>
-                {% for option in competition_interest_options %}
-                  <option value="{{ option.code }}" {% if form_data.competition_interest == option.code %}selected{% endif %}>{{ option.label }}</option>
-                {% endfor %}
-              </select>
-              {% if field_errors.competition_interest %}<span class="field-hint">{{ field_errors.competition_interest }}</span>{% endif %}
-            </label>
-
-            <label>
-              骑行经验
-              <select name="cycling_experience" required>
-                <option value="" {% if not form_data.cycling_experience %}selected{% endif %}>请选择</option>
-                {% for option in cycling_experience_options %}
-                  <option value="{{ option.code }}" {% if form_data.cycling_experience == option.code %}selected{% endif %}>{{ option.label }}</option>
-                {% endfor %}
-              </select>
-              {% if field_errors.cycling_experience %}<span class="field-hint">{{ field_errors.cycling_experience }}</span>{% endif %}
-            </label>
-
-            <label>
-              车辆情况
-              <select name="bicycle_status" required>
-                <option value="" {% if not form_data.bicycle_status %}selected{% endif %}>请选择</option>
-                {% for option in bicycle_status_options %}
-                  <option value="{{ option.code }}" {% if form_data.bicycle_status == option.code %}selected{% endif %}>{{ option.label }}</option>
-                {% endfor %}
-              </select>
-              {% if field_errors.bicycle_status %}<span class="field-hint">{{ field_errors.bicycle_status }}</span>{% endif %}
-            </label>
+              <label>
+                联系电话 <span class="required-mark">*</span>
+                <input type="text" name="phone" value="{{ form_data.phone or '' }}" maxlength="32" autocomplete="tel" placeholder="手机、WhatsApp 或常用联系电话" required>
+                {% if field_errors.phone %}<span class="field-hint">{{ field_errors.phone }}</span>{% endif %}
+              </label>
+            </div>
           </div>
 
-          <label>
-            其他车辆说明
-            <input type="text" name="other_bicycle_description" value="{{ form_data.other_bicycle_description or '' }}" maxlength="255" placeholder="选择其他类型自行车时填写">
-            {% if field_errors.other_bicycle_description %}<span class="field-hint">{{ field_errors.other_bicycle_description }}</span>{% endif %}
-          </label>
+          <div class="membership-form-section">
+            <div class="membership-form-section-head">
+              <span>2</span>
+              <div>
+                <strong>骑行情况</strong>
+                <p class="hint">用于了解新社员基础和活动安排，不影响正式档案的稳定身份字段。</p>
+              </div>
+            </div>
 
-          <label>
-            补充说明（可选）
-            <textarea name="additional_note" rows="5" maxlength="1000" placeholder="可以补充你希望我们知道的信息。">{{ form_data.additional_note or '' }}</textarea>
-            {% if field_errors.additional_note %}<span class="field-hint">{{ field_errors.additional_note }}</span>{% endif %}
-          </label>
+            <div class="member-profile-edit-grid">
+              <label>
+                参赛意愿 <span class="required-mark">*</span>
+                <select name="competition_interest" required>
+                  <option value="" {% if not form_data.competition_interest %}selected{% endif %}>请选择</option>
+                  {% for option in competition_interest_options %}
+                    <option value="{{ option.code }}" {% if form_data.competition_interest == option.code %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                {% if field_errors.competition_interest %}<span class="field-hint">{{ field_errors.competition_interest }}</span>{% endif %}
+              </label>
 
-          <label class="checkbox-row">
-            <input type="checkbox" name="confirm_info" value="1" {% if form_data.confirm_info == '1' %}checked{% endif %} required>
-            <span>我已阅读上述说明，并确认提交的信息真实有效。</span>
-          </label>
-          {% if field_errors.confirm_info %}<span class="field-hint">{{ field_errors.confirm_info }}</span>{% endif %}
+              <label>
+                骑行经验 <span class="required-mark">*</span>
+                <select name="cycling_experience" required>
+                  <option value="" {% if not form_data.cycling_experience %}selected{% endif %}>请选择</option>
+                  {% for option in cycling_experience_options %}
+                    <option value="{{ option.code }}" {% if form_data.cycling_experience == option.code %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                {% if field_errors.cycling_experience %}<span class="field-hint">{{ field_errors.cycling_experience }}</span>{% endif %}
+              </label>
+
+              <label>
+                车辆情况 <span class="required-mark">*</span>
+                <select name="bicycle_status" data-bicycle-status-select required>
+                  <option value="" {% if not form_data.bicycle_status %}selected{% endif %}>请选择</option>
+                  {% for option in bicycle_status_options %}
+                    <option value="{{ option.code }}" {% if form_data.bicycle_status == option.code %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                {% if field_errors.bicycle_status %}<span class="field-hint">{{ field_errors.bicycle_status }}</span>{% endif %}
+              </label>
+
+              <label data-other-bicycle-field>
+                其他车辆说明
+                <input type="text" name="other_bicycle_description" value="{{ form_data.other_bicycle_description or '' }}" maxlength="255" placeholder="选择“有其他类型自行车”时填写">
+                <span class="field-hint">仅在车辆情况选择“有其他类型自行车”时需要填写。</span>
+                {% if field_errors.other_bicycle_description %}<span class="field-hint">{{ field_errors.other_bicycle_description }}</span>{% endif %}
+              </label>
+            </div>
+          </div>
+
+          <div class="membership-form-section">
+            <div class="membership-form-section-head">
+              <span>3</span>
+              <div>
+                <strong>补充与确认</strong>
+                <p class="hint">提交后会进入待审核状态，审核期间请勿重复提交。</p>
+              </div>
+            </div>
+
+            <label>
+              补充说明（可选）
+              <textarea name="additional_note" rows="5" maxlength="1000" placeholder="例如：平时可参加活动的时间、想了解的骑行内容、特殊情况等。">{{ form_data.additional_note or '' }}</textarea>
+              {% if field_errors.additional_note %}<span class="field-hint">{{ field_errors.additional_note }}</span>{% endif %}
+            </label>
+
+            <label class="checkbox-row">
+              <input type="checkbox" name="confirm_info" value="1" {% if form_data.confirm_info == '1' %}checked{% endif %} required>
+              <span>我已阅读上述说明，并确认提交的信息真实有效。</span>
+            </label>
+            {% if field_errors.confirm_info %}<span class="field-hint">{{ field_errors.confirm_info }}</span>{% endif %}
+          </div>
 
           <div class="row-actions">
             <button class="btn" type="submit"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-pen"></use></svg></span><span>提交申请</span></button>
@@ -183,5 +217,26 @@
     </section>
   </main>
   <script src="{{ url_for('static', filename='theme-switcher.js') }}"></script>
+  <script>
+    (() => {
+      const select = document.querySelector("[data-bicycle-status-select]");
+      const field = document.querySelector("[data-other-bicycle-field]");
+      if (!select || !field) return;
+
+      const input = field.querySelector("input");
+      const syncOtherBicycleField = () => {
+        const enabled = select.value === "{{ bicycle_status_other }}";
+        field.classList.toggle("is-muted", !enabled);
+        if (input) {
+          input.disabled = !enabled;
+          input.required = enabled;
+          if (!enabled) input.value = "";
+        }
+      };
+
+      select.addEventListener("change", syncOtherBicycleField);
+      syncOtherBicycleField();
+    })();
+  </script>
 </body>
 </html>

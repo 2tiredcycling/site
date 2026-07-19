@@ -1198,7 +1198,12 @@ def test_join_page_available_for_anonymous_user(app_and_client):
     html = resp.get_data(as_text=True)
     assert resp.status_code == 200
     assert "加入 2Tired 骑行社" in html
+    assert "身份信息" in html
+    assert "骑行情况" in html
+    assert "补充与确认" in html
     assert 'name="student_id"' in html
+    assert 'data-bicycle-status-select' in html
+    assert "仅在车辆情况选择“有其他类型自行车”时需要填写。" in html
     assert "我已阅读上述说明" in html
 
 
@@ -1381,6 +1386,88 @@ def test_anonymous_submission_does_not_auto_bind_existing_member_user(app_and_cl
         application = MembershipApplication.query.filter_by(student_id="20261205").first()
         assert application is not None
         assert application.member_user_id is None
+
+
+def test_membership_application_success_guides_anonymous_and_logged_in_users(app_and_client):
+    app, client = app_and_client
+
+    anonymous_resp = client.get("/join/success")
+    anonymous_html = anonymous_resp.get_data(as_text=True)
+    assert anonymous_resp.status_code == 200
+    assert "收到，准备一起上路吧" in anonymous_html
+    assert "等管理团队审核" in anonymous_html
+    assert "在个人中心看结果" in anonymous_html
+    assert "也想一起把社团做起来？" in anonymous_html
+    assert "完成入社申请后即可登记" in anonymous_html
+
+    assert register_member(client, "20261250", "Success Rider", "memberpass123").status_code == 200
+    assert _post_join(client, student_id="FORGED-SUCCESS", full_name="Success Member").status_code == 302
+    member_resp = client.get("/join/success")
+    member_html = member_resp.get_data(as_text=True)
+    assert member_resp.status_code == 200
+    assert "查看审核状态" in member_html
+    assert "这次申请已关联你的账号，之后随时都能回来查看。" in member_html
+    assert "想申请的岗位方向" in member_html
+    assert "创建账号" not in member_html
+
+
+def test_membership_management_interest_is_saved_on_recent_application(app_and_client):
+    app, client = app_and_client
+    assert _post_join(client, student_id="20261251").status_code == 302
+    success_page = client.get("/join/success")
+    success_html = success_page.get_data(as_text=True)
+    token = _extract_csrf(success_html)
+    assert "管理组招新" in success_html
+
+    response = client.post(
+        "/join/management-interest",
+        data={
+            "csrf_token": token,
+            "management_position": "activities",
+            "management_interest_note": "组织过学院迎新，也愿意学习路线安全工作。",
+        },
+        follow_redirects=True,
+    )
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "管理组岗位意向已保存" in html
+    assert "活动部 / 活动策划与执行" in html
+    assert "已登记，可随时更新" in html
+
+    with app.app_context():
+        application = MembershipApplication.query.filter_by(student_id="20261251").first()
+        assert application.management_position == "activities"
+        assert application.management_interest_note == "组织过学院迎新，也愿意学习路线安全工作。"
+        assert application.management_interest_submitted_at is not None
+        audit = AuditLog.query.filter_by(
+            action="membership_application.management_interest",
+            target_id=str(application.id),
+        ).first()
+        assert audit is not None
+        assert json.loads(audit.detail) == {"position": "activities", "submission_type": "initial"}
+        assert application.management_interest_note not in audit.detail
+
+
+def test_membership_management_interest_validates_position_and_note(app_and_client):
+    app, client = app_and_client
+    assert _post_join(client, student_id="20261252").status_code == 302
+    token = _extract_csrf(client.get("/join/success").get_data(as_text=True))
+    response = client.post(
+        "/join/management-interest",
+        data={
+            "csrf_token": token,
+            "management_position": "forged-role",
+            "management_interest_note": "x" * 501,
+        },
+    )
+    html = response.get_data(as_text=True)
+    assert response.status_code == 400
+    assert "请选择一个感兴趣的管理组岗位方向" in html
+    assert "补充说明不能超过 500 个字符" in html
+    with app.app_context():
+        application = MembershipApplication.query.filter_by(student_id="20261252").first()
+        assert application.management_position is None
+        assert application.management_interest_submitted_at is None
 
 
 def test_join_blocks_existing_formal_member_profile_and_approved_application(app_and_client):
@@ -1923,6 +2010,9 @@ def test_manage_membership_applications_read_permission_lists_and_details(app_an
             cycling_experience="casual",
             bicycle_status="road_bike",
             additional_note="希望参加周末骑行。",
+            management_position="technology",
+            management_interest_note="愿意维护网站和活动工具。",
+            management_interest_submitted_at=datetime(2026, 7, 14, 7, 30, tzinfo=timezone.utc),
             status="approved",
             reviewed_at=datetime(2026, 7, 14, 8, 30, tzinfo=timezone.utc),
             review_note="资料通过",
@@ -1942,6 +2032,7 @@ def test_manage_membership_applications_read_permission_lists_and_details(app_an
     assert "还不确定" in list_html
     assert "偶尔休闲骑行" in list_html
     assert "有公路车" in list_html
+    assert "技术方向 / 网站与工具" in list_html
     assert "已绑定" in list_html
 
     detail_resp = client.get(f"/manage/membership-applications/{application_id}?status=all")
@@ -1951,6 +2042,9 @@ def test_manage_membership_applications_read_permission_lists_and_details(app_an
     assert "理工学院" in detail_html
     assert "逸夫书院" in detail_html
     assert "希望参加周末骑行。" in detail_html
+    assert "管理组岗位意向" in detail_html
+    assert "技术方向 / 网站与工具" in detail_html
+    assert "愿意维护网站和活动工具。" in detail_html
     assert "资料通过" in detail_html
     assert "application_review_user" in detail_html
     assert "Approved Profile" in detail_html
@@ -2512,6 +2606,13 @@ def test_manage_membership_applications_export_filtering_and_excel_content(app_a
                     student_id="20261754",
                     full_name="Recent Approved",
                     status="approved",
+                    management_position="publicity",
+                    management_interest_note="愿意负责活动摄影。",
+                    management_interest_submitted_at=datetime.combine(
+                        today - timedelta(days=1),
+                        time(13, 0),
+                        tzinfo=timezone(timedelta(hours=8)),
+                    ).astimezone(timezone.utc),
                     submitted_at=datetime.combine(today - timedelta(days=1), time(12, 0), tzinfo=timezone(timedelta(hours=8))).astimezone(
                         timezone.utc
                     ),
@@ -2546,6 +2647,9 @@ def test_manage_membership_applications_export_filtering_and_excel_content(app_a
         "车辆状况",
         "其他车辆说明",
         "补充说明",
+        "管理组岗位意向",
+        "管理组补充说明",
+        "管理组意向提交时间",
         "是否绑定账号",
         "申请状态",
         "表单版本",
@@ -2595,6 +2699,9 @@ def test_manage_membership_applications_export_filtering_and_excel_content(app_a
         filtered_ids = [row[0] for row in filtered_rows]
         assert approved_application.id in filtered_ids
         assert set(filtered_ids) == set(expected_filtered_ids)
+        approved_row = next(row for row in filtered_rows if row[0] == approved_application.id)
+        assert approved_row[headers.index("管理组岗位意向")] == "宣传部 / 内容与传播"
+        assert approved_row[headers.index("管理组补充说明")] == "愿意负责活动摄影。"
 
 
 def test_manage_membership_applications_export_audit_log_and_confirmation(app_and_client):

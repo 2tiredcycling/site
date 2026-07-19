@@ -51,6 +51,17 @@ BICYCLE_STATUS_OPTIONS = (
 )
 BICYCLE_STATUS_VALUES = tuple(option["code"] for option in BICYCLE_STATUS_OPTIONS)
 
+MANAGEMENT_POSITION_OPTIONS = (
+    {"code": "president_team", "label": "社长团 / 统筹协调"},
+    {"code": "activities", "label": "活动部 / 活动策划与执行"},
+    {"code": "publicity", "label": "宣传部 / 内容与传播"},
+    {"code": "finance", "label": "财务部 / 财务与物资"},
+    {"code": "outreach", "label": "外联方向 / 合作与资源"},
+    {"code": "technology", "label": "技术方向 / 网站与工具"},
+    {"code": "undecided", "label": "尚未确定 / 愿意先聊聊"},
+)
+MANAGEMENT_POSITION_VALUES = tuple(option["code"] for option in MANAGEMENT_POSITION_OPTIONS)
+
 
 def _label_for(options: tuple[dict, ...], value: str | None) -> str:
     for option in options:
@@ -75,6 +86,10 @@ def bicycle_status_label(value: str | None) -> str:
     return _label_for(BICYCLE_STATUS_OPTIONS, value)
 
 
+def management_position_label(value: str | None) -> str:
+    return _label_for(MANAGEMENT_POSITION_OPTIONS, value)
+
+
 def is_valid_application_status(value: str | None) -> bool:
     return value in APPLICATION_STATUSES
 
@@ -89,3 +104,7 @@ def is_valid_cycling_experience(value: str | None) -> bool:
 
 def is_valid_bicycle_status(value: str | None) -> bool:
     return value in BICYCLE_STATUS_VALUES
+
+
+def is_valid_management_position(value: str | None) -> bool:
+    return value in MANAGEMENT_POSITION_VALUES

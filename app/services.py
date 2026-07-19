@@ -54,11 +54,13 @@ from app.membership_application_options import (
     COMPETITION_INTEREST_VALUES,
     CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION,
     CYCLING_EXPERIENCE_VALUES,
+    MANAGEMENT_POSITION_VALUES,
 )
 
 MEMBERSHIP_APPLICATION_MEMBER_EXISTS_MESSAGE = "该学号已经存在正式社员档案，无需重复申请。如资料有误，请联系管理人员。"
 MEMBERSHIP_APPLICATION_PENDING_MESSAGE = "你已有一份待审核的入社申请，请勿重复提交。"
 MEMBERSHIP_APPLICATION_SUBMIT_ACTION = "membership_application.submit"
+MEMBERSHIP_MANAGEMENT_INTEREST_ACTION = "membership_application.management_interest"
 MEMBERSHIP_APPLICATION_ENABLED_SETTING_KEY = "membership_application_enabled"
 MEMBERSHIP_APPLICATION_ENABLED_DEFAULT = True
 
@@ -81,6 +83,13 @@ class MembershipApplicationReviewError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message
+
+
+class MembershipManagementInterestError(Exception):
+    def __init__(self, errors: dict[str, str], values: dict[str, str]):
+        super().__init__("membership management interest validation failed")
+        self.errors = errors
+        self.values = values
 
 
 def _coerce_bool(value: str | bool | int | None, *, default: bool) -> bool:
@@ -348,6 +357,15 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("media_assets", "activity_route_option_id", "activity_route_option_id INTEGER")
         _add_column_if_missing("member_users", "student_id", "student_id VARCHAR(32) DEFAULT '' NOT NULL")
         _add_column_if_missing("member_users", "nickname", "nickname VARCHAR(64) DEFAULT '' NOT NULL")
+        _add_column_if_missing("membership_applications", "management_position", "management_position VARCHAR(32)")
+        _add_column_if_missing(
+            "membership_applications", "management_interest_note", "management_interest_note TEXT"
+        )
+        _add_column_if_missing(
+            "membership_applications",
+            "management_interest_submitted_at",
+            "management_interest_submitted_at DATETIME",
+        )
     else:
         _add_column_if_missing("routes", "updated_at", "updated_at TIMESTAMP")
         _add_column_if_missing("routes", "uploaded_at", "uploaded_at TIMESTAMP")
@@ -427,6 +445,15 @@ def ensure_schema_compat() -> None:
         _add_column_if_missing("media_assets", "activity_route_option_id", "activity_route_option_id INTEGER")
         _add_column_if_missing("member_users", "student_id", "student_id VARCHAR(32) DEFAULT '' NOT NULL")
         _add_column_if_missing("member_users", "nickname", "nickname VARCHAR(64) DEFAULT '' NOT NULL")
+        _add_column_if_missing("membership_applications", "management_position", "management_position VARCHAR(32)")
+        _add_column_if_missing(
+            "membership_applications", "management_interest_note", "management_interest_note TEXT"
+        )
+        _add_column_if_missing(
+            "membership_applications",
+            "management_interest_submitted_at",
+            "management_interest_submitted_at TIMESTAMP",
+        )
 
     with db.engine.begin() as conn:
         conn.execute(text("UPDATE routes SET uploaded_at = created_at WHERE uploaded_at IS NULL"))
@@ -799,6 +826,49 @@ def create_membership_application(form_data, member_user: MemberUser | None = No
         db.session.rollback()
         raise
 
+    return application
+
+
+def update_membership_management_interest(
+    application: MembershipApplication,
+    form_data,
+) -> MembershipApplication:
+    values = {
+        "management_position": _clean_membership_application_text(form_data.get("management_position")),
+        "management_interest_note": str(form_data.get("management_interest_note") or "").strip(),
+    }
+    errors: dict[str, str] = {}
+    if values["management_position"] not in MANAGEMENT_POSITION_VALUES:
+        errors["management_position"] = "请选择一个感兴趣的管理组岗位方向。"
+    if len(values["management_interest_note"]) > 500:
+        errors["management_interest_note"] = "补充说明不能超过 500 个字符。"
+    if errors:
+        raise MembershipManagementInterestError(errors, values)
+
+    was_submitted = application.management_interest_submitted_at is not None
+    now_value = utcnow()
+    application.management_position = values["management_position"]
+    application.management_interest_note = values["management_interest_note"] or None
+    application.management_interest_submitted_at = now_value
+    application.updated_at = now_value
+    try:
+        add_audit_log(
+            actor_id=None,
+            action=MEMBERSHIP_MANAGEMENT_INTEREST_ACTION,
+            target_type="membership_application",
+            target_id=str(application.id),
+            detail=json.dumps(
+                {
+                    "position": values["management_position"],
+                    "submission_type": "update" if was_submitted else "initial",
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return application
 
 

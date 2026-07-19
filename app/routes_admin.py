@@ -128,6 +128,7 @@ from app.membership_application_options import (
     bicycle_status_label,
     competition_interest_label,
     cycling_experience_label,
+    management_position_label,
 )
 from app.querying import query_routes_from_request
 from app.gpx_utils import parse_gpx_points_and_stats, parse_gpx_waypoints
@@ -287,6 +288,7 @@ AUDIT_ACTION_LABELS = {
     "member_profile.account_bind": "绑定社员账号",
     "membership_application.submit": "提交入社申请",
     "membership_application.link_account": "关联入社申请账号",
+    "membership_application.management_interest": "提交管理组岗位意向",
     "membership_application.approve": "同意入社申请",
     "membership_application.reject": "拒绝入社申请",
     "membership_application.export": "导出入社申请",
@@ -950,6 +952,7 @@ def _inject_csrf_token():
         "competition_interest_label": competition_interest_label,
         "cycling_experience_label": cycling_experience_label,
         "bicycle_status_label": bicycle_status_label,
+        "management_position_label": management_position_label,
     }
 
 
@@ -2569,6 +2572,9 @@ def export_membership_applications_excel():
         "车辆状况",
         "其他车辆说明",
         "补充说明",
+        "管理组岗位意向",
+        "管理组补充说明",
+        "管理组意向提交时间",
         "是否绑定账号",
         "申请状态",
         "表单版本",
@@ -2582,6 +2588,7 @@ def export_membership_applications_excel():
     for item in applications:
         submitted_local = _to_local_time(item.submitted_at)
         reviewed_local = _to_local_time(item.reviewed_at)
+        management_interest_local = _to_local_time(item.management_interest_submitted_at)
         rows.append(
             [
                 item.id,
@@ -2597,6 +2604,9 @@ def export_membership_applications_excel():
                 bicycle_status_label(item.bicycle_status) or "-",
                 item.other_bicycle_description or "-",
                 item.additional_note or "-",
+                management_position_label(item.management_position) or "-",
+                item.management_interest_note or "-",
+                management_interest_local.strftime("%Y-%m-%d %H:%M:%S") if management_interest_local else "-",
                 "是" if item.member_user_id else "否",
                 application_status_label(item.status),
                 item.form_version,
@@ -2614,7 +2624,7 @@ def export_membership_applications_excel():
     sheet.append(headers)
     for row in rows:
         sheet.append(row)
-    for col in "ABCDEFGHIJKLMNOPQRST":
+    for col in "ABCDEFGHIJKLMNOPQRSTUVWX":
         sheet.column_dimensions[col].width = 18
     output = BytesIO()
     workbook.save(output)

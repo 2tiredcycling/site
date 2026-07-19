@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [v4.12.0]
+
+### Added
+
+- Added an optional management-team interest form after membership application submission, linked to the existing application record with role direction and a short note.
+- Added management-team interest visibility to the management application list, detail view, audit log labels, and Excel export.
+- Added a database migration and startup schema compatibility for the new management interest fields.
+
+### Changed
+
+- Optimized the public membership application form with clearer step sections, required-field cues, more helpful placeholders, and conditional guidance for other bicycle descriptions.
+- Redesigned the membership application success page with warmer cycling-club language, lightweight activity and route links, clearer next-step guidance, prioritized account actions, and responsive behavior.
+
 ## [v4.11.6]
 
 ### Added

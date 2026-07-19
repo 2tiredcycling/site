@@ -337,6 +337,9 @@ class MembershipApplication(db.Model):
     bicycle_status = db.Column(db.String(32), nullable=False)
     other_bicycle_description = db.Column(db.String(255), nullable=True)
     additional_note = db.Column(db.Text, nullable=True)
+    management_position = db.Column(db.String(32), nullable=True)
+    management_interest_note = db.Column(db.Text, nullable=True)
+    management_interest_submitted_at = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(16), nullable=False, default=APPLICATION_STATUS_PENDING)
     form_version = db.Column(db.Integer, nullable=False, default=CURRENT_MEMBERSHIP_APPLICATION_FORM_VERSION)
     submitted_at = db.Column(db.DateTime, nullable=False, default=utcnow)
@@ -375,6 +378,13 @@ class MembershipApplication(db.Model):
             "bicycle_status": self.bicycle_status,
             "other_bicycle_description": self.other_bicycle_description,
             "additional_note": self.additional_note,
+            "management_position": self.management_position,
+            "management_interest_note": self.management_interest_note,
+            "management_interest_submitted_at": (
+                self.management_interest_submitted_at.isoformat()
+                if self.management_interest_submitted_at
+                else None
+            ),
             "status": self.status,
             "form_version": self.form_version,
             "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,

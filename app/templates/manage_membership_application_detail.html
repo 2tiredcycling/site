@@ -103,6 +103,22 @@
     </section>
 
     <section class="card form-card manage-route-list-card">
+      <h2>管理组岗位意向</h2>
+      {% if application.management_position %}
+        <table>
+          <tbody>
+            <tr><th>意向方向</th><td>{{ management_position_label(application.management_position) }}</td></tr>
+            <tr><th>补充说明</th><td>{{ application.management_interest_note or '-' }}</td></tr>
+            <tr><th>登记时间</th><td>{{ to_local_time(application.management_interest_submitted_at).strftime('%Y-%m-%d %H:%M') if application.management_interest_submitted_at else '-' }}</td></tr>
+          </tbody>
+        </table>
+        <p class="hint">该意向仅用于后续管理组招新沟通，不影响本次入社申请的审核结果。</p>
+      {% else %}
+        <p class="hint">申请人暂未登记管理组岗位意向。</p>
+      {% endif %}
+    </section>
+
+    <section class="card form-card manage-route-list-card">
       <h2>骑行与申请信息</h2>
       <table>
         <tbody>

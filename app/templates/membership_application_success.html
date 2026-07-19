@@ -10,19 +10,147 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <main class="container">
+  <main class="container membership-success-page">
     {% include '_site_icon_sprite.html' %}
     {% include '_site_nav.html' %}
 
-    <section class="card form-card login-card member-auth-card">
-      <p class="hero-kicker">APPLICATION SUBMITTED</p>
-      <h1>入社申请已提交</h1>
-      <p class="hint">你的入社申请已经进入待审核状态。管理人员会统一审核，请勿重复提交。</p>
-      <p class="hint">你可以创建账号或登录已有账号，以便之后在个人中心查看审核状态。</p>
-      <div class="row-actions">
-        <a class="btn" href="{{ url_for('web.member_register', next=url_for('web.member_applications')) }}"><span>创建账号</span></a>
-        <a class="btn btn-muted" href="{{ url_for('web.member_login', next=url_for('web.member_applications')) }}"><span>登录</span></a>
-        <a class="btn btn-muted" href="{{ url_for('web.index') }}"><span class="home-icon-badge"><svg class="home-icon-svg"><use href="#i-home"></use></svg></span><span>返回首页</span></a>
+    {% set member_user = current_member_user() %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert {{ 'alert-ok' if category == 'success' else '' }} membership-success-alert">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <section class="card membership-application-success-card">
+      <div class="membership-success-layout">
+        <div class="membership-success-copy">
+          <div class="membership-success-status">
+            <span class="membership-success-mark" aria-hidden="true">
+              <svg class="home-icon-svg"><use href="#i-bike"></use></svg>
+            </span>
+            <span>
+              <small>入社申请已提交</small>
+              <strong>谢谢你愿意加入我们</strong>
+            </span>
+          </div>
+          <h1>收到，准备一起上路吧</h1>
+          <p class="membership-success-lead">管理团队会统一查看这批申请。结果出来前不用重复填写，先去看看近期活动和路线，认识一下我们平时怎么骑。</p>
+          <div class="membership-success-explore" aria-label="了解骑行社">
+            <a href="{{ url_for('web.events_list') }}">看看近期活动</a>
+            <a href="{{ url_for('web.routes_center') }}">挑一条路线</a>
+          </div>
+        </div>
+
+        <aside class="membership-success-next" aria-label="申请后续流程">
+          <p class="membership-success-next-title">接下来</p>
+          <ol class="membership-success-steps">
+            <li>
+              <span>1</span>
+              <div>
+                <strong>等管理团队审核</strong>
+                <p>申请目前是待审核状态，我们会按批次统一处理。</p>
+              </div>
+            </li>
+            <li>
+              <span>2</span>
+              <div>
+                <strong>在个人中心看结果</strong>
+                {% if member_user %}
+                  <p>这次申请已关联你的账号，之后随时都能回来查看。</p>
+                {% else %}
+                  <p>用申请时填写的学号注册或登录，记录会自动跟上。</p>
+                {% endif %}
+              </div>
+            </li>
+          </ol>
+        </aside>
+      </div>
+
+      <div class="membership-success-actions">
+        <div class="membership-success-action-copy">
+          {% if member_user %}
+            <strong>申请记录已经留在账号里</strong>
+            <span>审核状态会更新到个人中心。</span>
+          {% else %}
+            <strong>留住这次申请记录</strong>
+            <span>用同一学号创建账号或登录即可自动关联。</span>
+          {% endif %}
+        </div>
+        <div class="row-actions">
+          {% if member_user %}
+            <a class="btn btn-solid membership-success-primary" href="{{ url_for('web.member_applications') }}">
+              <span>查看审核状态</span>
+              <span class="home-icon-badge" aria-hidden="true"><svg class="home-icon-svg"><use href="#i-forward"></use></svg></span>
+            </a>
+          {% else %}
+            <a class="btn btn-solid membership-success-primary" href="{{ url_for('web.member_register', next=url_for('web.member_applications')) }}">
+              <span class="home-icon-badge" aria-hidden="true"><svg class="home-icon-svg"><use href="#i-user"></use></svg></span>
+              <span>创建账号</span>
+            </a>
+            <a class="btn btn-muted membership-success-login" href="{{ url_for('web.member_login', next=url_for('web.member_applications')) }}"><span>直接登录</span></a>
+          {% endif %}
+          <a class="membership-success-home-link" href="{{ url_for('web.index') }}">
+            <span class="home-icon-badge" aria-hidden="true"><svg class="home-icon-svg"><use href="#i-home"></use></svg></span>
+            <span>返回首页</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section id="management-interest" class="membership-management-invite">
+      <div class="membership-management-copy">
+        <div class="membership-management-heading">
+          <span class="home-icon-badge" aria-hidden="true"><svg class="home-icon-svg"><use href="#i-team"></use></svg></span>
+          <span>管理组招新</span>
+        </div>
+        <h2>也想一起把社团做起来？</h2>
+        <p>从路线策划、活动执行到宣传、外联和网站维护，都需要愿意搭把手的人。先留一个感兴趣的方向，后续我们再单独聊。</p>
+        <p class="membership-management-assurance">这是可选意向，不影响入社申请审核，也不用重复填写个人资料。</p>
+      </div>
+
+      <div class="membership-management-form-wrap">
+        {% if application %}
+          {% if application.management_interest_submitted_at %}
+            <p class="membership-management-saved">
+              <span class="home-icon-badge" aria-hidden="true"><svg class="home-icon-svg"><use href="#i-bike"></use></svg></span>
+              已登记，可随时更新
+            </p>
+          {% endif %}
+          <form method="post" action="{{ url_for('web.membership_management_interest_submit') }}" class="single-form membership-management-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>
+              <span>想申请的岗位方向 <span class="required-mark">*</span></span>
+              <select name="management_position" required aria-describedby="management-position-error">
+                <option value="">请选择一个方向</option>
+                {% for option in management_position_options %}
+                  <option value="{{ option.code }}" {% if management_interest_values.management_position == option.code %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+              </select>
+              {% if management_interest_errors.management_position %}
+                <span id="management-position-error" class="field-hint">{{ management_interest_errors.management_position }}</span>
+              {% endif %}
+            </label>
+            <label>
+              <span>想补充的话（可选）</span>
+              <textarea name="management_interest_note" rows="3" maxlength="500" placeholder="例如：做过活动策划、摄影、公众号排版，或只是很愿意学习。">{{ management_interest_values.management_interest_note }}</textarea>
+              {% if management_interest_errors.management_interest_note %}
+                <span class="field-hint">{{ management_interest_errors.management_interest_note }}</span>
+              {% endif %}
+            </label>
+            <div class="row-actions membership-management-actions">
+              <button class="btn btn-solid" type="submit">
+                <span>{{ '更新岗位意向' if application.management_interest_submitted_at else '提交岗位意向' }}</span>
+                <span class="home-icon-badge" aria-hidden="true"><svg class="home-icon-svg"><use href="#i-forward"></use></svg></span>
+              </button>
+            </div>
+          </form>
+        {% else %}
+          <div class="membership-management-context-missing">
+            <strong>完成入社申请后即可登记</strong>
+            <p>系统会把岗位意向直接关联到你的申请，不再重复收集姓名和联系方式。</p>
+            <a class="btn btn-solid" href="{{ url_for('web.membership_application_form') }}">前往入社申请</a>
+          </div>
+        {% endif %}
       </div>
     </section>
   </main>

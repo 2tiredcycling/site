@@ -95,6 +95,7 @@
             <th>比赛意愿</th>
             <th>骑行经验</th>
             <th>车辆状况</th>
+            <th>管理组意向</th>
             <th>账号绑定</th>
             <th>状态</th>
             <th>提交时间</th>
@@ -118,6 +119,14 @@
               <td>{{ cycling_experience_label(application.cycling_experience) or '-' }}</td>
               <td>{{ bicycle_status_label(application.bicycle_status) or '-' }}</td>
               <td>
+                {% if application.management_position %}
+                  <strong>{{ management_position_label(application.management_position) }}</strong>
+                  <div class="hint">已登记</div>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
                 {% if application.member_user %}
                   {{ status_badge('active', '已绑定') }}
                   <div class="hint">{{ application.member_user.nickname }} · ID {{ application.member_user.id }}</div>
@@ -132,7 +141,7 @@
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="9">暂无符合条件的入社申请</td></tr>
+            <tr><td colspan="10">暂无符合条件的入社申请</td></tr>
           {% endfor %}
         </tbody>
       </table>

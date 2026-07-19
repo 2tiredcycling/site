@@ -67,6 +67,7 @@ from app.membership_application_options import (
     BICYCLE_STATUS_OPTIONS,
     COMPETITION_INTEREST_OPTIONS,
     CYCLING_EXPERIENCE_OPTIONS,
+    MANAGEMENT_POSITION_OPTIONS,
     application_status_label,
 )
 from app.querying import query_routes_from_request
@@ -74,6 +75,7 @@ from app.security_limits import consume_fixed_window
 from app.services import (
     MembershipApplicationBlocked,
     MembershipApplicationFormError,
+    MembershipManagementInterestError,
     add_audit_log,
     add_member_profile_audit_log,
     create_membership_application,
@@ -81,6 +83,7 @@ from app.services import (
     membership_application_block_message,
     membership_application_initial_values,
     normalize_membership_application_form,
+    update_membership_management_interest,
 )
 from app.gpx_utils import parse_gpx_points_and_stats
 
@@ -92,6 +95,7 @@ MEMBERSHIP_APPLICATION_LIMIT = 5
 MEMBERSHIP_APPLICATION_WINDOW_SECONDS = 30 * 60
 MEMBERSHIP_APPLICATION_LINK_CONTEXT_KEY = "membership_application_link_context"
 MEMBERSHIP_APPLICATION_LINK_NOTICE_KEY = "membership_application_link_notice"
+MEMBERSHIP_APPLICATION_SUCCESS_CONTEXT_KEY = "membership_application_success_context"
 MEMBERSHIP_APPLICATION_LINK_TTL_SECONDS = 60 * 60
 MEMBERSHIP_APPLICATION_LINKABLE_STATUSES = (
     APPLICATION_STATUS_PENDING,
@@ -390,6 +394,49 @@ def _store_membership_application_link_context(application: MembershipApplicatio
         "token": secrets.token_urlsafe(32),
         "created_at": int(utcnow().timestamp()),
     }
+
+
+def _store_membership_application_success_context(application: MembershipApplication | None) -> None:
+    if application is None:
+        return
+    session[MEMBERSHIP_APPLICATION_SUCCESS_CONTEXT_KEY] = {
+        "application_id": application.id,
+        "created_at": int(utcnow().timestamp()),
+    }
+
+
+def _membership_application_success_context_valid() -> dict | None:
+    context = session.get(MEMBERSHIP_APPLICATION_SUCCESS_CONTEXT_KEY)
+    if not isinstance(context, dict):
+        session.pop(MEMBERSHIP_APPLICATION_SUCCESS_CONTEXT_KEY, None)
+        return None
+    application_id = context.get("application_id")
+    created_at = context.get("created_at")
+    if not isinstance(application_id, int) or not isinstance(created_at, int):
+        session.pop(MEMBERSHIP_APPLICATION_SUCCESS_CONTEXT_KEY, None)
+        return None
+    if int(utcnow().timestamp()) - created_at > MEMBERSHIP_APPLICATION_LINK_TTL_SECONDS:
+        session.pop(MEMBERSHIP_APPLICATION_SUCCESS_CONTEXT_KEY, None)
+        return None
+    return context
+
+
+def _membership_application_for_success() -> MembershipApplication | None:
+    context = _membership_application_success_context_valid()
+    if not context:
+        context = _membership_application_link_context_valid()
+    if not context:
+        return None
+    application = db.session.get(MembershipApplication, context["application_id"])
+    if application is None:
+        session.pop(MEMBERSHIP_APPLICATION_SUCCESS_CONTEXT_KEY, None)
+        return None
+    member = _current_member_user()
+    if member is None and application.member_user_id is not None:
+        return None
+    if member is not None and application.member_user_id != member.id:
+        return None
+    return application
 
 
 def _clear_membership_application_link_context() -> None:
@@ -1087,6 +1134,7 @@ def membership_application_submit():
             status_code=409,
         )
 
+    _store_membership_application_success_context(application)
     if member is None:
         _store_membership_application_link_context(application)
 
@@ -1095,10 +1143,42 @@ def membership_application_submit():
 
 @bp.get("/join/success")
 def membership_application_success():
+    application = _membership_application_for_success()
     return render_template(
         "membership_application_success.html",
+        application=application,
+        management_position_options=MANAGEMENT_POSITION_OPTIONS,
+        management_interest_values={
+            "management_position": application.management_position if application else "",
+            "management_interest_note": application.management_interest_note if application else "",
+        },
+        management_interest_errors={},
         meta_description="2Tired 骑行社入社申请已提交。",
     )
+
+
+@bp.post("/join/management-interest")
+def membership_management_interest_submit():
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        abort(400, description="Invalid CSRF token")
+
+    application = _membership_application_for_success()
+    if application is None:
+        abort(409, description="Recent membership application not found")
+    try:
+        update_membership_management_interest(application, request.form)
+    except MembershipManagementInterestError as error:
+        return render_template(
+            "membership_application_success.html",
+            application=application,
+            management_position_options=MANAGEMENT_POSITION_OPTIONS,
+            management_interest_values=error.values,
+            management_interest_errors=error.errors,
+            meta_description="2Tired 骑行社入社申请已提交。",
+        ), 400
+
+    flash("管理组岗位意向已保存，我们会在后续沟通中单独联系你。", "success")
+    return redirect(f"{_url_for('web.membership_application_success')}#management-interest")
 
 
 @bp.get("/kit")
